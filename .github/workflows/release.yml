@@ -8,8 +8,8 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write   # create the GitHub release
-  id-token: write   # npm provenance
+  contents: write # create the GitHub release
+  id-token: write # npm provenance
 
 jobs:
   publish:

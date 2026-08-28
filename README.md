@@ -39,15 +39,15 @@ The full walkthrough — token scopes, verification curls, limits, troubleshooti
 
 ## Use
 
-| Command | What it does |
-|---|---|
-| `handbill plan.html` | Publish. Prints exactly one line: the URL. |
-| `cat plan.html \| handbill -` | Publish from stdin. |
-| `handbill plan.html --json` | `{ "hash", "url", "created" }` instead. Every command takes `--json`. |
-| `handbill list` | What you have published, newest first: date, URL, title. |
-| `handbill remove <url\|hash>` | Unpublish. Idempotent. |
-| `handbill doctor` | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix. |
-| `handbill completions zsh` | Shell completions (bash, zsh, fish). |
+| Command                       | What it does                                                                              |
+| ----------------------------- | ----------------------------------------------------------------------------------------- |
+| `handbill plan.html`          | Publish. Prints exactly one line: the URL.                                                |
+| `cat plan.html \| handbill -` | Publish from stdin.                                                                       |
+| `handbill plan.html --json`   | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                     |
+| `handbill list`               | What you have published, newest first: date, URL, title.                                  |
+| `handbill remove <url\|hash>` | Unpublish. Idempotent.                                                                    |
+| `handbill doctor`             | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix. |
+| `handbill completions zsh`    | Shell completions (bash, zsh, fish).                                                      |
 
 Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result.
 
@@ -67,14 +67,14 @@ Anyone holding a link can read the page; the link is unguessable and not indexed
 
 [tot](https://github.com/plannotator/tot) is the hosted cousin: `tot notes.md` gives you a link on tot.page with no setup. Different tool, same idea.
 
-| | tot | handbill |
-|---|---|---|
-| Pages live on | tot.page | your domain, your Cloudflare account |
-| Setup | none | deploy a Worker once (~10 min) |
-| Link model | living link + frozen `@hash` snapshots | content-addressed, immutable |
-| Who can update or delete | anyone with the link | whoever holds the token |
-| Inputs | Markdown, HTML + local assets | one self-contained HTML file |
-| Open source | the CLI | Worker, CLI, skill |
+|                          | tot                                    | handbill                             |
+| ------------------------ | -------------------------------------- | ------------------------------------ |
+| Pages live on            | tot.page                               | your domain, your Cloudflare account |
+| Setup                    | none                                   | deploy a Worker once (~10 min)       |
+| Link model               | living link + frozen `@hash` snapshots | content-addressed, immutable         |
+| Who can update or delete | anyone with the link                   | whoever holds the token              |
+| Inputs                   | Markdown, HTML + local assets          | one self-contained HTML file         |
+| Open source              | the CLI                                | Worker, CLI, skill                   |
 
 Pick tot when you want a link in ten seconds; pick handbill when the link has to be on your domain and nobody but you may change what it points to.
 
