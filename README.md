@@ -88,7 +88,7 @@ Effect 4 end to end, pinned to an exact release candidate. Conventions and invar
 
 ## Roadmap
 
-- **0.1** — self-host kit: Worker, CLI, skill (this release)
+- **0.1** — self-host kit: Worker, CLI, skill (released)
 - **0.2** — Markdown input rendered in the CLI, named aliases (living links) on KV, OpenAPI, docs site
 - **0.3** — hosted mode: the same Worker with accounts instead of a single token
 - later — inline local assets at publish time, expiring pages, encrypted pages
