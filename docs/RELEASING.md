@@ -21,7 +21,7 @@ The workflow refuses a tag whose version does not match `apps/cli/package.json`.
 - **npm credentials for the workflow**, one of:
   - `NPM_TOKEN` repository secret: on npmjs.com create a *Granular Access Token* with *Read and write* on packages, allowed to *bypass 2FA*, and add it with `gh secret set NPM_TOKEN -R viktoravelino/handbill`.
   - Trusted publishing (no token): available once the package exists on npm. Package settings → *Trusted Publisher* → GitHub Actions, repository `viktoravelino/handbill`, workflow `release.yml`. Then remove `NPM_TOKEN`.
-- The package name `handbill` must be free on npm at publish time (it was on 2026-08-28).
+- Before the first release, confirm the package name is still free: `npm view handbill version` must fail with 404.
 
 ## If a release fails
 

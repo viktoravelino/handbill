@@ -29,7 +29,9 @@ or `HANDBILL_ENDPOINT` and `HANDBILL_TOKEN` in the environment.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/viktoravelino/handbill/tree/main/apps/worker)
 
-1. In `apps/worker/wrangler.jsonc`, change the three lines marked `EDIT` to your zone.
+From a clone of this repository, after `bun install`, in `apps/worker` (wrangler reads the `wrangler.jsonc` there):
+
+1. In `wrangler.jsonc`, change the three lines marked `EDIT` to your zone.
 2. Add two proxied DNS records on the zone: `api` and `*`.
 3. `bunx wrangler r2 bucket create handbill`
 4. `openssl rand -hex 32 | bunx wrangler secret put PUBLISH_TOKEN`

@@ -2,7 +2,7 @@
 
 ## Threat model, in three sentences
 
-A published page is public to anyone holding its link; the link is unguessable (48 bits of content hash) and served with `noindex`, but it is not secret and it is not encrypted. Writing — publishing and unpublishing — requires the bearer token, which only the deployment's operator holds; a missing or wrong token fails closed. The Worker serves bytes exactly as stored and never executes them, but a page is a full HTML document that runs in the reader's browser with everything any web page can do — call remote servers, load remote code, show whatever it likes — so publish only pages you trust; what the per-page origin guarantees is that a page cannot read another page's storage, cookies, or content, nor the API's.
+A published page is public to anyone holding its link; the link is unguessable (48 bits of content hash) and served with `noindex`, but it is not secret: TLS protects it in transit, and nothing else does — anyone with the link, and the operator of the deployment, can read the page. There is no end-to-end encryption and no reader authentication. Writing — publishing and unpublishing — requires the bearer token, which only the deployment's operator holds; a missing or wrong token fails closed. The Worker serves bytes exactly as stored and never executes them, but a page is a full HTML document that runs in the reader's browser with everything any web page can do — call remote servers, load remote code, show whatever it likes — so publish only pages you trust; what the per-page origin guarantees is that a page cannot read another page's storage, cookies, or content, nor the API's.
 
 ## What handbill protects
 
