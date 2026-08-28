@@ -1,10 +1,36 @@
 {
   "name": "handbill",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Hand someone a page: publish one self-contained HTML file at an unguessable, immutable URL.",
+  "keywords": [
+    "cli",
+    "cloudflare",
+    "html",
+    "publish",
+    "sharing"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/viktoravelino/handbill.git",
+    "directory": "apps/cli"
+  },
+  "bin": {
+    "handbill": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
   "type": "module",
+  "scripts": {
+    "build": "bun build ./src/cli.ts --target=node --outfile=dist/cli.js --external effect --banner='#!/usr/bin/env node' && chmod +x dist/cli.js"
+  },
   "dependencies": {
     "effect": "4.0.0-rc.112"
+  },
+  "devDependencies": {
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@handbill/contract": "workspace:*"
   },
   "engines": {
     "node": ">=22"
