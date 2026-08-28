@@ -40,7 +40,7 @@ jobs:
           [[ "$tag" == "$pkg" ]] || { echo "tag v$tag does not match apps/cli version $pkg" >&2; exit 1; }
           grep -q "const version = \"$pkg\"" apps/cli/src/cli.ts || { echo "apps/cli/src/cli.ts version literal is not $pkg" >&2; exit 1; }
 
-      - run: bun --cwd apps/cli run build
+      - run: bun run --cwd apps/cli build
       - run: node apps/cli/dist/cli.js --version
 
       # Trusted publishing (OIDC): no token, provenance is attached automatically.
