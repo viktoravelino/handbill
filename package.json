@@ -1,0 +1,21 @@
+{
+  "name": "handbill-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --build",
+    "lint": "oxlint && oxfmt --check .",
+    "format": "oxfmt .",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.9",
+    "oxfmt": "0.65.0",
+    "oxlint": "1.80.0",
+    "typescript": "7.0.2"
+  }
+}
