@@ -37,7 +37,7 @@ Publishing from CI uses npm **trusted publishing** (OIDC): no npm token anywhere
    ```
 3. The `Release` workflow runs: typecheck, lint, test, tag-vs-version guard, build, `npm publish` via OIDC, GitHub release with generated notes.
 
-The workflow refuses a tag whose version does not match `apps/cli/package.json`, and skips the publish step if that version is already on npm. A prerelease version (anything with a `-`, such as `0.1.1-rc.0`) is published under the `next` dist-tag, so `latest` and plain `npx handbill` are untouched — use one to rehearse the pipeline: `npx handbill@next --version`.
+The workflow refuses a tag whose version does not match `apps/cli/package.json`, and skips the publish step if that version is already on npm. A prerelease version (anything with a `-`, such as `0.1.1-rc.0`) is published under the `next` dist-tag and its GitHub release is marked as a prerelease, so `latest` and plain `npx handbill` are untouched — use one to rehearse the pipeline: `npx handbill@next --version`.
 
 ## If a release fails
 

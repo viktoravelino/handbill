@@ -37,4 +37,4 @@ Read `AGENTS.md` first; every rule there is a review criterion. The product defi
 
 - One comment per finding, anchored to the line, stating the invariant or rule it breaks and the concrete failure it causes. Suggest the fix when it is short.
 - Distinguish **blocking** (invariant, correctness, scope) from **nit** (naming, comments) in the first word of the comment.
-- If the PR is clean, say so in the summary in one sentence; do not invent findings. A review with no comments is the signal that moves the issue to "Ready to Merge".
+- If the PR is clean, say so in the summary in one sentence; do not invent findings. The maintainer reads the review before approving; a clean summary is what lets them approve quickly.
