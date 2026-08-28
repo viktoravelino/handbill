@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>handbill — PRD, versions and implementation plan</title>
+<style>
+  /* ---- tokens -------------------------------------------------------- */
+  :root {
+    --ground:#F0F2F1; --surface:#FAFBFA; --sunken:#E6EAE8;
+    --ink:#15191A; --ink-2:#535D5B;
+    --rule:#D2D9D6; --rule-strong:#B4BFBB;
+    --accent:#1D5F53; --accent-wash:#E2ECE8;
+    --flag:#7C4E0E; --flag-wash:#F1E9DA;
+
+    --font-display:"Iowan Old Style","Charter","Palatino Linotype",Palatino,Georgia,serif;
+    --font-body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+
+    --measure:74ch;
+    --step:1.5rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0F1413; --surface:#161C1B; --sunken:#1C2422;
+      --ink:#E6EBE9; --ink-2:#98A5A1;
+      --rule:#2A3432; --rule-strong:#3D4A47;
+      --accent:#7FC9B5; --accent-wash:#152E29;
+      --flag:#D6A566; --flag-wash:#2E2311;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0F1413; --surface:#161C1B; --sunken:#1C2422;
+    --ink:#E6EBE9; --ink-2:#98A5A1;
+    --rule:#2A3432; --rule-strong:#3D4A47;
+    --accent:#7FC9B5; --accent-wash:#152E29;
+    --flag:#D6A566; --flag-wash:#2E2311;
+  }
+
+  /* ---- base ---------------------------------------------------------- */
+  *,*::before,*::after { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font:1.0625rem/1.65 var(--font-body);
+    padding:clamp(1.25rem,4vw,3.5rem) clamp(1rem,5vw,2rem) 5rem;
+  }
+  .doc { max-width:var(--measure); margin:0 auto; }
+  p,li { text-wrap:pretty; }
+  .doc > section > p, .doc > header > p { max-width:66ch; }
+  h1,h2,h3 { font-family:var(--font-display); font-weight:600; text-wrap:balance; line-height:1.2; margin:0; }
+  h1 { font-size:clamp(1.9rem,5vw,2.55rem); letter-spacing:-0.01em; }
+  h2 { font-size:1.45rem; }
+  h3 { font-size:1.1rem; }
+  a { color:var(--accent); text-underline-offset:2px; }
+  code { font-family:var(--font-mono); font-size:0.9em; }
+  p code, li code, td code, th code, dd code {
+    background:var(--sunken); border:1px solid var(--rule);
+    padding:0.05em 0.3em; border-radius:2px;
+    /* Long paths and hostnames must wrap rather than push the column sideways.
+       Table cells opt back into nowrap below, inside their own scroll container. */
+    overflow-wrap:break-word;
+  }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  ::selection { background:var(--accent-wash); }
+
+  /* ---- masthead ------------------------------------------------------ */
+  .masthead { display:grid; gap:1rem; padding-bottom:1.5rem; border-bottom:2px solid var(--ink); margin-bottom:2rem; }
+  .masthead__top { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+  .eyebrow { font:500 0.6875rem/1 var(--font-mono); letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); margin:0 0 0.6rem; }
+  .lede { font-size:1.15rem; color:var(--ink-2); max-width:60ch; }
+  .meta { display:flex; flex-wrap:wrap; gap:0.35rem 1.25rem; margin:0; padding:0; list-style:none;
+          font:0.75rem/1.5 var(--font-mono); color:var(--ink-2); }
+  .meta strong { color:var(--ink); font-weight:500; }
+  .toggle { flex:none; font:0.75rem/1 var(--font-mono); color:var(--ink-2); background:transparent;
+            border:1px solid var(--rule-strong); padding:0.45rem 0.6rem; cursor:pointer; border-radius:2px; }
+  .toggle:hover { color:var(--ink); border-color:var(--ink-2); }
+
+  /* ---- nav ----------------------------------------------------------- */
+  .toc { margin:0 0 3rem; padding:1rem 1.15rem; background:var(--surface); border:1px solid var(--rule); }
+  .toc h2 { font:500 0.6875rem/1 var(--font-mono); letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-2); margin-bottom:0.85rem; }
+  .toc ol { margin:0; padding:0; list-style:none; display:grid; gap:0.4rem 1.5rem; grid-template-columns:repeat(auto-fill,minmax(15rem,1fr)); font-size:0.9rem; }
+  .toc a { color:var(--ink); text-decoration-color:var(--rule-strong); }
+  .toc a:hover { color:var(--accent); }
+  .toc .num { font:0.75rem var(--font-mono); color:var(--ink-2); margin-right:0.5rem; }
+
+  /* ---- sections ------------------------------------------------------ */
+  section { margin-bottom:3.25rem; }
+  section > * + * { margin-top:1rem; }
+  h2 + p { margin-top:0.75rem; }
+  ul,ol { padding-left:1.25rem; }
+  li + li { margin-top:0.4rem; }
+
+  .decisions { list-style:none; padding:0; counter-reset:d; display:grid; gap:0.9rem; }
+  .decisions li { counter-increment:d; padding-left:2.4rem; position:relative; max-width:66ch; }
+  .decisions li::before {
+    content:counter(d,decimal-leading-zero); position:absolute; left:0; top:0.15em;
+    font:500 0.75rem/1 var(--font-mono); color:var(--accent); letter-spacing:0.04em;
+  }
+  .decisions b { font-weight:600; }
+
+  /* ---- code ---------------------------------------------------------- */
+  figure.code { margin:0; border:1px solid var(--rule); background:var(--sunken); }
+  .code__bar { display:flex; align-items:center; justify-content:space-between; gap:1rem;
+               padding:0.35rem 0.4rem 0.35rem 0.7rem; background:var(--surface); border-bottom:1px solid var(--rule); }
+  .code__label { font:500 0.6875rem/1.4 var(--font-mono); letter-spacing:0.09em; text-transform:uppercase; color:var(--ink-2); }
+  .copy { flex:none; font:0.6875rem/1 var(--font-mono); color:var(--ink-2); background:transparent;
+          border:1px solid var(--rule-strong); padding:0.3rem 0.5rem; cursor:pointer; border-radius:2px; }
+  .copy:hover { color:var(--ink); border-color:var(--ink-2); }
+  .code pre { margin:0; padding:0.85rem 0.9rem; overflow-x:auto; font:0.8125rem/1.65 var(--font-mono); color:var(--ink); }
+
+  /* ---- tables -------------------------------------------------------- */
+  .scroll { overflow-x:auto; border:1px solid var(--rule); background:var(--surface); }
+  table { border-collapse:collapse; width:100%; min-width:32rem; font-size:0.875rem; font-variant-numeric:tabular-nums; }
+  caption { text-align:left; font:500 0.6875rem/1.4 var(--font-mono); letter-spacing:0.09em;
+            text-transform:uppercase; color:var(--ink-2); padding:0.6rem 0.7rem; border-bottom:1px solid var(--rule); }
+  th,td { text-align:left; vertical-align:top; padding:0.55rem 0.7rem; border-bottom:1px solid var(--rule); }
+  thead th { font:600 0.6875rem/1.4 var(--font-mono); letter-spacing:0.07em; text-transform:uppercase;
+             color:var(--ink-2); border-bottom:2px solid var(--rule-strong); white-space:nowrap; }
+  tbody tr:last-child td { border-bottom:0; }
+  td code { white-space:nowrap; }
+
+  /* ---- steps --------------------------------------------------------- */
+  .steps { list-style:none; padding:0; margin:0; display:grid; gap:3rem; }
+  /* Grid items default to min-width:auto, so a wide <pre> would stretch its whole
+     track and leak horizontal scrolling to the page. Keep the overflow inside .code pre. */
+  .steps > li, .step > *, .field > *, .verify > * { min-width:0; }
+  .step { border-top:2px solid var(--ink); padding-top:0.85rem; display:grid; gap:1.1rem; }
+  .step__head { display:grid; gap:0.35rem; }
+  .step__n { font:500 0.6875rem/1 var(--font-mono); letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); }
+  .field { display:grid; gap:0.55rem; }
+  .field > h4 { margin:0; font:600 0.6875rem/1 var(--font-mono); letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-2); }
+  .field p, .field li { max-width:66ch; }
+  .field ul, .field ol { margin:0; }
+  .verify { background:var(--accent-wash); border:1px solid var(--rule); padding:0.9rem 1rem; display:grid; gap:0.55rem; }
+  .verify > h4 { color:var(--accent); }
+
+  /* ---- flags --------------------------------------------------------- */
+  .flags { list-style:none; padding:0; display:grid; gap:1.1rem; }
+  .flags li { max-width:66ch; }
+  .tag { display:inline-block; font:600 0.625rem/1.6 var(--font-mono); letter-spacing:0.1em; text-transform:uppercase;
+         color:var(--flag); background:var(--flag-wash); border:1px solid var(--rule); padding:0.05rem 0.4rem;
+         border-radius:2px; margin-right:0.5rem; vertical-align:0.08em; }
+  .tag--scope { color:var(--ink-2); background:var(--sunken); }
+
+  .note { border-left:3px solid var(--rule-strong); padding-left:0.9rem; color:var(--ink-2); font-size:0.95rem; max-width:64ch; }
+
+  footer { border-top:1px solid var(--rule); padding-top:1rem; color:var(--ink-2); font-size:0.85rem; }
+
+  @media (max-width:34rem) {
+    body { font-size:1rem; }
+    .code pre { font-size:0.75rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation:none !important; transition:none !important; } }
+  @media print {
+    body { background:#fff; color:#000; padding:0; }
+    .toggle,.copy,.toc { display:none; }
+    .step { break-inside:avoid; }
+  }
+</style>
+<style>
+  .stories { list-style:none; padding:0; margin:0; display:grid; gap:0.9rem; }
+  .story { border:1px solid var(--rule); background:var(--surface); padding:0.85rem 1rem; display:grid; gap:0.5rem; }
+  .story__id { font:600 0.6875rem/1 var(--font-mono); letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); }
+  .story p { margin:0; max-width:66ch; }
+  .story ul { margin:0; font-size:0.925rem; color:var(--ink-2); }
+  .story ul li + li { margin-top:0.2rem; }
+  .persona { display:grid; grid-template-columns:auto 1fr; gap:0.2rem 1rem; align-items:baseline; }
+  .persona dt { font:600 0.6875rem/1.6 var(--font-mono); letter-spacing:0.1em; text-transform:uppercase; color:var(--accent); }
+  .persona dd { margin:0; max-width:66ch; }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<header class="masthead">
+  <div class="masthead__top">
+    <div>
+      <p class="eyebrow">PRD &middot; versions &middot; implementation plan &middot; 2026-08-28</p>
+      <h1>handbill</h1>
+    </div>
+    <button class="toggle" type="button" id="theme" aria-live="polite">Theme: auto</button>
+  </div>
+  <p class="lede">Hand someone a page. One command turns a self-contained HTML file into an unguessable, immutable link on a domain you own. Self-host first; a hosted tier later, from the same code. This document is the product definition, the user stories per version, the technical design on Effect, and the build order for <code>~/projects/handbill</code>, a fresh repo.</p>
+  <ul class="meta">
+    <li><strong>Owner</strong> Viktor Avelino</li>
+    <li><strong>Repo</strong> ~/projects/handbill (new, empty)</li>
+    <li><strong>Stack</strong> Effect 4 (rc) &middot; Cloudflare Workers + R2 &middot; bun &middot; Astro</li>
+    <li><strong>Supersedes</strong> the 2026-08-28 brainstorm</li>
+  </ul>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#product">Product</a></li>
+    <li><a href="#personas">Personas</a></li>
+    <li><a href="#versions">Versions plan</a></li>
+    <li><a href="#stories">User stories</a></li>
+    <li><a href="#design">Technical design</a></li>
+    <li><a href="#contract">API contract</a></li>
+    <li><a href="#repo">Repository</a></li>
+    <li><a href="#build">Implementation plan &middot; v0.1</a></li>
+    <li><a href="#later">Implementation outline &middot; v0.2 &ndash; v1.0</a></li>
+    <li><a href="#risks">Risks</a></li>
+    <li><a href="#open">Open questions</a></li>
+  </ol>
+</nav>
+
+<section id="product">
+  <h2>Product</h2>
+  <p><strong>Problem.</strong> Coding agents finish work by producing documents &mdash; plans, reviews, reports &mdash; as HTML files on disk. Sharing one means attaching a file. The existing hosted option (<a href="https://github.com/plannotator/tot">tot</a>) puts the page on someone else&rsquo;s domain, lets anyone with the link edit or delete it, and cannot be self-hosted.</p>
+  <p><strong>Product.</strong> <code>handbill plan.html</code> prints <code>https://a3f9c1d4e2b8.yourdomain.dev</code>. The URL is the content hash, so it never changes under a reader; a new version is a new link. Publishing needs a token; reading needs only the link. The whole stack &mdash; Worker, CLI, agent skill, docs &mdash; is MIT and deploys to your own Cloudflare account in minutes. Later, the same Worker runs in <em>accounts</em> mode on <code>handbill.dev</code> for people without a domain.</p>
+
+  <h3>Goals</h3>
+  <ul>
+    <li>Time from &ldquo;I have a domain on Cloudflare&rdquo; to first published link: under 10 minutes, following the README only.</li>
+    <li>An agent with the skill installed ends a task with a working link, first try, without being told how.</li>
+    <li>The Worker stays small enough to read in one sitting; the CLI is one binary-like file with predictable stdout.</li>
+    <li>Hosted mode is a configuration of the same code, not a fork.</li>
+  </ul>
+  <h3>Non-goals</h3>
+  <ul>
+    <li>A site builder: no multi-file sites, directories, routing, build steps, or transforms on the server.</li>
+    <li>Collaboration: no comments, reactions, analytics, view counts, dashboards beyond a list.</li>
+    <li>Other clouds: Cloudflare is the only target. The value is one config file that works.</li>
+    <li>Editing in place. A link is a specific set of bytes, forever. Aliases (v0.2) are the escape hatch.</li>
+  </ul>
+  <h3>Success measures</h3>
+  <ul>
+    <li>Viktor&rsquo;s daily flow runs on <code>handbill</code> and the old <code>publish-plan</code> deployment is retired (v0.1).</li>
+    <li>At least three self-hosters not named Viktor confirm the README works (v0.1 &rarr; v0.2).</li>
+    <li>Zero security reports rated high or above; every page served with <code>noindex</code> and immutable caching.</li>
+  </ul>
+</section>
+
+<section id="personas">
+  <h2>Personas</h2>
+  <dl class="persona">
+    <dt>Ada</dt><dd><strong>Agent operator.</strong> Runs Claude Code and Codex all day. Wants every plan and review to end in a link she can paste in Slack. Cares about the skill and about stdout being exactly one URL. This is Viktor.</dd>
+    <dt>Sam</dt><dd><strong>Self-hoster.</strong> Has a domain on Cloudflare, comfortable with <code>wrangler</code>, allergic to SaaS for personal infra. Wants the five-minute setup, the free tier, and to never think about it again.</dd>
+    <dt>Kai</dt><dd><strong>Hosted user (v0.3).</strong> No domain, no Cloudflare account. Read about it, ran <code>npx handbill plan.html</code>, wants a link. Will tolerate a login.</dd>
+    <dt>Rae</dt><dd><strong>Contributor.</strong> Wants to add markdown rendering or fix a bug. Needs tests that run without a Cloudflare account and a codebase where one file explains the whole thing.</dd>
+  </dl>
+</section>
+
+<section id="versions">
+  <h2>Versions plan</h2>
+  <p>Each version has a theme, ships alone, and has an exit criterion that is observable, not a feeling. Semver on the CLI package; the API is versioned under <code>/v1</code> and does not break inside a major.</p>
+  <div class="scroll">
+    <table>
+      <caption>Roadmap</caption>
+      <thead><tr><th scope="col">Version</th><th scope="col">Theme</th><th scope="col">Ships</th><th scope="col">Exit criterion</th></tr></thead>
+      <tbody>
+        <tr><td><strong>0.1</strong></td><td>Print</td><td>Worker (secret auth), CLI <code>publish</code>/<code>list</code>/<code>remove</code>/<code>doctor</code>, stdin, <code>--json</code>, skill, self-host docs, Deploy button, CI, npm</td><td>Viktor&rsquo;s flow migrated; one outside self-hoster succeeds from the README alone</td></tr>
+        <tr><td><strong>0.2</strong></td><td>Words and names</td><td>Markdown &rarr; self-contained HTML in the CLI; aliases (living names) in KV; <code>--open</code>; shell completions; OpenAPI + docs endpoint; landing + docs site on <code>handbill.dev</code></td><td>Three outside self-hosters; <code>handbill notes.md</code> works; aliases documented as opt-in and guessable</td></tr>
+        <tr><td><strong>0.3</strong></td><td>Hosted</td><td>Accounts auth layer (KV), <code>handbill login</code>, per-owner index, quotas, rate limits, operator takedown, ToS/abuse page, default endpoint flips to <code>api.handbill.dev</code></td><td>A stranger publishes with no config in under two minutes; abuse controls exercised in a drill</td></tr>
+        <tr><td><strong>0.4</strong></td><td>Sheets and time</td><td>Inline local assets into the HTML at publish time; <code>--ttl</code> with a sweeping cron</td><td>A page with local images publishes as one object</td></tr>
+        <tr><td><strong>1.0</strong></td><td>Stable</td><td>Contract frozen, Effect on stable v4, <code>@handbill/contract</code> published, Public Suffix List entry for <code>handbill.dev</code>, encrypted pages behind an experimental flag</td><td>No breaking change for two minor versions</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="stories">
+  <h2>User stories</h2>
+  <p>Acceptance criteria are the test list. Stories are numbered by the version they belong to.</p>
+
+  <h3>v0.1 &middot; Print</h3>
+  <ul class="stories">
+    <li class="story"><span class="story__id">S1.1 &middot; Ada</span>
+      <p>As an agent operator, I want <code>handbill plan.html</code> to print one URL so that an agent&rsquo;s last line is the deliverable.</p>
+      <ul><li>stdout is exactly the URL followed by a newline; nothing else on stdout, ever.</li><li>Publishing the same bytes twice prints the same URL and stores nothing new.</li><li>Exit code 0 on success, non-zero with a one-line stderr reason otherwise.</li></ul></li>
+    <li class="story"><span class="story__id">S1.2 &middot; Ada</span>
+      <p>As an agent, I want to publish from stdin (<code>handbill -</code>) so that I never have to write a temp file.</p>
+      <ul><li>Bytes are hashed and sent as-is; the 5&nbsp;MB cap applies before upload.</li></ul></li>
+    <li class="story"><span class="story__id">S1.3 &middot; Ada</span>
+      <p>As an agent, I want <code>--json</code> on every command so that I can read <code>{ url, hash, created }</code> without parsing prose.</p>
+      <ul><li>Errors under <code>--json</code> are <code>{ error, message }</code> on stderr, same exit codes.</li></ul></li>
+    <li class="story"><span class="story__id">S1.4 &middot; Ada</span>
+      <p>As an operator, I want <code>handbill list</code> to show what is published, newest first, with titles, so that I can find a link I lost.</p>
+      <ul><li>Server-side list; every machine with the token sees the same thing.</li><li>Columns: url, date, title (from <code>&lt;title&gt;</code>, or &ldquo;(untitled)&rdquo;).</li></ul></li>
+    <li class="story"><span class="story__id">S1.5 &middot; Ada</span>
+      <p>As an operator, I want <code>handbill remove &lt;url|hash&gt;</code> to be idempotent so that unpublishing a mistake is one command with no questions.</p>
+      <ul><li>204 whether or not the page existed; the served URL returns 404 within seconds.</li></ul></li>
+    <li class="story"><span class="story__id">S1.6 &middot; Sam</span>
+      <p>As a self-hoster, I want to deploy from the README in under ten minutes so that I own my links.</p>
+      <ul><li>Three edits in <code>wrangler.jsonc</code> (zone, two routes), one <code>wrangler secret put</code>, two DNS records.</li><li>A &ldquo;Deploy to Cloudflare&rdquo; button provisions Worker + bucket; the doc covers the remaining manual steps.</li><li>Free tier by default; the doc states the limits.</li></ul></li>
+    <li class="story"><span class="story__id">S1.7 &middot; Sam</span>
+      <p>As a self-hoster, I want <code>handbill doctor</code> to tell me what is wrong so that setup failures are not a mystery.</p>
+      <ul><li>Checks: config file present, token present, endpoint reachable (<code>GET /v1/health</code>), token accepted, wildcard TLS valid for a probe hostname.</li><li>Each check prints pass/fail and one sentence of what to do.</li></ul></li>
+    <li class="story"><span class="story__id">S1.8 &middot; Ada</span>
+      <p>As an operator, I want the skill installable into Claude Code and Codex so that agents publish without instruction.</p>
+      <ul><li><code>skills/handbill/SKILL.md</code> in the repo; installable by copying or with a skills installer.</li><li>The skill says what not to publish (secrets, customer data) and how to unpublish.</li></ul></li>
+    <li class="story"><span class="story__id">S1.9 &middot; reader</span>
+      <p>As a reader, I want the page to load fast and never change so that a link I was sent is what was sent.</p>
+      <ul><li><code>Cache-Control: public, max-age=31536000, immutable</code>; <code>X-Robots-Tag: noindex, nofollow</code>; <code>text/html; charset=utf-8</code>.</li><li>Every path on a hash hostname serves the same document; the apex and unknown hosts return a small 404.</li></ul></li>
+    <li class="story"><span class="story__id">S1.10 &middot; Rae</span>
+      <p>As a contributor, I want tests that run with <code>bun test</code> and no Cloudflare account so that I can change the Worker safely.</p>
+      <ul><li>An in-memory storage layer replaces R2 in tests; the CLI client is tested against the Worker handler in-process.</li></ul></li>
+  </ul>
+
+  <h3>v0.2 &middot; Words and names</h3>
+  <ul class="stories">
+    <li class="story"><span class="story__id">S2.1 &middot; Ada</span><p>As a writer, I want <code>handbill notes.md</code> to publish a readable page so that markdown is a first-class input.</p>
+      <ul><li>The CLI renders to a self-contained HTML with a built-in light/dark stylesheet; the Worker never sees markdown.</li><li><code>&lt;title&gt;</code> comes from the first H1 or the filename.</li></ul></li>
+    <li class="story"><span class="story__id">S2.2 &middot; Ada</span><p>As an operator, I want <code>handbill alias plan &lt;hash|url&gt;</code> so that <code>plan.mydomain.dev</code> always shows the latest version while old hashes stay valid.</p>
+      <ul><li>A first label that is not 12-hex is looked up in KV and served (not redirected) with <code>max-age=60</code>.</li><li>Aliases are guessable by construction; the docs say so and the feature is off until a KV binding exists.</li><li><code>alias remove</code>, <code>alias list</code>.</li></ul></li>
+    <li class="story"><span class="story__id">S2.3 &middot; Sam</span><p>As a self-hoster, I want <code>/v1/openapi.json</code> and a docs page so that I can script against my own instance.</p></li>
+    <li class="story"><span class="story__id">S2.4 &middot; Ada</span><p>As a human, I want <code>--open</code> and shell completions so that the CLI feels finished.</p></li>
+    <li class="story"><span class="story__id">S2.5 &middot; Sam</span><p>As a visitor, I want <code>handbill.dev</code> to explain the project and link to the docs so that I can decide in one minute.</p></li>
+  </ul>
+
+  <h3>v0.3 &middot; Hosted</h3>
+  <ul class="stories">
+    <li class="story"><span class="story__id">S3.1 &middot; Kai</span><p>As someone without a domain, I want <code>npx handbill plan.html</code> to work after a login so that I get a link with no infrastructure.</p>
+      <ul><li><code>handbill login</code> opens a browser, mints an API key, stores it in the config file.</li><li>Default endpoint becomes <code>https://api.handbill.dev</code>; self-hosters keep overriding it.</li></ul></li>
+    <li class="story"><span class="story__id">S3.2 &middot; Kai</span><p>As a hosted user, I want <code>list</code> and <code>remove</code> to see only my pages.</p>
+      <ul><li>Objects carry <code>owner</code>; a per-owner index backs <code>list</code>; <code>remove</code> requires owner match.</li></ul></li>
+    <li class="story"><span class="story__id">S3.3 &middot; operator</span><p>As the operator, I want quotas, rate limits, and a takedown command so that hosting strangers is survivable.</p>
+      <ul><li>Per key: pages/day and total bytes; per IP: WAF rules on publish and read.</li><li><code>handbill admin takedown &lt;hash&gt;</code> with an operator token; abuse contact and ToS published.</li></ul></li>
+  </ul>
+
+  <h3>v0.4 &middot; Sheets and time</h3>
+  <ul class="stories">
+    <li class="story"><span class="story__id">S4.1 &middot; Ada</span><p>As a writer, I want local images, CSS, and scripts inlined at publish so that a page with assets is still one object.</p></li>
+    <li class="story"><span class="story__id">S4.2 &middot; Ada</span><p>As an operator, I want <code>--ttl 7d</code> so that throwaway pages clean themselves up.</p></li>
+  </ul>
+</section>
+
+<section id="design">
+  <h2>Technical design</h2>
+  <p>Effect 4 end to end. The reason is not fashion: the two things this product needs to swap later &mdash; the auth strategy and the storage backend &mdash; are exactly what Effect&rsquo;s services and layers are for, and the API contract as a typed value gives the CLI a client, the docs an OpenAPI spec, and the tests an in-process server, all from one definition.</p>
+
+  <h3>Runtime decisions</h3>
+  <ol class="decisions">
+    <li><b>Effect <code>4.0.0-rc</code>, pinned exact.</b> v3 is feature-frozen and v4 is at release candidate with a unified version across the ecosystem. Everything we use lives in <code>effect/unstable/httpapi</code>, <code>effect/unstable/http</code>, and <code>effect/unstable/cli</code>. The <code>unstable</code> path means minor-version API churn until stable; pinning and a small surface make that a one-afternoon migration when it comes.</li>
+    <li><b>Worker = <code>HttpRouter.toWebHandler(appLayer)</code>.</b> The Workers <code>fetch</code> handler classifies the hostname, then hands API requests to the Effect web handler and page requests to a small Effect that reads storage. No framework besides Effect.</li>
+    <li><b>Contract is a package.</b> <code>packages/contract</code> exports the <code>HttpApi</code> definition and schemas. The Worker implements it with <code>HttpApiBuilder</code>; the CLI consumes it with <code>HttpApiClient.make</code>; <code>OpenApi.fromApi</code> generates the spec. Nobody hand-writes a fetch or a status code.</li>
+    <li><b>CLI = <code>effect/unstable/cli</code> on <code>@effect/platform-node</code>.</b> Runs under Node &ge;&nbsp;22 and bun. Bundled with <code>bun build --target=node</code> into one <code>dist/cli.js</code>; the published package has one runtime dependency (<code>effect</code>) and one file. Help, completions, and prompts come free.</li>
+    <li><b>Web = Astro + Starlight, static, on Workers static assets.</b> Landing and docs only, from v0.2. A hosted-mode dashboard (v0.3) starts as an Astro page with one island; if it ever needs routing and auth state, TanStack Start. Not decided until it hurts.</li>
+    <li><b>bun workspaces, oxlint + oxfmt, bun test.</b> One package manager, one lint/format tool, no config sprawl.</li>
+  </ol>
+
+  <h3>Services and layers</h3>
+  <figure class="code">
+    <figcaption class="code__bar"><span class="code__label">apps/worker &mdash; the shape</span></figcaption>
+    <pre><code>Config        ZONE, MAX_BYTES                     from env (Config module)
+Storage       put / get / head / delete / list    StorageR2      (prod)
+                                                  StorageMemory  (tests)
+Auth          authorize(token) &rarr; Owner            AuthSecret     (v0.1: one PUBLISH_TOKEN, owner = "self")
+                                                  AuthAccounts   (v0.3: KV sha256(key) &rarr; owner)
+Aliases       resolve(name) / set / remove        AliasesKV      (v0.2, optional binding)
+Index         byOwner(owner)                      IndexBucket    (v0.1: walk the bucket)
+                                                  IndexKV        (v0.3: per-owner prefix)
+
+errors        HashMismatch 400 &middot; Unauthorized 401 &middot; NotFound 404 &middot; TooLarge 413
+              as Schema.TaggedError with HttpApiSchema status annotations
+              &rarr; the contract, the OpenAPI spec and the client all know them
+
+fetch(request, env)
+  classifyHost(hostname, env.ZONE)
+    api   &rarr; apiHandler(request)          HttpRouter.toWebHandler(ApiLive)
+    page  &rarr; servePage(hash)              Storage.get &rarr; immutable response
+    alias &rarr; serveAlias(name)             Aliases.resolve &rarr; servePage (v0.2)
+    none  &rarr; nothingHere()</code></pre>
+  </figure>
+  <p>What this buys concretely: the v0.3 hosted tier is <code>Layer.provide(AuthAccounts)</code> instead of <code>AuthSecret</code>, selected by a <code>MODE</code> var. Tests provide <code>StorageMemory</code> and call the same web handler with a <code>new Request(&hellip;)</code>. The CLI&rsquo;s integration test points <code>HttpApiClient</code> at that in-process handler &mdash; a full round-trip with no network and no Miniflare.</p>
+
+  <h3>Hashing and identity</h3>
+  <ul>
+    <li><code>hash = hex(sha256(bytes))[0:12]</code>, computed by the client to form the URL and re-computed by the server to reject forgeries. 48 bits: unguessable, short enough to say out loud.</li>
+    <li>Objects carry <code>customMetadata: { owner, title, publishedAt }</code> from v0.1, even though <code>owner</code> is always <code>"self"</code> in secret mode. That single field is what makes v0.3 additive.</li>
+    <li>Hosted mode open question: identical bytes from two owners. Options are first-owner-wins (documented) or salting the hash with the owner id in accounts mode. Decide at v0.3; nothing in v0.1 forecloses either.</li>
+  </ul>
+
+  <h3>CLI</h3>
+  <figure class="code">
+    <figcaption class="code__bar"><span class="code__label">apps/cli &mdash; surface</span></figcaption>
+    <pre><code>handbill &lt;file.html | -&gt;  [--open] [--json] [--endpoint &lt;url&gt;]
+handbill list               [--json]
+handbill remove &lt;url|hash&gt;  [--json]
+handbill doctor
+handbill completions &lt;shell&gt;
+                                                        v0.2+
+handbill &lt;file.md&gt;          rendered to HTML client-side
+handbill alias &lt;name&gt; &lt;url|hash&gt; | alias remove &lt;name&gt; | alias list
+                                                        v0.3+
+handbill login              mints a key against api.handbill.dev
+handbill admin takedown &lt;hash&gt;
+
+config   ~/.config/handbill/config.json   { "endpoint", "token" }
+env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over env)</code></pre>
+  </figure>
+</section>
+
+<section id="contract">
+  <h2>API contract</h2>
+  <p>Kept byte-compatible with the existing deployment so Viktor&rsquo;s migration is a config change. Additions are new endpoints only.</p>
+  <div class="scroll">
+    <table>
+      <caption>/v1, all on <code>api.&lt;zone&gt;</code></caption>
+      <thead><tr><th scope="col">Endpoint</th><th scope="col">Auth</th><th scope="col">Result</th><th scope="col">Since</th></tr></thead>
+      <tbody>
+        <tr><td><code>PUT /v1/pages/:hash</code> &mdash; raw HTML body</td><td>bearer</td><td><code>200 { hash, url, created }</code>; 400 hash mismatch; 413 over cap</td><td>0.1</td></tr>
+        <tr><td><code>GET /v1/pages</code></td><td>bearer</td><td><code>200 { pages: [{ hash, url, title, publishedAt, size }] }</code></td><td>0.1</td></tr>
+        <tr><td><code>DELETE /v1/pages/:hash</code></td><td>bearer</td><td><code>204</code>, idempotent</td><td>0.1</td></tr>
+        <tr><td><code>GET /v1/health</code></td><td>none</td><td><code>200 { ok, mode, zone }</code></td><td>0.1</td></tr>
+        <tr><td><code>GET /v1/openapi.json</code>, <code>GET /docs</code></td><td>none</td><td>Spec and a Scalar page, generated from the contract</td><td>0.2</td></tr>
+        <tr><td><code>PUT | DELETE /v1/aliases/:name</code>, <code>GET /v1/aliases</code></td><td>bearer</td><td>Alias CRUD; 404 unless a KV binding exists</td><td>0.2</td></tr>
+        <tr><td><code>GET /v1/me</code></td><td>bearer</td><td><code>{ owner, quota }</code></td><td>0.3</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="scroll">
+    <table>
+      <caption>Served hostnames</caption>
+      <thead><tr><th scope="col">Host</th><th scope="col">Serves</th><th scope="col">Cache</th></tr></thead>
+      <tbody>
+        <tr><td><code>&lt;12-hex&gt;.&lt;zone&gt;</code> any path</td><td>The document, <code>noindex</code></td><td><code>public, max-age=31536000, immutable</code></td></tr>
+        <tr><td><code>&lt;name&gt;.&lt;zone&gt;</code> (0.2, opt-in)</td><td>The aliased document</td><td><code>public, max-age=60</code></td></tr>
+        <tr><td><code>api.&lt;zone&gt;</code></td><td>The API</td><td><code>no-store</code></td></tr>
+        <tr><td>apex, <code>www</code>, anything else</td><td>&ldquo;Nothing here&rdquo; 404 (self-host); the site (hosted)</td><td><code>no-store</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="repo">
+  <h2>Repository</h2>
+  <figure class="code">
+    <figcaption class="code__bar"><span class="code__label">~/projects/handbill</span></figcaption>
+    <pre><code>handbill/
+  README.md                       pitch, 30-second demo, Deploy button, self-host in 5 steps, "why not tot"
+  LICENSE                         MIT
+  SECURITY.md                     threat model in three sentences + contact
+  package.json                    bun workspaces: packages/*, apps/*
+  tsconfig.base.json  .oxlintrc.json  .oxfmtrc.json
+  packages/
+    contract/                     HttpApi + Schema: Hash, Page, errors; OpenAPI generation
+  apps/
+    worker/                       Effect on Workers; wrangler.jsonc; StorageR2, AuthSecret, ...
+      src/{index,api,pages,services}.ts   src/*.test.ts
+    cli/                          effect/unstable/cli; npm "handbill"; bin dist/cli.js
+      src/{main,commands,config,client}.ts test/
+    web/                          Astro + Starlight (v0.2)
+  skills/handbill/SKILL.md        the agent skill
+  docs/                           this PRD, SELF-HOSTING.md, ADRs, release notes
+  .github/workflows/ci.yml        typecheck, lint, test, bundle-size check; tag &rarr; npm publish --provenance</code></pre>
+  </figure>
+  <p>Nothing is copied from <code>publish-plan</code>. The contract is re-derived from its documented behaviour so the two deployments stay compatible; the code is new.</p>
+</section>
+
+<section id="build">
+  <h2>Implementation plan &middot; v0.1</h2>
+  <p>Ordered so every milestone leaves something that runs. Estimates are focused hours, agent-assisted. Milestones 3 and 4 can run in parallel once the contract (milestone 2) exists; file ownership is by app directory so they never collide.</p>
+  <ol class="steps">
+    <li class="step">
+      <div class="step__head"><p class="step__n">M1 &middot; 1h</p><h3>Scaffold</h3></div>
+      <div class="field"><h4>Tasks</h4><ul>
+        <li><code>git init</code>, bun workspaces, base tsconfig (strict, <code>exactOptionalPropertyTypes</code>, <code>noUncheckedIndexedAccess</code>), oxlint/oxfmt, MIT, <code>.gitignore</code> (<code>.env</code>, <code>.wrangler</code>, <code>node_modules</code>, <code>dist</code>).</li>
+        <li>Empty packages with <code>package.json</code> and a passing placeholder test each so CI is green from commit one.</li>
+        <li>CI: <code>bun install --frozen-lockfile</code>, typecheck, lint, test.</li>
+      </ul></div>
+      <div class="verify"><h4>Done when</h4><p>CI green on the first push; <code>bun run typecheck</code> and <code>bun test</code> pass at the root.</p></div>
+    </li>
+    <li class="step">
+      <div class="step__head"><p class="step__n">M2 &middot; 2h</p><h3>Contract</h3></div>
+      <div class="field"><h4>Tasks</h4><ul>
+        <li><code>Hash</code> schema (12 lowercase hex, branded), <code>Page</code>, <code>PublishResult</code>, the four tagged errors with status annotations.</li>
+        <li><code>HttpApi</code> with groups <code>pages</code> (publish, list, remove) and <code>meta</code> (health); bearer security on <code>pages</code>.</li>
+        <li>Raw-body publish endpoint: verify <code>HttpApiSchema</code> binary encoding on a spike; fall back to reading <code>HttpServerRequest</code> in the handler if it fights us.</li>
+        <li>Test: <code>OpenApi.fromApi</code> produces a spec with the four error responses.</li>
+      </ul></div>
+      <div class="verify"><h4>Done when</h4><p>The contract package typechecks and the spec snapshot test passes. This is the interface the next two milestones build against.</p></div>
+    </li>
+    <li class="step">
+      <div class="step__head"><p class="step__n">M3 &middot; 4h</p><h3>Worker</h3></div>
+      <div class="field"><h4>Tasks</h4><ul>
+        <li>Services: <code>Storage</code> (R2 + memory layers), <code>Auth</code> (secret layer), <code>Config</code> from env.</li>
+        <li><code>HttpApiBuilder.group</code> handlers for pages and meta; <code>HttpRouter.toWebHandler</code>; hostname classifier; page serving with the immutable headers; 404 page.</li>
+        <li><code>wrangler.jsonc</code> with the three marked lines, <code>vars.ZONE</code>, R2 binding, <code>workers_dev: false</code>.</li>
+        <li>Tests on the memory layer: hash mismatch, size cap, idempotent put, list order, delete idempotency, host classification table, headers.</li>
+        <li>Bundle-size check in CI (<code>wrangler deploy --dry-run --outdir</code>, fail above 1&nbsp;MB gzip).</li>
+      </ul></div>
+      <div class="verify"><h4>Done when</h4><p>Deployed to Viktor&rsquo;s account as a second Worker on the existing bucket; the old publish script still works against it (contract compatibility proven), then routes move.</p></div>
+    </li>
+    <li class="step">
+      <div class="step__head"><p class="step__n">M4 &middot; 4h</p><h3>CLI</h3></div>
+      <div class="field"><h4>Tasks</h4><ul>
+        <li>Config resolution (flag &gt; env &gt; file); <code>HttpApiClient.make</code> with a bearer transformer; hashing with <code>node:crypto</code>.</li>
+        <li>Commands: default publish (file or <code>-</code>), <code>list</code>, <code>remove</code>, <code>doctor</code>, <code>completions</code>; <code>--json</code>; stdout discipline.</li>
+        <li>Tests: config precedence, hashing, and one in-process round-trip per command against the Worker handler on the memory layer.</li>
+        <li>Build: <code>bun build --target=node</code> &rarr; <code>dist/cli.js</code> with shebang; <code>files: ["dist"]</code>; <code>engines.node &gt;= 22</code>.</li>
+      </ul></div>
+      <div class="verify"><h4>Done when</h4><p><code>npm i -g ./apps/cli</code> on a bun-less machine publishes, lists, and removes against Viktor&rsquo;s deployment.</p></div>
+    </li>
+    <li class="step">
+      <div class="step__head"><p class="step__n">M5 &middot; 1h</p><h3>Skill and migration</h3></div>
+      <div class="field"><h4>Tasks</h4><ul>
+        <li><code>skills/handbill/SKILL.md</code> for Claude Code and Codex, calling the installed CLI.</li>
+        <li><code>agents-config</code>: replace the vendored <code>publish-plan</code> skill with a copy step; migrate the token to <code>~/.config/handbill/config.json</code>; update the memory note.</li>
+        <li>Retire the <code>publish-plan</code> Worker once routes point at the new one.</li>
+      </ul></div>
+      <div class="verify"><h4>Done when</h4><p>&ldquo;Give me a link&rdquo; in a fresh Claude Code session ends with a working URL via <code>handbill</code>.</p></div>
+    </li>
+    <li class="step">
+      <div class="step__head"><p class="step__n">M6 &middot; 2h</p><h3>Docs and release</h3></div>
+      <div class="field"><h4>Tasks</h4><ul>
+        <li><code>docs/SELF-HOSTING.md</code>: account, DNS (<code>*</code> and <code>api</code>, proxied), Universal SSL note, secret, deploy, the curl that proves it, free-tier limits.</li>
+        <li>README: pitch, recording, Deploy button (<code>deploy.workers.cloudflare.com/?url=&hellip;</code>), five steps, comparison with tot, security note.</li>
+        <li><code>SECURITY.md</code>; release workflow on tag with <code>npm publish --provenance</code>; publish <code>0.1.0</code>.</li>
+      </ul></div>
+      <div class="verify"><h4>Done when</h4><p><code>npx handbill --help</code> works for a stranger; one outside self-hoster confirms the README end to end.</p></div>
+    </li>
+  </ol>
+</section>
+
+<section id="later">
+  <h2>Implementation outline &middot; v0.2 &ndash; v1.0</h2>
+  <div class="scroll">
+    <table>
+      <caption>Work by version</caption>
+      <thead><tr><th scope="col">Version</th><th scope="col">Work</th><th scope="col">Notes</th></tr></thead>
+      <tbody>
+        <tr><td>0.2</td><td>Markdown renderer + built-in stylesheet in the CLI; <code>Aliases</code> service on KV, alias endpoints, alias hostname branch; <code>--open</code>; completions; OpenAPI + Scalar routes; <code>apps/web</code> Astro + Starlight deployed to <code>handbill.dev</code></td><td>First and only CLI dependency beyond <code>effect</code> is the markdown parser. Aliases require a KV binding and are absent from the API when missing.</td></tr>
+        <tr><td>0.3</td><td><code>AuthAccounts</code> + <code>IndexKV</code> layers; <code>MODE=accounts</code>; key minting page (GitHub OAuth) on <code>handbill.dev</code>; <code>login</code>, <code>me</code>; quotas in KV; WAF rate rules; <code>admin takedown</code>; ToS + abuse page; default endpoint flip; hash-salting decision</td><td>Separate Cloudflare account, Workers Paid. A drill: publish abusive content on a test key, take it down, confirm cache purge.</td></tr>
+        <tr><td>0.4</td><td>Asset inlining in the CLI (img/link/script &rarr; data URIs and inline blocks, with a size warning); <code>--ttl</code> writes <code>expiresAt</code>; cron trigger sweeps</td><td>Server stays single-object. TTL is metadata + cron, not lifecycle rules.</td></tr>
+        <tr><td>1.0</td><td>Move to Effect 4 stable; freeze <code>/v1</code>; publish <code>@handbill/contract</code>; PSL submission for <code>handbill.dev</code>; encrypted pages (<code>--private</code>, key in URL fragment) behind an experimental flag</td><td>Encrypted pages are the one feature tot explicitly lacks; ship only if asked for.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="risks">
+  <h2>Risks</h2>
+  <ul class="flags">
+    <li><span class="tag">effect</span><strong>v4 RC churn.</strong> <code>unstable/*</code> APIs may rename before stable. Mitigation: exact pin, small surface (one HttpApi, one router, one CLI command tree), and the contract package as the only place that touches the API-definition side.</li>
+    <li><span class="tag">effect</span><strong>Raw binary request body in HttpApi.</strong> The publish endpoint takes bytes, not JSON. Spike it in M2; the fallback (read the request stream in the handler) costs nothing in the contract.</li>
+    <li><span class="tag">workers</span><strong>Bundle size and cold start.</strong> Effect 4 is markedly smaller than 3 (~20&nbsp;KB minimal), but HttpApi and Schema add up. The CI size gate keeps it honest; Workers free allows 3&nbsp;MB compressed.</li>
+    <li><span class="tag">people</span><strong>Learning curve for contributors.</strong> Effect is a barrier for a drive-by fix. Mitigation: the Worker stays under ~400 lines, each service is one file, and the README links a &ldquo;how this codebase uses Effect&rdquo; page.</li>
+    <li><span class="tag">hosted</span><strong>Being a host.</strong> Abuse, cost, liability. Contained by the separate account, quotas, rate limits, takedown, and by not doing it until 0.3.</li>
+    <li><span class="tag tag--scope">scope</span><strong>Feature pull toward a site builder.</strong> Every &ldquo;can it also serve my folder&rdquo; request is answered by the non-goals. Inlining (0.4) is the last concession.</li>
+  </ul>
+</section>
+
+<section id="open">
+  <h2>Open questions</h2>
+  <ul>
+    <li>Hosted identical-bytes rule: first-owner-wins or owner-salted hash? (Decide at 0.3.)</li>
+    <li>Should <code>@handbill/contract</code> be public from 0.2 so people can write clients, or wait for the 1.0 freeze? Leaning 1.0.</li>
+    <li>Markdown parser choice at 0.2 (size vs CommonMark fidelity).</li>
+    <li>Does the hosted key-minting page justify a real app framework, or is one Astro island enough? Decide when building 0.3, not before.</li>
+  </ul>
+  <p class="note">Assumptions: the name is <code>handbill</code> and the domain is bought under a separate Cloudflare account; the existing API contract is kept byte-compatible; Cloudflare is the only target; there is no hosted tier before 0.3.</p>
+</section>
+
+<footer>
+  <p>PRD &middot; 2026-08-28 &middot; <code>~/projects/handbill/docs/2026-08-28-prd.html</code>. Effect versions verified against npm the same day (<code>effect@rc</code> = 4.0.0-rc.112; v3 feature-frozen).</p>
+</footer>
+
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, button = document.getElementById("theme");
+    var labels = { auto: "Theme: auto", light: "Theme: light", dark: "Theme: dark" }, order = ["auto", "light", "dark"];
+    function apply(mode) { if (mode === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", mode); button.textContent = labels[mode]; }
+    var saved = null; try { saved = localStorage.getItem("publish-plan-theme"); } catch (e) {}
+    var current = order.indexOf(saved) > -1 ? saved : "auto"; apply(current);
+    button.addEventListener("click", function () { current = order[(order.indexOf(current) + 1) % order.length]; apply(current); try { localStorage.setItem("publish-plan-theme", current); } catch (e) {} });
+  })();
+</script>
+</body>
+</html>
