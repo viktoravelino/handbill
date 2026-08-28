@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Open-sourcing the publish system — brainstorm</title>
+<style>
+  /* ---- tokens -------------------------------------------------------- */
+  :root {
+    --ground:#F0F2F1; --surface:#FAFBFA; --sunken:#E6EAE8;
+    --ink:#15191A; --ink-2:#535D5B;
+    --rule:#D2D9D6; --rule-strong:#B4BFBB;
+    --accent:#1D5F53; --accent-wash:#E2ECE8;
+    --flag:#7C4E0E; --flag-wash:#F1E9DA;
+
+    --font-display:"Iowan Old Style","Charter","Palatino Linotype",Palatino,Georgia,serif;
+    --font-body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+
+    --measure:74ch;
+    --step:1.5rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0F1413; --surface:#161C1B; --sunken:#1C2422;
+      --ink:#E6EBE9; --ink-2:#98A5A1;
+      --rule:#2A3432; --rule-strong:#3D4A47;
+      --accent:#7FC9B5; --accent-wash:#152E29;
+      --flag:#D6A566; --flag-wash:#2E2311;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0F1413; --surface:#161C1B; --sunken:#1C2422;
+    --ink:#E6EBE9; --ink-2:#98A5A1;
+    --rule:#2A3432; --rule-strong:#3D4A47;
+    --accent:#7FC9B5; --accent-wash:#152E29;
+    --flag:#D6A566; --flag-wash:#2E2311;
+  }
+
+  /* ---- base ---------------------------------------------------------- */
+  *,*::before,*::after { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font:1.0625rem/1.65 var(--font-body);
+    padding:clamp(1.25rem,4vw,3.5rem) clamp(1rem,5vw,2rem) 5rem;
+  }
+  .doc { max-width:var(--measure); margin:0 auto; }
+  p,li { text-wrap:pretty; }
+  .doc > section > p, .doc > header > p { max-width:66ch; }
+  h1,h2,h3 { font-family:var(--font-display); font-weight:600; text-wrap:balance; line-height:1.2; margin:0; }
+  h1 { font-size:clamp(1.9rem,5vw,2.55rem); letter-spacing:-0.01em; }
+  h2 { font-size:1.45rem; }
+  h3 { font-size:1.1rem; }
+  a { color:var(--accent); text-underline-offset:2px; }
+  code { font-family:var(--font-mono); font-size:0.9em; }
+  p code, li code, td code, th code, dd code {
+    background:var(--sunken); border:1px solid var(--rule);
+    padding:0.05em 0.3em; border-radius:2px;
+    /* Long paths and hostnames must wrap rather than push the column sideways.
+       Table cells opt back into nowrap below, inside their own scroll container. */
+    overflow-wrap:break-word;
+  }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  ::selection { background:var(--accent-wash); }
+
+  /* ---- masthead ------------------------------------------------------ */
+  .masthead { display:grid; gap:1rem; padding-bottom:1.5rem; border-bottom:2px solid var(--ink); margin-bottom:2rem; }
+  .masthead__top { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+  .eyebrow { font:500 0.6875rem/1 var(--font-mono); letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); margin:0 0 0.6rem; }
+  .lede { font-size:1.15rem; color:var(--ink-2); max-width:60ch; }
+  .meta { display:flex; flex-wrap:wrap; gap:0.35rem 1.25rem; margin:0; padding:0; list-style:none;
+          font:0.75rem/1.5 var(--font-mono); color:var(--ink-2); }
+  .meta strong { color:var(--ink); font-weight:500; }
+  .toggle { flex:none; font:0.75rem/1 var(--font-mono); color:var(--ink-2); background:transparent;
+            border:1px solid var(--rule-strong); padding:0.45rem 0.6rem; cursor:pointer; border-radius:2px; }
+  .toggle:hover { color:var(--ink); border-color:var(--ink-2); }
+
+  /* ---- nav ----------------------------------------------------------- */
+  .toc { margin:0 0 3rem; padding:1rem 1.15rem; background:var(--surface); border:1px solid var(--rule); }
+  .toc h2 { font:500 0.6875rem/1 var(--font-mono); letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-2); margin-bottom:0.85rem; }
+  .toc ol { margin:0; padding:0; list-style:none; display:grid; gap:0.4rem 1.5rem; grid-template-columns:repeat(auto-fill,minmax(15rem,1fr)); font-size:0.9rem; }
+  .toc a { color:var(--ink); text-decoration-color:var(--rule-strong); }
+  .toc a:hover { color:var(--accent); }
+  .toc .num { font:0.75rem var(--font-mono); color:var(--ink-2); margin-right:0.5rem; }
+
+  /* ---- sections ------------------------------------------------------ */
+  section { margin-bottom:3.25rem; }
+  section > * + * { margin-top:1rem; }
+  h2 + p { margin-top:0.75rem; }
+  ul,ol { padding-left:1.25rem; }
+  li + li { margin-top:0.4rem; }
+
+  .decisions { list-style:none; padding:0; counter-reset:d; display:grid; gap:0.9rem; }
+  .decisions li { counter-increment:d; padding-left:2.4rem; position:relative; max-width:66ch; }
+  .decisions li::before {
+    content:counter(d,decimal-leading-zero); position:absolute; left:0; top:0.15em;
+    font:500 0.75rem/1 var(--font-mono); color:var(--accent); letter-spacing:0.04em;
+  }
+  .decisions b { font-weight:600; }
+
+  /* ---- code ---------------------------------------------------------- */
+  figure.code { margin:0; border:1px solid var(--rule); background:var(--sunken); }
+  .code__bar { display:flex; align-items:center; justify-content:space-between; gap:1rem;
+               padding:0.35rem 0.4rem 0.35rem 0.7rem; background:var(--surface); border-bottom:1px solid var(--rule); }
+  .code__label { font:500 0.6875rem/1.4 var(--font-mono); letter-spacing:0.09em; text-transform:uppercase; color:var(--ink-2); }
+  .copy { flex:none; font:0.6875rem/1 var(--font-mono); color:var(--ink-2); background:transparent;
+          border:1px solid var(--rule-strong); padding:0.3rem 0.5rem; cursor:pointer; border-radius:2px; }
+  .copy:hover { color:var(--ink); border-color:var(--ink-2); }
+  .code pre { margin:0; padding:0.85rem 0.9rem; overflow-x:auto; font:0.8125rem/1.65 var(--font-mono); color:var(--ink); }
+
+  /* ---- tables -------------------------------------------------------- */
+  .scroll { overflow-x:auto; border:1px solid var(--rule); background:var(--surface); }
+  table { border-collapse:collapse; width:100%; min-width:32rem; font-size:0.875rem; font-variant-numeric:tabular-nums; }
+  caption { text-align:left; font:500 0.6875rem/1.4 var(--font-mono); letter-spacing:0.09em;
+            text-transform:uppercase; color:var(--ink-2); padding:0.6rem 0.7rem; border-bottom:1px solid var(--rule); }
+  th,td { text-align:left; vertical-align:top; padding:0.55rem 0.7rem; border-bottom:1px solid var(--rule); }
+  thead th { font:600 0.6875rem/1.4 var(--font-mono); letter-spacing:0.07em; text-transform:uppercase;
+             color:var(--ink-2); border-bottom:2px solid var(--rule-strong); white-space:nowrap; }
+  tbody tr:last-child td { border-bottom:0; }
+  td code { white-space:nowrap; }
+
+  /* ---- steps --------------------------------------------------------- */
+  .steps { list-style:none; padding:0; margin:0; display:grid; gap:3rem; }
+  /* Grid items default to min-width:auto, so a wide <pre> would stretch its whole
+     track and leak horizontal scrolling to the page. Keep the overflow inside .code pre. */
+  .steps > li, .step > *, .field > *, .verify > * { min-width:0; }
+  .step { border-top:2px solid var(--ink); padding-top:0.85rem; display:grid; gap:1.1rem; }
+  .step__head { display:grid; gap:0.35rem; }
+  .step__n { font:500 0.6875rem/1 var(--font-mono); letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); }
+  .field { display:grid; gap:0.55rem; }
+  .field > h4 { margin:0; font:600 0.6875rem/1 var(--font-mono); letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-2); }
+  .field p, .field li { max-width:66ch; }
+  .field ul, .field ol { margin:0; }
+  .verify { background:var(--accent-wash); border:1px solid var(--rule); padding:0.9rem 1rem; display:grid; gap:0.55rem; }
+  .verify > h4 { color:var(--accent); }
+
+  /* ---- flags --------------------------------------------------------- */
+  .flags { list-style:none; padding:0; display:grid; gap:1.1rem; }
+  .flags li { max-width:66ch; }
+  .tag { display:inline-block; font:600 0.625rem/1.6 var(--font-mono); letter-spacing:0.1em; text-transform:uppercase;
+         color:var(--flag); background:var(--flag-wash); border:1px solid var(--rule); padding:0.05rem 0.4rem;
+         border-radius:2px; margin-right:0.5rem; vertical-align:0.08em; }
+  .tag--scope { color:var(--ink-2); background:var(--sunken); }
+
+  .note { border-left:3px solid var(--rule-strong); padding-left:0.9rem; color:var(--ink-2); font-size:0.95rem; max-width:64ch; }
+
+  footer { border-top:1px solid var(--rule); padding-top:1rem; color:var(--ink-2); font-size:0.85rem; }
+
+  @media (max-width:34rem) {
+    body { font-size:1rem; }
+    .code pre { font-size:0.75rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation:none !important; transition:none !important; } }
+  @media print {
+    body { background:#fff; color:#000; padding:0; }
+    .toggle,.copy,.toc { display:none; }
+    .step { break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<header class="masthead">
+  <div class="masthead__top">
+    <div>
+      <p class="eyebrow">Brainstorm &middot; 2026-08-28</p>
+      <h1>Open-sourcing the publish system</h1>
+    </div>
+    <button class="toggle" type="button" id="theme" aria-live="polite">Theme: auto</button>
+  </div>
+  <p class="lede">What <code>publish-plan</code> would need to become to stand next to <a href="https://github.com/plannotator/tot">plannotator/tot</a> as an open-source project: a name, a positioning, a repo shape, the product decisions, and a build order. Nothing here is built yet; the last section lists what you need to decide.</p>
+  <ul class="meta">
+    <li><strong>Owner</strong> maintainer</li>
+    <li><strong>Today</strong> ~/projects/publish-plan + the publish-plan skill</li>
+    <li><strong>Reference</strong> @plannotator/tot 0.1.2</li>
+    <li><strong>Status</strong> brainstorm, pre-decision</li>
+  </ul>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#gap">tot, us, and the gap</a></li>
+    <li><a href="#positioning">Positioning</a></li>
+    <li><a href="#names">Names</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#decisions">Product decisions</a></li>
+    <li><a href="#bold">Bold ideas and roadmap</a></li>
+    <li><a href="#plan">Build order</a></li>
+    <li><a href="#launch">Launch checklist</a></li>
+    <li><a href="#open">Decisions you need to make</a></li>
+  </ol>
+</nav>
+
+<section id="gap">
+  <h2>tot, us, and the gap</h2>
+  <p><strong>tot</strong> is a hosted service. <code>npm i -g @plannotator/tot</code>, run <code>tot notes.md</code>, get <code>https://tot.page/aB3xK9q</code>. Its pitch is <em>git-backed publishing</em>: the link is a living branch tip that moves on <code>tot update</code>, and every publish also mints a frozen <code>@hash</code> snapshot. No accounts; the link is the key, so anyone holding it can also update or delete the page. The CLI (~6 source files, one dependency, <code>~/.tot</code> registry) is MIT. The backend is Plannotator&rsquo;s closed Workspaces platform on Cloudflare Artifacts &mdash; the repo&rsquo;s own <code>docs/SPEC.md</code> says &ldquo;tot is a thin CLI over <code>/v1</code>&rdquo;. You cannot run tot yourself.</p>
+  <p><strong>What we have</strong> is the opposite shape. A ~150-line Worker and an R2 bucket you own, on your own domain, with a bearer token for writes and content-addressed immutable URLs for reads. Plus a skill so agents publish without being told how. Everything is already in two small TypeScript files &mdash; it just has your domain hard-coded and lives in two private repos.</p>
+  <p>The gap tot leaves open is exactly the thing we have: <strong>the whole stack, self-hostable, in five minutes.</strong> That is the project.</p>
+</section>
+
+<section id="positioning">
+  <h2>Positioning</h2>
+  <p>One line for the README:</p>
+  <p class="note">Hand someone a page. One command turns a self-contained HTML file into an unguessable link on <em>your</em> domain &mdash; a Worker and a bucket you deploy once and own forever.</p>
+  <p>Four principles that decide every feature question below:</p>
+  <ol class="decisions">
+    <li><b>You own it.</b> Your Cloudflare account, your domain, your R2 bucket, your token. No hosted tier, no sign-up, no telemetry, nothing that phones home. If this project disappears, your links keep working.</li>
+    <li><b>Immutable by construction.</b> The URL is the content hash. The same bytes always land on the same URL; different bytes are a different URL. No living links in v1 &mdash; see <a href="#bold">aliases</a> for how they come later without breaking this.</li>
+    <li><b>Agent-native.</b> The reason this exists is that agents finish work by handing you a link. The repo ships the skill, not just the CLI. Humans get a nice CLI as a side effect.</li>
+    <li><b>Small enough to read.</b> One Worker file, one CLI file, zero runtime dependencies. If the Worker needs a framework, the feature is wrong.</li>
+  </ol>
+  <p>Who it is for: people running coding agents (Claude Code, Codex, Cursor) who want plans and reports as links; solo devs who already have a domain on Cloudflare; anyone who read tot&rsquo;s README and thought &ldquo;nice, but I want it on my own domain.&rdquo;</p>
+</section>
+
+<section id="names">
+  <h2>Names</h2>
+  <p>The metaphor that fits is print, not git. A page is printed once, handed to the people who should see it, and cannot be edited afterwards &mdash; you print a new one. Every candidate below was checked today against npm (unscoped), the <code>.dev</code> domain, and GitHub for collisions.</p>
+  <div class="scroll">
+    <table>
+      <caption>Shortlist</caption>
+      <thead><tr><th scope="col">Name</th><th scope="col">npm</th><th scope="col">.dev</th><th scope="col">GitHub collisions</th><th scope="col">Notes</th></tr></thead>
+      <tbody>
+        <tr><td><strong>handbill</strong></td><td>free</td><td>free</td><td>none of note</td><td>A single printed sheet handed to specific people. Immutable, self-contained, deliberately shared. <code>handbill plan.html</code> reads well. Recommended.</td></tr>
+        <tr><td>plaque</td><td>free</td><td>free</td><td>none of note (medical repos)</td><td>One syllable, screams &ldquo;permanent, mounted, engraved&rdquo;. The dental meaning is the cost.</td></tr>
+        <tr><td>broadside</td><td>free</td><td>taken (<code>.sh</code> free)</td><td>lumoslabs/broadside 44&#9733; (ECS deploys)</td><td>Historically a one-sheet poster. Also means &ldquo;a verbal attack&rdquo;, and the domain is gone.</td></tr>
+        <tr><td>tackup</td><td>free</td><td>free</td><td>4&#9733; tab-backup tool</td><td>&ldquo;Tack it up on the board.&rdquo; Fine, slightly generic.</td></tr>
+        <tr><td>hashpage</td><td>free</td><td>free</td><td>a <code>hashpage</code> org exists</td><td>Descriptive, no metaphor. Says exactly what it does; nobody will remember it.</td></tr>
+        <tr><td>letterpress</td><td>free</td><td>unclear</td><td>an0/Letterpress 674&#9733;</td><td>Beautiful, but the collision is a well-known blog engine.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Taken on npm and therefore out: <code>tack</code>, <code>placard</code>, <code>flyer</code>, <code>pamphlet</code>, <code>poster</code>, <code>pinup</code>, <code>pinboard</code>, <code>corkboard</code>, <code>pushpin</code>, <code>thumbtack</code>, <code>handoff</code>, <code>permalink</code>, <code>seal</code>, <code>stamped</code>, <code>notice</code>, <code>bulletin</code>. Scoping (<code>@scope/tack</code>) would rescue any of them, but an unscoped name is worth a lot for a CLI people type.</p>
+  <p><strong>Recommendation: <code>handbill</code>.</strong> Clean everywhere, the metaphor teaches the immutability rule for free, and it is unusual enough to search for. The rest of this document uses it as a placeholder; nothing depends on the choice. Buying <code>handbill.dev</code> is optional (~$12/year) &mdash; the README can live on GitHub and a docs site can come later &mdash; but names this clean do not stay free.</p>
+</section>
+
+<section id="architecture">
+  <h2>Architecture</h2>
+  <p>Three deliverables in one repo, each independently useful. The Worker is what you deploy, the CLI is what you install, the skill is what your agent reads.</p>
+  <figure class="code">
+    <figcaption class="code__bar"><span class="code__label">Repo layout</span></figcaption>
+    <pre><code>handbill/
+  README.md                 30-second demo, "Deploy to Cloudflare" button, self-host steps
+  LICENSE                   MIT
+  package.json              bun workspaces: worker, cli
+  worker/
+    wrangler.jsonc          name, R2 binding, routes, ZONE var  &mdash; the 3 lines you edit
+    src/index.ts            the Worker, unchanged in spirit (~150 lines)
+    src/index.test.ts       bun test, no network
+  cli/
+    package.json            npm "handbill", bin: handbill, zero deps, node &ge;20 + bun
+    src/cli.ts              arg parsing (node:util parseArgs) + commands
+    src/api.ts              hash, PUT/GET/DELETE against the API
+    test/                   mocked fetch
+  skills/handbill/SKILL.md  the agent skill (Claude Code, Codex); installable with `npx skills add viktoravelino/handbill`
+  docs/SELF-HOSTING.md      DNS, TLS, token, custom zone, cost (free tier)
+  docs/API.md               the contract, lifted from the existing plan
+  .github/workflows/ci.yml  typecheck + test; tag &rarr; npm publish with provenance</code></pre>
+  </figure>
+
+  <h3>Worker</h3>
+  <p>Keep it as it is, with one change: <code>ZONE</code> stops being a constant and comes from <code>env.ZONE</code> (a <code>vars</code> entry in <code>wrangler.jsonc</code>). <code>classifyHost</code> takes the zone as an argument so tests stay pure. Everything else &mdash; content hashing, hash-mismatch rejection, immutable cache headers, <code>noindex</code>, server-side list, the 5&nbsp;MB cap &mdash; is already right for the general case.</p>
+  <p>The self-host story is three edits in <code>wrangler.jsonc</code> (<code>zone_name</code>, the two <code>routes</code>, <code>ZONE</code>), one <code>wrangler secret put PUBLISH_TOKEN</code>, and two DNS records (<code>*</code> and <code>api</code>, proxied). Cloudflare&rsquo;s <a href="https://developers.cloudflare.com/workers/platform/deploy-buttons/">Deploy to Cloudflare button</a> reads <code>wrangler.jsonc</code> and provisions the Worker and the R2 bucket from a repo URL; the custom-domain routes and the secret remain manual, which the docs walk through. Free tier covers it many times over.</p>
+
+  <h3>CLI</h3>
+  <p>Port <code>publish.ts</code> from Bun-only APIs to Node-compatible ones (<code>node:crypto</code>, <code>node:fs/promises</code>, global <code>fetch</code>) so <code>npm i -g handbill</code> works for everyone; it still runs under bun. Still zero dependencies.</p>
+  <figure class="code">
+    <figcaption class="code__bar"><span class="code__label">Surface</span></figcaption>
+    <pre><code>handbill plan.html            &rarr; https://a3f9c1d4e2b8.viktoravelino.dev
+handbill plan.html --open     publish and open in the browser
+cat plan.html | handbill -    publish from stdin (agents love this)
+handbill list                 url  date  title, newest first (server-side)
+handbill remove &lt;url|hash&gt;    idempotent
+handbill --endpoint &lt;url&gt;     override for one run
+
+config   ~/.config/handbill/config.json   { "endpoint": "https://api.&lt;zone&gt;", "token": "..." }
+env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins; CI-friendly)</code></pre>
+  </figure>
+  <p>The CLI prints exactly one line on success, the URL, and nothing else on stdout. That is the contract that makes it composable for agents and shell scripts alike. Errors go to stderr with a non-zero exit.</p>
+
+  <h3>Skill</h3>
+  <p>The current <code>SKILL.md</code> already has the right content: when to publish, what not to publish, list, unpublish, how to debug. It loses the embedded <code>publish.ts</code> and calls <code>handbill</code> instead. Your <code>agents-config</code> copy becomes a symlink to (or a vendored copy of) <code>skills/handbill/</code> in the repo, so the two never drift.</p>
+
+  <h3>Your own deployment</h3>
+  <p>Nothing has to move. The Worker named <code>publish-plan</code> and the bucket keep running; the repo&rsquo;s <code>wrangler.jsonc</code> can ship with your zone as the worked example (a zone name is public information, not a secret) and a comment saying &ldquo;change these three lines&rdquo;. When you eventually want the Worker to be called <code>handbill</code>, deploy a second Worker bound to the same bucket, move the routes, delete the old one &mdash; no data moves.</p>
+</section>
+
+<section id="decisions">
+  <h2>Product decisions</h2>
+  <p>Proposed, not made. Each one is a place tot chose differently, so it is worth being explicit.</p>
+  <ol class="decisions">
+    <li><b>Immutable, content-addressed URLs only in v1.</b> tot&rsquo;s living link is its headline feature; ours is that a link can never change under a reader. Living links come later as aliases (below), opt-in, without touching the hash model.</li>
+    <li><b>Writes need a token.</b> tot lets anyone with the link update or delete the page. That is fine for a throwaway; it is wrong for a plan you sent to your team. One deployment, one token, kept in the config file or env.</li>
+    <li><b>One self-contained HTML file per page.</b> tot scans HTML for local assets and uploads them (parse5, a workspace per page). We refuse anything that is not one file, and the CLI tells you which local refs would 404. Inlining local assets into the file is a possible later step; multi-object pages are not.</li>
+    <li><b>No markdown in v1.</b> Agents already emit HTML. Markdown is the most requested thing v1 will not have, so it is first on the roadmap, done as <em>render to a self-contained HTML with a built-in stylesheet</em> in the CLI &mdash; the Worker never learns about markdown.</li>
+    <li><b>Server-side list.</b> tot keeps a local <code>~/.tot</code> registry because anonymous pages have no owner. We have a token, so the bucket is the truth and any machine with the token sees the same list.</li>
+    <li><b>The 12-hex hostname stays.</b> 48 bits is unguessable and short enough to read out loud. A hostname per page also gives each document its own origin: one page&rsquo;s JavaScript cannot touch another&rsquo;s storage.</li>
+    <li><b>Cloudflare only.</b> No adapter layer for S3/Vercel/Deno. The whole value is &ldquo;one config file and it runs&rdquo;; a second backend doubles the surface for a user who does not exist yet.</li>
+    <li><b>No accounts, no hosted tier, ever.</b> The moment there is a <code>handbill.dev</code> you can publish to, it is tot with worse marketing. The project is the self-host kit.</li>
+  </ol>
+</section>
+
+<section id="bold">
+  <h2>Bold ideas and roadmap</h2>
+  <p>None of these are v1. They are listed so v1 does not accidentally close the door on them.</p>
+  <ul class="flags">
+    <li><span class="tag">v1.1</span><strong>Aliases: living links without breaking hashes.</strong> <code>handbill alias plan a3f9c1d4e2b8</code> writes <code>plan &rarr; a3f9c1d4e2b8</code> to a KV namespace; <code>plan.viktoravelino.dev</code> serves (not redirects to) the current hash with <code>max-age=60</code>. The rule is trivial: a first label that is <em>not</em> 12-hex is looked up in KV. Guessable by design, so it is opt-in per name. This is tot&rsquo;s branch/commit model with one KV lookup instead of a git platform.</li>
+    <li><span class="tag">v1.1</span><strong>Markdown in the CLI.</strong> <code>handbill notes.md</code> renders to a self-contained HTML with a small built-in stylesheet (light/dark, ~2&nbsp;KB) and publishes that. One dependency (a markdown parser) in the CLI, zero in the Worker.</li>
+    <li><span class="tag">v1.2</span><strong>Inline instead of upload.</strong> Where tot uploads a page&rsquo;s local images/CSS/JS as separate objects, the CLI can inline them (data URIs, <code>&lt;style&gt;</code>, <code>&lt;script&gt;</code>) so the server still stores one object. Keeps the Worker single-object forever.</li>
+    <li><span class="tag">v2</span><strong>Encrypted pages: a private mode even the host cannot read.</strong> <code>handbill --private plan.html</code> encrypts client-side, uploads ciphertext wrapped in a ~1&nbsp;KB bootstrap page, and puts the key in the URL fragment (<code>#k=&hellip;</code>), which browsers never send to the server. The Worker stores bytes it cannot read. tot explicitly has no private mode; this would be the first self-host pastebin-style page host with one. Real complexity; do it only if people ask.</li>
+    <li><span class="tag">v2</span><strong>Expiry.</strong> <code>--ttl 7d</code> writes an <code>expiresAt</code> metadata field; a cron trigger sweeps. R2 lifecycle rules are bucket-wide, so per-page TTL needs the sweep.</li>
+    <li><span class="tag tag--scope">never</span><strong>Analytics, view counts, comments, custom themes, a dashboard.</strong> Each one is a reason to run a server that knows about users. The bucket list is the dashboard.</li>
+  </ul>
+</section>
+
+<section id="plan">
+  <h2>Build order</h2>
+  <p>Roughly a weekend if done in this order. Each step ends with something that works on its own.</p>
+  <ol class="steps">
+    <li class="step">
+      <div class="step__head"><p class="step__n">Step 01 &middot; 1h</p><h3>Name and repo</h3></div>
+      <div class="field"><h4>Actions</h4><ul>
+        <li>Pick the name; optionally register the <code>.dev</code>.</li>
+        <li>Create <code>github.com/viktoravelino/&lt;name&gt;</code>. Move <code>~/projects/publish-plan</code> in with history (<code>git mv</code> the Worker into <code>worker/</code>, add the workspace <code>package.json</code>). Keep <code>plans/</code> out of the public repo or move them to a private notes folder.</li>
+        <li>MIT license, <code>.gitignore</code> already covers <code>.env</code> and <code>.wrangler</code>.</li>
+      </ul></div>
+      <div class="verify"><h4>Done when</h4><p><code>bun test</code> passes from the repo root and the public repo contains no token, no plan, no <code>.env</code>.</p></div>
+    </li>
+    <li class="step">
+      <div class="step__head"><p class="step__n">Step 02 &middot; 2h</p><h3>Generalise the Worker</h3></div>
+      <div class="field"><h4>Actions</h4><ul>
+        <li><code>ZONE</code> from <code>env.ZONE</code>; <code>classifyHost(hostname, zone)</code>; tests updated.</li>
+        <li><code>wrangler.jsonc</code> with your zone as the example and a top comment marking the three lines to change. Add <code>"vars": { "ZONE": "viktoravelino.dev" }</code>.</li>
+        <li>Fail loudly at request time if <code>ZONE</code> or <code>PUBLISH_TOKEN</code> is missing (the API already fails closed on the token).</li>
+        <li><code>docs/SELF-HOSTING.md</code>: account, DNS (<code>*</code> + <code>api</code>, proxied), Universal SSL wildcard note, secret, deploy, the curl that proves it.</li>
+      </ul></div>
+      <div class="verify"><h4>Done when</h4><p>Redeploying to your account changes nothing observable, and a fresh account following only the doc gets a working page.</p></div>
+    </li>
+    <li class="step">
+      <div class="step__head"><p class="step__n">Step 03 &middot; 3h</p><h3>The CLI as an npm package</h3></div>
+      <div class="field"><h4>Actions</h4><ul>
+        <li><code>cli/src/api.ts</code>: <code>hashOf</code>, <code>publish</code>, <code>list</code>, <code>remove</code> over <code>fetch</code>; Node and Bun compatible; typed responses inferred from one <code>Page</code> type.</li>
+        <li><code>cli/src/cli.ts</code>: <code>parseArgs</code>, config resolution (env &gt; config file), stdin via <code>-</code>, <code>--open</code>, <code>--endpoint</code>. One URL on stdout, errors on stderr.</li>
+        <li>Tests: hashing, config precedence, one mocked round-trip per command. No smoke tests.</li>
+        <li>Build with <code>bun build --target=node</code> to a single <code>dist/cli.js</code> with a shebang; <code>files: ["dist"]</code>.</li>
+      </ul></div>
+      <div class="verify"><h4>Done when</h4><p><code>npm i -g ./cli</code> on a machine without bun publishes a page to your deployment.</p></div>
+    </li>
+    <li class="step">
+      <div class="step__head"><p class="step__n">Step 04 &middot; 1h</p><h3>Skill and your own setup</h3></div>
+      <div class="field"><h4>Actions</h4><ul>
+        <li><code>skills/handbill/SKILL.md</code>: today&rsquo;s text, calling <code>handbill</code>. Frontmatter compatible with Claude Code and Codex.</li>
+        <li><code>agents-config</code>: replace the vendored skill with a symlink or a copy step in <code>install.sh</code>. Migrate <code>~/.config/publish/token</code> to <code>~/.config/handbill/config.json</code>.</li>
+        <li>Update the memory file so future sessions use <code>handbill</code>, not <code>publish.ts</code>.</li>
+      </ul></div>
+      <div class="verify"><h4>Done when</h4><p>An agent asked to &ldquo;give me a link&rdquo; ends with a URL, using the installed npm CLI.</p></div>
+    </li>
+    <li class="step">
+      <div class="step__head"><p class="step__n">Step 05 &middot; 2h</p><h3>README, CI, release</h3></div>
+      <div class="field"><h4>Actions</h4><ul>
+        <li>README: one-line pitch, a terminal recording (<code>handbill plan.html</code> &rarr; URL &rarr; the page), the Deploy button, the 5-minute self-host, the comparison table, the security note (&ldquo;the link is public, the token is yours&rdquo;).</li>
+        <li><code>SECURITY.md</code> with a contact; the threat model in three sentences.</li>
+        <li>CI: typecheck + test on push; <code>npm publish --provenance</code> on tag.</li>
+        <li>Publish <code>0.1.0</code>.</li>
+      </ul></div>
+      <div class="verify"><h4>Done when</h4><p><code>npx handbill --help</code> works for a stranger and the README answers &ldquo;why not tot?&rdquo; without being asked.</p></div>
+    </li>
+  </ol>
+</section>
+
+<section id="launch">
+  <h2>Launch checklist</h2>
+  <ul>
+    <li>A 20-second recording: agent finishes a plan, prints a link, the link opens on a phone.</li>
+    <li>Post where the audience is: the Claude Code and Codex communities, the thread where Theo shared the plan-as-HTML idea, Hacker News as &ldquo;Show HN: self-hosted tot.page in one Worker&rdquo;.</li>
+    <li>Open a friendly issue on tot linking to it as the self-host option &mdash; different tool, same idea, no competition.</li>
+    <li>A <code>good first issue</code> for markdown rendering, since it is the first thing people will ask for.</li>
+    <li>Keep the dependency count at zero on the README badge line; it is the argument.</li>
+  </ul>
+</section>
+
+<section id="open">
+  <h2>Decisions you need to make</h2>
+  <ul class="flags">
+    <li><span class="tag">name</span><code>handbill</code>, <code>plaque</code>, or something else? And buy the <code>.dev</code> now or not?</li>
+    <li><span class="tag">scope</span>Immutable-only v1 (recommended) or ship aliases in v1 to match tot&rsquo;s headline feature?</li>
+    <li><span class="tag">scope</span>Markdown at v1 or v1.1? It adds the first dependency and a stylesheet to maintain, but it doubles who cares.</li>
+    <li><span class="tag">repo</span>Move <code>publish-plan</code> with its history, or start clean and copy the Worker over? History shows the design was deliberate; a clean start is tidier.</li>
+    <li><span class="tag">runtime</span>Node-compatible CLI (recommended, wider install base) or stay Bun-only and keep the current file nearly as-is?</li>
+    <li><span class="tag">privacy</span>Ship your zone as the worked example in <code>wrangler.jsonc</code>, or placeholders? The zone is public anyway; the example is friendlier.</li>
+  </ul>
+  <p class="note">Assumptions in this document: Cloudflare stays the only target; the existing URL shape and API contract are kept verbatim; the project stays a self-host kit with no hosted offering.</p>
+</section>
+
+<footer>
+  <p>Brainstorm &middot; 2026-08-28 &middot; drafted from <code>~/projects/publish-plan</code>, the <code>publish-plan</code> skill, and <code>plannotator/tot</code> at 0.1.2. Availability checks (npm, RDAP, GitHub) were run the same day.</p>
+</footer>
+
+</div>
+
+<script>
+  // Theme: OS preference by default; the button pins light or dark in localStorage.
+  (function () {
+    var root = document.documentElement;
+    var button = document.getElementById("theme");
+    var labels = { auto: "Theme: auto", light: "Theme: light", dark: "Theme: dark" };
+    var order = ["auto", "light", "dark"];
+    function apply(mode) {
+      if (mode === "auto") root.removeAttribute("data-theme");
+      else root.setAttribute("data-theme", mode);
+      button.textContent = labels[mode];
+    }
+    var saved = null;
+    try { saved = localStorage.getItem("publish-plan-theme"); } catch (e) {}
+    var current = order.indexOf(saved) > -1 ? saved : "auto";
+    apply(current);
+    button.addEventListener("click", function () {
+      current = order[(order.indexOf(current) + 1) % order.length];
+      apply(current);
+      try { localStorage.setItem("publish-plan-theme", current); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>
