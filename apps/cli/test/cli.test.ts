@@ -6,15 +6,23 @@ import { Layer } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 import { hashDocument } from "../src/hash"
 import { configHome, run, type RunOptions } from "./harness"
-import { makeServer, TOKEN, ZONE } from "./server"
-
-const document = "<!doctype html><title>Quarter plan</title><p>Hello.</p>"
-const bytes = new TextEncoder().encode(document)
-const hash = hashDocument(bytes)
+import { makeServer, PUBLISHED_AT, TOKEN, ZONE } from "./server"
 
 const files = mkdtempSync(join(tmpdir(), "handbill-docs-"))
-const plan = join(files, "plan.html")
-writeFileSync(plan, document)
+
+/** A document on disk, with the hash and URL the CLI should end up printing for it. */
+const document = (name: string, html: string) => {
+  const path = join(files, name)
+  writeFileSync(path, html)
+  const hash = hashDocument(new TextEncoder().encode(html))
+  return { path, html, hash, url: `https://${hash}.${ZONE}` }
+}
+
+const plan = document("plan.html", "<!doctype html><title>Quarter plan</title><p>Hello.</p>")
+const kickoff = document("kickoff.html", "<!doctype html><title>Kickoff</title>")
+const retro = document("retro.html", "<!doctype html><title>Retro</title>")
+
+const { hash, url } = plan
 
 let server = makeServer()
 afterAll(() => server.dispose())
@@ -56,52 +64,52 @@ const cli = (
 describe("publish", () => {
   // S1.1
   test("prints one URL and nothing else", async () => {
-    const outcome = await cli([plan])
+    const outcome = await cli([plan.path])
     expect(outcome.ok).toBe(true)
-    expect(outcome.stdout).toEqual([`https://${hash}.${ZONE}`])
+    expect(outcome.stdout).toEqual([url])
     expect(outcome.stderr).toEqual([])
   })
 
   // S1.1: same bytes, same URL, and the second publish is not a create.
   test("is idempotent for the same bytes", async () => {
-    const first = await cli([plan, "--json"])
-    const second = await cli([plan, "--json"])
+    const first = await cli([plan.path, "--json"])
+    const second = await cli([plan.path, "--json"])
     expect(JSON.parse(first.stdout[0] ?? "")).toEqual({
       hash,
-      url: `https://${hash}.${ZONE}`,
+      url,
       created: true
     })
     expect(JSON.parse(second.stdout[0] ?? "")).toEqual({
       hash,
-      url: `https://${hash}.${ZONE}`,
+      url,
       created: false
     })
   })
 
   // S1.2
   test("reads stdin when the argument is -", async () => {
-    const outcome = await cli(["-"], { stdin: document })
-    expect(outcome.stdout).toEqual([`https://${hash}.${ZONE}`])
+    const outcome = await cli(["-"], { stdin: plan.html })
+    expect(outcome.stdout).toEqual([url])
     expect(server.hashes()).toEqual([hash])
   })
 
   // S1.3
   test("reports a rejected token on stderr and exits non-zero", async () => {
-    const outcome = await cli([plan], { env: { HANDBILL_TOKEN: "wrong" } })
+    const outcome = await cli([plan.path], { env: { HANDBILL_TOKEN: "wrong" } })
     expect(outcome.ok).toBe(false)
     expect(outcome.stdout).toEqual([])
     expect(outcome.stderr.join("\n")).toContain("rejected the token")
   })
 
   test("reports a rejected token as JSON on stderr with --json", async () => {
-    const outcome = await cli([plan, "--json"], { env: { HANDBILL_TOKEN: "wrong" } })
+    const outcome = await cli([plan.path, "--json"], { env: { HANDBILL_TOKEN: "wrong" } })
     expect(outcome.ok).toBe(false)
     expect(outcome.stdout).toEqual([])
     expect(JSON.parse(outcome.stderr[0] ?? "")).toMatchObject({ error: "Unauthorized" })
   })
 
   test("says what to configure when there is no endpoint", async () => {
-    const outcome = await run([plan], {
+    const outcome = await run([plan.path], {
       http: server.layer,
       env: { XDG_CONFIG_HOME: configHome() }
     })
@@ -111,23 +119,38 @@ describe("publish", () => {
 })
 
 describe("list", () => {
-  // S1.4
-  test("prints one line per page with its title", async () => {
-    await cli([plan])
+  // S1.4: one line per page, newest first — the order is the Worker's, not the
+  // order the store happens to iterate in. The clock moves a day between
+  // publishes, so every page is unambiguously newer than the one before it and
+  // the printed date says which is which.
+  test("prints one line per page, newest first, with its title", async () => {
+    await cli([kickoff.path])
+    server.advance("1 day")
+    await cli([retro.path])
+    server.advance("1 day")
+    await cli([plan.path])
+
     const outcome = await cli(["list"])
     expect(outcome.ok).toBe(true)
-    expect(outcome.stdout).toHaveLength(1)
-    expect(outcome.stdout[0]).toContain(`https://${hash}.${ZONE}`)
-    expect(outcome.stdout[0]).toContain("Quarter plan")
+    expect(outcome.stdout).toEqual([
+      `2026-01-17  ${url}  Quarter plan`,
+      `2026-01-16  ${retro.url}  Retro`,
+      `2026-01-15  ${kickoff.url}  Kickoff`
+    ])
   })
 
   test("prints the wire shape with --json", async () => {
-    await cli([plan])
+    await cli([plan.path])
     const outcome = await cli(["list", "--json"])
     const body = JSON.parse(outcome.stdout[0] ?? "")
     expect(body.pages).toHaveLength(1)
-    expect(body.pages[0]).toMatchObject({ hash, title: "Quarter plan" })
-    expect(typeof body.pages[0].publishedAt).toBe("string")
+    expect(body.pages[0]).toEqual({
+      hash,
+      url,
+      title: "Quarter plan",
+      publishedAt: PUBLISHED_AT,
+      size: plan.html.length
+    })
   })
 
   test("says nothing on stdout when there is nothing published", async () => {
@@ -140,16 +163,18 @@ describe("list", () => {
 describe("remove", () => {
   // S1.5
   test("accepts a URL and is idempotent", async () => {
-    await cli([plan])
-    const first = await cli(["remove", `https://${hash}.${ZONE}`])
-    const second = await cli(["remove", `https://${hash}.${ZONE}`])
+    await cli([plan.path])
+    const first = await cli(["remove", url])
+    const second = await cli(["remove", url])
     expect(first.ok && second.ok).toBe(true)
+    // Both calls report the same removal: the second is a no-op, not an error.
     expect(first.stdout).toEqual([hash])
+    expect(second.stdout).toEqual([hash])
     expect(server.hashes()).toEqual([])
   })
 
   test("accepts a bare hash", async () => {
-    await cli([plan])
+    await cli([plan.path])
     const outcome = await cli(["remove", hash, "--json"])
     expect(JSON.parse(outcome.stdout[0] ?? "")).toEqual({ hash, removed: true })
   })
