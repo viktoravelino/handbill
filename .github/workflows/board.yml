@@ -73,6 +73,15 @@ jobs:
           echo "target=$target" >> "$GITHUB_OUTPUT"
           echo "event=$EVENT reviewer=${REVIEWER:-} state=${STATE:-} → ${target:-no-op}"
 
+      - name: Debug token (temporary)
+        if: env.GH_TOKEN != ''
+        run: |
+          echo "scopes: $(gh api -i user 2>/dev/null | grep -i '^x-oauth-scopes' || echo 'none reported')"
+          echo "viewer: $(gh api graphql -f query='{ viewer { login } }' 2>&1 | head -c 300)"
+          echo "user+project: $(gh api graphql -f query='{ user(login:"viktoravelino") { id projectV2(number:8) { id } } }' 2>&1 | head -c 400)"
+          echo "org lookup: $(gh api graphql -f query='{ organization(login:"viktoravelino") { id } }' 2>&1 | head -c 300)"
+          gh project view 8 --owner viktoravelino --format json 2>&1 | head -c 300 || true
+
       - name: Move linked issues
         if: env.GH_TOKEN != '' && steps.decide.outputs.target != ''
         env:
