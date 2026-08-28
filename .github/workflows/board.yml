@@ -1,13 +1,13 @@
 name: Board
 
-# Keeps the project board (viktoravelino/projects/8) in step with review state
-# by reconciling from what is on the PR, not from who triggered the event:
-#   any human "changes requested"              → In Review
-#   human approval, or a clean Copilot review  → Ready to Merge
-#   no review on the head commit yet           → In Review
-# Runs on PR open/push (that PR only) and every 15 minutes (all open PRs) —
-# the cron exists because GitHub does not create workflow runs for review
-# events submitted by the Copilot reviewer bot on a public repo.
+# Keeps the project board (viktoravelino/projects/8) in step with review state,
+# reconciling from what is on the PR whenever an event we receive fires:
+#   PR opened / pushed                         → In Review
+#   a human approves the head commit           → Ready to Merge
+#   a human requests changes                   → In Review
+# A clean Copilot review on its own does not move the card: GitHub creates no
+# workflow run for review events submitted by the Copilot reviewer bot on a
+# public repo, and Copilot never approves. The maintainer's approval is the signal.
 # Needs the PROJECT_TOKEN secret (GITHUB_TOKEN cannot touch user-owned projects):
 # a classic personal access token with scopes `project`, `public_repo`, and
 # `read:org` (gh's project commands look the owner up as user *and* organization,
@@ -19,9 +19,11 @@ on:
     types: [opened, reopened, ready_for_review, synchronize]
   pull_request_review:
     types: [submitted]
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number to reconcile (empty = all open PRs)
+        required: false
 
 permissions:
   contents: read
@@ -48,7 +50,7 @@ jobs:
       - name: Reconcile
         if: env.GH_TOKEN != ''
         env:
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ github.event.pull_request.number || inputs.pr }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
