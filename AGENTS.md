@@ -41,7 +41,7 @@ docs/               PRD, SELF-HOSTING.md, ADRs
 
 ## Working here
 
-- `main` is protected: no direct pushes, no force-push, PR required with a green `check` job, branch up to date, squash merge only. Branches are deleted on merge; enable auto-merge on your PR (`gh pr merge --auto --squash`) once it is ready.
+- `main` is protected: no direct pushes, no force-push, PR required with green `typecheck`, `lint`, and `test` jobs, branch up to date, squash merge only. Branches are deleted on merge; enable auto-merge on your PR (`gh pr merge --auto --squash`) once it is ready.
 - One GitHub issue per milestone; work on a branch named after it (`m3-worker`), open a PR with `Closes #N`. The PR title becomes the squash commit subject and the body its message — write both as you would a commit.
 - The board is https://github.com/users/viktoravelino/projects/8. Use the `board` skill (`.claude/skills/board/`, also linked from `.agents/skills/`): `board.sh start <n>` when you begin, `board.sh add <n>` for every issue you create, `board.sh show` to see the state. Merging the PR is what moves a card to Done.
 - Tests are focused: hashing, host classification, headers, error mapping, one in-process round-trip per CLI command. No smoke-test sprawl.
