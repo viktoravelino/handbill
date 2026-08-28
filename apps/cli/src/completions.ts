@@ -2,6 +2,25 @@ import { Argument, Command, Completions } from "effect/unstable/cli"
 import * as Output from "./output"
 
 /**
+ * `--endpoint` and `--json` are on the default command and on every subcommand
+ * that reaches the API, so the descriptor repeats them for each of those.
+ */
+const apiFlags: ReadonlyArray<Completions.FlagDescriptor> = [
+  {
+    name: "endpoint",
+    aliases: [],
+    description: "Base URL of the deployment",
+    type: { _tag: "String" }
+  },
+  {
+    name: "json",
+    aliases: [],
+    description: "Print the result as JSON",
+    type: { _tag: "Boolean" }
+  }
+]
+
+/**
  * The command tree as the completion generator wants it. The framework builds
  * this from the real commands for its own `--completions` flag but keeps the
  * conversion internal, so the subcommand describes the tree by hand;
@@ -10,20 +29,7 @@ import * as Output from "./output"
 export const descriptor: Completions.CommandDescriptor = {
   name: "handbill",
   description: "Publish one self-contained HTML file at an unguessable, immutable URL",
-  flags: [
-    {
-      name: "endpoint",
-      aliases: [],
-      description: "Base URL of the deployment",
-      type: { _tag: "String" }
-    },
-    {
-      name: "json",
-      aliases: [],
-      description: "Print the result as JSON",
-      type: { _tag: "Boolean" }
-    }
-  ],
+  flags: apiFlags,
   arguments: [
     {
       name: "file",
@@ -37,14 +43,14 @@ export const descriptor: Completions.CommandDescriptor = {
     {
       name: "list",
       description: "List published pages, newest first",
-      flags: [],
+      flags: apiFlags,
       arguments: [],
       subcommands: []
     },
     {
       name: "remove",
       description: "Unpublish a page",
-      flags: [],
+      flags: apiFlags,
       arguments: [
         {
           name: "target",
@@ -59,7 +65,7 @@ export const descriptor: Completions.CommandDescriptor = {
     {
       name: "doctor",
       description: "Check the configuration and the endpoint",
-      flags: [],
+      flags: apiFlags,
       arguments: [],
       subcommands: []
     },

@@ -48,17 +48,20 @@ const configured = (settings: Config.Settings): ReadonlyArray<Check> => [
 const accepts = Effect.fn(function* (client: Client.Client, hasToken: boolean) {
   if (!hasToken) return check("auth", "skip", "Skipped: there is no token to send.")
   const pages = yield* Effect.result(client.pages.list({}))
-  return Result.isSuccess(pages)
-    ? check(
-        "auth",
-        "ok",
-        `The endpoint accepted the token; it holds ${pages.success.pages.length} page(s).`
-      )
-    : check(
-        "auth",
-        "FAIL",
-        `The endpoint refused the token: ${Output.describe(pages.failure).message}`
-      )
+  if (Result.isSuccess(pages)) {
+    return check(
+      "auth",
+      "ok",
+      `The endpoint accepted the token; it holds ${pages.success.pages.length} page(s).`
+    )
+  }
+  // Only a 401 says anything about the token. A transport or decode failure is
+  // its own problem, and blaming the token for it sends the user hunting for a
+  // secret that was fine all along.
+  const described = Output.describe(pages.failure)
+  return described.error === "Unauthorized"
+    ? check("auth", "FAIL", `The endpoint refused the token: ${described.message}`)
+    : check("auth", "FAIL", `GET /v1/pages did not answer: ${described.message}`)
 })
 
 /**

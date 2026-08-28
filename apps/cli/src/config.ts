@@ -68,7 +68,18 @@ const pick = <A>(
 /** Reads and decodes the config file. Absent is `None`; corrupt is a failure. */
 const readConfigFile = Effect.fn(function* (path: string) {
   const fs = yield* FileSystem.FileSystem
-  const contents = yield* Effect.option(fs.readFileString(path))
+  // Only a file that is not there means "no config file". Every other read
+  // failure — no permission, a directory in the way — is something the user has
+  // to fix, and reporting it as a missing setting would send them the wrong way.
+  const contents = yield* fs.readFileString(path).pipe(
+    Effect.map(Option.some),
+    Effect.catchTag("PlatformError", (error) => {
+      const { _tag: cause } = error.reason
+      return cause === "NotFound"
+        ? Effect.succeed(Option.none<string>())
+        : Effect.fail(new BadConfigFile({ path, reason: `the file system reported ${cause}` }))
+    })
+  )
   if (Option.isNone(contents)) return Option.none<ConfigFile>()
   const json = yield* Effect.try(() => JSON.parse(contents.value) as unknown).pipe(
     Effect.mapError(() => new BadConfigFile({ path, reason: "it is not valid JSON" }))
