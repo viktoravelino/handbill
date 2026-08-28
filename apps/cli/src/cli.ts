@@ -5,7 +5,7 @@ import { FetchHttpClient } from "effect/unstable/http"
 import { handbill } from "./commands"
 
 /** Keep in sync with the `version` field in `package.json`. */
-const version = "0.1.0"
+const version = "0.1.1-rc.0"
 
 /**
  * The published entry point. `fetch` is the transport because Node 22 has it
