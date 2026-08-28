@@ -15,7 +15,7 @@ OWNER=viktoravelino
 PROJECT=8
 REPO=viktoravelino/handbill
 
-usage() { echo "usage: board.sh show | start|review|ready|todo|done|add <issue-number>" >&2; exit 2; }
+usage() { echo "usage: board.sh show | board.sh (start|review|ready|todo|done|add) <issue-number>" >&2; exit 2; }
 
 project_id() { gh project view "$PROJECT" --owner "$OWNER" --format json --jq .id; }
 field_id()   { gh project field-list "$PROJECT" --owner "$OWNER" --format json --jq '.fields[] | select(.name=="Status") | .id'; }

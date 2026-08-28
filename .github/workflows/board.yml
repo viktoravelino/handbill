@@ -6,8 +6,12 @@ name: Board
 #   Copilot review with comments     → "In Review"
 #   human approves                   → "Ready to Merge"
 #   human requests changes           → "In Review"
-# Needs the PROJECT_TOKEN secret: a fine-grained PAT with Projects read/write
-# (GITHUB_TOKEN cannot touch user-owned projects). Without it the job is skipped.
+# Needs the PROJECT_TOKEN secret (GITHUB_TOKEN cannot touch user-owned projects):
+# a fine-grained PAT with repository access to this repo and
+#   - Pull requests: read   (review comments, via REST)
+#   - Issues: read          (closingIssuesReferences, via GraphQL)
+#   - Metadata: read        (implied)
+# plus the account permission Projects: read & write. Without it the job is skipped.
 
 on:
   pull_request:
