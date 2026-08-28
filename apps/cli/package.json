@@ -23,10 +23,11 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "bun build ./src/cli.ts --target=node --outfile=dist/cli.js --external effect --banner='#!/usr/bin/env node' && chmod +x dist/cli.js"
+    "build": "bun build ./src/cli.ts --target=node --outfile=dist/cli.js --external effect --external marked --banner='#!/usr/bin/env node' && chmod +x dist/cli.js"
   },
   "dependencies": {
-    "effect": "4.0.0-rc.112"
+    "effect": "4.0.0-rc.112",
+    "marked": "18.0.11"
   },
   "devDependencies": {
     "@effect/platform-node": "4.0.0-rc.112",

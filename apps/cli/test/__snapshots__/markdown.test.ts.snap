@@ -1,0 +1,43 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`render makes one self-contained page 1`] = `
+"<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Release plan</title>
+<style>
+/* stylesheet */
+</style>
+</head>
+<body>
+<main>
+<h1>Release plan</h1>
+<p>Ship <strong>on Friday</strong>, see <a href="https://example.dev">the notes</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Owner</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Cut</td>
+<td>Ada</td>
+</tr>
+</tbody></table>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> branch cut</li>
+<li><input disabled="" type="checkbox"> tag</li>
+</ul>
+<pre><code class="language-sh">bun test
+</code></pre>
+<blockquote>
+<p>Nothing ships on a Friday.</p>
+</blockquote>
+</main>
+</body>
+</html>
+"
+`;
