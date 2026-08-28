@@ -42,7 +42,7 @@ Idempotent: succeeds even if the page is already gone. Use it immediately if som
 
 - Every failure is one sentence on stderr and a non-zero exit (`{ "error", "message" }` on stderr with `--json`). Report it; do not retry in a loop.
 - `handbill doctor` checks, in order: config present, token present, endpoint reachable, token accepted, wildcard TLS valid — each with a one-line fix. Run it first when a command fails for a reason that is not the file.
-- `command not found: handbill` → the CLI is not installed. `npm i -g handbill`, or from a checkout of the repository: `bun --cwd apps/cli run build && npm i -g ./apps/cli`.
+- `command not found: handbill` → the CLI is not installed. `npm i -g handbill`, or from a checkout of the repository: `bun run --cwd apps/cli build && npm i -g ./apps/cli`.
 - A `5xx` from the endpoint is the deployment's problem (`apps/worker` in the repository), not the file's. Tell the user and stop.
 
 ## Installing this skill

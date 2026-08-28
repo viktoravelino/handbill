@@ -7,7 +7,7 @@ Hand someone a page: `handbill plan.html` → `https://<sha256[0:12]>.<zone>`. S
 ## Ground rules
 
 - Fresh code. Do not copy from `~/projects/publish-plan`; the API contract stays byte-compatible with that deployment, the code is new.
-- Keep it small. The Worker should stay readable in one sitting (~400 lines). If a feature needs a framework, the feature is wrong.
+- Keep it small. The Worker should stay readable in one sitting (about 500 lines today; do not let it grow without taking something out). If a feature needs a framework, the feature is wrong.
 - No `any`. Prefer inferred types; brand IDs (`Hash`) with Schema. Write TypeScript Matt Pocock would sign off on.
 - Non-goals are real: no multi-file sites, no server-side transforms, no analytics, no other clouds.
 - YAGNI: build the milestone in front of you, not the next version.
