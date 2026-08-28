@@ -30,7 +30,8 @@
   },
   "devDependencies": {
     "@effect/platform-node": "4.0.0-rc.112",
-    "@handbill/contract": "workspace:*"
+    "@handbill/contract": "workspace:*",
+    "@handbill/worker": "workspace:*"
   },
   "engines": {
     "node": ">=22"

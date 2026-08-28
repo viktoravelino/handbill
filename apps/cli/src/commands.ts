@@ -1,22 +1,13 @@
 import { DateTime, Effect, FileSystem, Option, Schema, Stdio, Stream } from "effect"
-import { Argument, Command, Flag } from "effect/unstable/cli"
+import { Argument, Command } from "effect/unstable/cli"
 import { Hash, PageList } from "@handbill/contract"
 import * as Client from "./client"
 import { completions } from "./completions"
 import * as Config from "./config"
 import * as Doctor from "./doctor"
+import { endpointFlag, jsonFlag } from "./flags"
 import { hashDocument } from "./hash"
 import * as Output from "./output"
-
-const endpointFlag = Flag.string("endpoint").pipe(
-  Flag.withDescription("Base URL of the deployment; beats HANDBILL_ENDPOINT and the config file"),
-  Flag.optional
-)
-
-const jsonFlag = Flag.boolean("json").pipe(
-  Flag.withDescription("Print the result as one JSON object on stdout"),
-  Flag.withDefault(false)
-)
 
 /**
  * Every command reports its own failures, so stdout only ever carries a result

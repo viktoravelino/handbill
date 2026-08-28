@@ -1,10 +1,15 @@
 import { Argument, Command, Completions } from "effect/unstable/cli"
+import { jsonFlag } from "./flags"
 import * as Output from "./output"
 
-/**
- * `--endpoint` and `--json` are on the default command and on every subcommand
- * that reaches the API, so the descriptor repeats them for each of those.
- */
+/** `--json` is on every command; only the ones that reach the API take `--endpoint`. */
+const jsonDescriptor: Completions.FlagDescriptor = {
+  name: "json",
+  aliases: [],
+  description: "Print the result as JSON",
+  type: { _tag: "Boolean" }
+}
+
 const apiFlags: ReadonlyArray<Completions.FlagDescriptor> = [
   {
     name: "endpoint",
@@ -12,12 +17,7 @@ const apiFlags: ReadonlyArray<Completions.FlagDescriptor> = [
     description: "Base URL of the deployment",
     type: { _tag: "String" }
   },
-  {
-    name: "json",
-    aliases: [],
-    description: "Print the result as JSON",
-    type: { _tag: "Boolean" }
-  }
+  jsonDescriptor
 ]
 
 /**
@@ -72,7 +72,7 @@ export const descriptor: Completions.CommandDescriptor = {
     {
       name: "completions",
       description: "Print a shell completion script",
-      flags: [],
+      flags: [jsonDescriptor],
       arguments: [
         {
           name: "shell",
@@ -89,6 +89,11 @@ export const descriptor: Completions.CommandDescriptor = {
 
 export const completions = Command.make(
   "completions",
-  { shell: Argument.choice("shell", ["bash", "zsh", "fish"]) },
-  ({ shell }) => Output.line(Completions.generate("handbill", shell, descriptor))
+  { shell: Argument.choice("shell", ["bash", "zsh", "fish"]), json: jsonFlag },
+  ({ json, shell }) => {
+    // The script is text, not data, so `--json` only wraps it — enough for a
+    // caller that reads every command the same way.
+    const script = Completions.generate("handbill", shell, descriptor)
+    return json ? Output.json({ script }) : Output.line(script)
+  }
 ).pipe(Command.withDescription("Print a shell completion script for bash, zsh or fish."))

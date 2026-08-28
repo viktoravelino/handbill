@@ -25,12 +25,13 @@ beforeEach(() => {
 })
 
 /** A transport where every request fails, standing in for an endpoint that is down. */
-const unreachable = Layer.succeed(
-  FetchHttpClient.Fetch,
-  Object.assign(() => Promise.reject(new Error("ECONNREFUSED")), {
-    preconnect: () => Promise.resolve()
-  }) as typeof globalThis.fetch
-).pipe(Layer.merge(FetchHttpClient.layer))
+const unreachableFetch: typeof globalThis.fetch = Object.assign(
+  () => Promise.reject(new Error("ECONNREFUSED")),
+  { preconnect: () => Promise.resolve() }
+)
+const unreachable = Layer.succeed(FetchHttpClient.Fetch, unreachableFetch).pipe(
+  Layer.merge(FetchHttpClient.layer)
+)
 
 /** The CLI as a configured user runs it, talking to the in-process server. */
 const cli = (
@@ -46,7 +47,7 @@ const cli = (
     http: options.http ?? server.layer,
     env: {
       XDG_CONFIG_HOME: configHome(),
-      HANDBILL_ENDPOINT: "http://handbill.test",
+      HANDBILL_ENDPOINT: `https://api.${ZONE}`,
       HANDBILL_TOKEN: TOKEN,
       ...options.env
     }
@@ -213,5 +214,13 @@ describe("completions", () => {
     const outcome = await cli(["completions", "zsh"])
     expect(outcome.ok).toBe(true)
     expect(outcome.stdout.join("\n")).toContain("#compdef handbill")
+  })
+
+  // S1.3 asks for `--json` on every command, so this one wraps its script.
+  test("wraps the script in an object under --json", async () => {
+    const outcome = await cli(["completions", "zsh", "--json"])
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stdout).toHaveLength(1)
+    expect(JSON.parse(outcome.stdout[0] ?? "").script).toContain("#compdef handbill")
   })
 })
