@@ -1,0 +1,42 @@
+import type { R2Bucket } from "@cloudflare/workers-types"
+import { Layer } from "effect"
+import { makeApp } from "./app"
+import { AuthSecret, DEFAULT_MAX_BYTES, StorageR2 } from "./services"
+
+/**
+ * The bindings `wrangler.jsonc` declares. `ZONE` and the bucket are config,
+ * `PUBLISH_TOKEN` is a secret (`wrangler secret put PUBLISH_TOKEN`) and
+ * `MAX_BYTES` is optional — it defaults to the CLI's 5 MB cap.
+ */
+export interface Env {
+  readonly ZONE: string
+  readonly MAX_BYTES?: string
+  readonly PUBLISH_TOKEN?: string
+  readonly BUCKET: R2Bucket
+}
+
+/**
+ * `MAX_BYTES` arrives as a string or not at all. Anything that is not a positive
+ * whole number — missing, empty, a typo — falls back to the default, because a
+ * `NaN` cap silently disables the size check and a `0` cap rejects every publish.
+ */
+export const maxBytesFrom = (value: string | undefined): number => {
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_BYTES
+}
+
+/**
+ * Built once per isolate. The bindings do not change between requests, so the
+ * layers are built on the first one and reused.
+ */
+let app: ReturnType<typeof makeApp> | undefined
+
+const appFor = (env: Env) =>
+  (app ??= makeApp(
+    { zone: env.ZONE, maxBytes: maxBytesFrom(env.MAX_BYTES) },
+    Layer.mergeAll(StorageR2(env.BUCKET), AuthSecret(env.PUBLISH_TOKEN ?? ""))
+  ))
+
+export default {
+  fetch: (request: Request, env: Env): Promise<Response> => appFor(env).fetch(request)
+}
