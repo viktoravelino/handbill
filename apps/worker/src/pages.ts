@@ -15,12 +15,19 @@ export type HostKind =
 const HASH_LABEL = /^[0-9a-f]{12}$/u
 
 /**
+ * Lowercased and without the trailing dot a fully-qualified name carries.
+ * Applied to the configured zone as well as the request's host, so a `ZONE`
+ * pasted out of DNS tooling as `example.dev.` still matches.
+ */
+const normalize = (name: string): string => name.toLowerCase().replace(/\.$/u, "")
+
+/**
  * `api.<zone>` is the API, `<12-hex>.<zone>` is a page, and the apex, `www` and
  * anything else are nothing. Called on every request before any Effect runs.
  */
 export const classifyHost = (hostname: string, zone: string): HostKind => {
-  const host = (hostname.toLowerCase().split(":")[0] ?? "").replace(/\.$/u, "")
-  const suffix = `.${zone.toLowerCase()}`
+  const host = normalize(hostname.split(":")[0] ?? "")
+  const suffix = `.${normalize(zone)}`
   if (host === `api${suffix}`) return { kind: "api" }
   if (host.endsWith(suffix)) {
     const label = host.slice(0, -suffix.length)
