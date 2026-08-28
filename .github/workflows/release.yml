@@ -14,6 +14,8 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
@@ -42,10 +44,18 @@ jobs:
       - run: bun --cwd apps/cli run build
       - run: node apps/cli/dist/cli.js --version
 
-      - name: Publish to npm
+      # Two publish paths, one runs: NPM_TOKEN when the secret exists, otherwise
+      # npm's OIDC trusted publishing (no token at all). See docs/RELEASING.md.
+      - name: Publish to npm (token)
+        if: env.NPM_TOKEN != ''
         working-directory: apps/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+      - name: Publish to npm (trusted publishing)
+        if: env.NPM_TOKEN == ''
+        working-directory: apps/cli
         run: npm publish --provenance --access public
 
       - name: GitHub release
