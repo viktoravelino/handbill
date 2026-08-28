@@ -81,7 +81,7 @@ const readConfigFile = Effect.fn(function* (path: string) {
     })
   )
   if (Option.isNone(contents)) return Option.none<ConfigFile>()
-  const json = yield* Effect.try(() => JSON.parse(contents.value) as unknown).pipe(
+  const json = yield* Effect.try((): unknown => JSON.parse(contents.value)).pipe(
     Effect.mapError(() => new BadConfigFile({ path, reason: "it is not valid JSON" }))
   )
   const decoded = yield* Schema.decodeUnknownEffect(ConfigFile)(json).pipe(
