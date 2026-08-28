@@ -91,9 +91,17 @@ const reachable = Effect.fn(function* (settings: Config.Settings, endpoint: stri
 
   const health = yield* Effect.result(client.meta.health({}))
   if (Result.isFailure(health)) {
+    const described = Output.describe(health.failure)
+    // An endpoint that cannot be reached at all makes token acceptance
+    // unknowable, so `auth` is skipped rather than failed a second time for the
+    // same reason. A health answer that merely did not decode still leaves the
+    // token worth trying.
+    const unreachable = described.error === "HttpClientError"
     return [
-      check("health", "FAIL", `GET /v1/health failed: ${Output.describe(health.failure).message}`),
-      yield* accepts(client, hasToken),
+      check("health", "FAIL", `GET /v1/health failed: ${described.message}`),
+      unreachable
+        ? check("auth", "skip", "Skipped: the endpoint could not be reached.")
+        : yield* accepts(client, hasToken),
       check("tls", "skip", "Skipped: the zone is only known from /v1/health.")
     ]
   }

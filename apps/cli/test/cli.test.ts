@@ -2,6 +2,8 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterAll, beforeEach, describe, expect, test } from "bun:test"
+import { Layer } from "effect"
+import { FetchHttpClient } from "effect/unstable/http"
 import { hashDocument } from "../src/hash"
 import { configHome, run, type RunOptions } from "./harness"
 import { makeServer, TOKEN, ZONE } from "./server"
@@ -22,16 +24,26 @@ beforeEach(() => {
   server = makeServer()
 })
 
+/** A transport where every request fails, standing in for an endpoint that is down. */
+const unreachable = Layer.succeed(
+  FetchHttpClient.Fetch,
+  Object.assign(() => Promise.reject(new Error("ECONNREFUSED")), {
+    preconnect: () => Promise.resolve()
+  }) as typeof globalThis.fetch
+).pipe(Layer.merge(FetchHttpClient.layer))
+
 /** The CLI as a configured user runs it, talking to the in-process server. */
 const cli = (
   args: ReadonlyArray<string>,
   options: Omit<RunOptions, "http" | "env"> & {
     readonly env?: Record<string, string | undefined>
+    /** Defaults to the in-process server; override to test an endpoint that is down. */
+    readonly http?: RunOptions["http"]
   } = {}
 ) =>
   run(args, {
     ...options,
-    http: server.layer,
+    http: options.http ?? server.layer,
     env: {
       XDG_CONFIG_HOME: configHome(),
       HANDBILL_ENDPOINT: "http://handbill.test",
@@ -182,6 +194,17 @@ describe("doctor", () => {
     expect(checks.find((check: { name: string }) => check.name === "auth")).toMatchObject({
       status: "FAIL"
     })
+  })
+
+  // One FAIL, not three: an endpoint nothing answers on says nothing about the
+  // token or the certificate, so those are unknowable rather than broken.
+  test("blames only health when nothing answers", async () => {
+    const outcome = await cli(["doctor", "--json"], { http: unreachable })
+    expect(outcome.ok).toBe(false)
+    const { checks } = JSON.parse(outcome.stdout[0] ?? "")
+    expect(
+      checks.map((check: { name: string; status: string }) => `${check.status} ${check.name}`)
+    ).toEqual(["ok config", "ok token", "FAIL health", "skip auth", "skip tls"])
   })
 })
 
