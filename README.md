@@ -13,7 +13,11 @@ handbill plan.html
 
 ## Status
 
-Pre-release. Nothing here runs yet. The product definition, user stories, and build order are in [`docs/2026-08-28-prd.html`](docs/2026-08-28-prd.html); work is tracked in the issues and the project board.
+Pre-release. The Worker, the CLI, and the agent skill are in place; self-hosting docs and the first npm release are in progress. The product definition, user stories, and build order are in [`docs/2026-08-28-prd.html`](docs/2026-08-28-prd.html); work is tracked in the issues and the project board.
+
+## Agents
+
+[`skills/handbill/SKILL.md`](skills/handbill/SKILL.md) teaches a coding agent when and how to publish with `handbill`: one file, one URL, what never to publish, how to list and unpublish, and what to do when it fails. Install it by symlinking the directory into the agent's skills folder (`~/.claude/skills/` for Claude Code, `~/.agents/skills/` for Codex); it needs only `handbill` on `PATH` and a configured endpoint and token.
 
 ## License
 
