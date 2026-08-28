@@ -184,7 +184,7 @@
   </div>
   <p class="lede">Hand someone a page. One command turns a self-contained HTML file into an unguessable, immutable link on a domain you own. Self-host first; a hosted tier later, from the same code. This document is the product definition, the user stories per version, the technical design on Effect, and the build order for <code>~/projects/handbill</code>, a fresh repo.</p>
   <ul class="meta">
-    <li><strong>Owner</strong> Viktor Avelino</li>
+    <li><strong>Owner</strong> maintainer</li>
     <li><strong>Repo</strong> ~/projects/handbill (new, empty)</li>
     <li><strong>Stack</strong> Effect 4 (rc) &middot; Cloudflare Workers + R2 &middot; bun &middot; Astro</li>
     <li><strong>Supersedes</strong> the 2026-08-28 brainstorm</li>
@@ -229,8 +229,8 @@
   </ul>
   <h3>Success measures</h3>
   <ul>
-    <li>Viktor&rsquo;s daily flow runs on <code>handbill</code> and the old <code>publish-plan</code> deployment is retired (v0.1).</li>
-    <li>At least three self-hosters not named Viktor confirm the README works (v0.1 &rarr; v0.2).</li>
+    <li>the maintainer&rsquo;s daily flow runs on <code>handbill</code> and the old <code>publish-plan</code> deployment is retired (v0.1).</li>
+    <li>At least three self-hosters not named the maintainer confirm the README works (v0.1 &rarr; v0.2).</li>
     <li>Zero security reports rated high or above; every page served with <code>noindex</code> and immutable caching.</li>
   </ul>
 </section>
@@ -238,7 +238,7 @@
 <section id="personas">
   <h2>Personas</h2>
   <dl class="persona">
-    <dt>Ada</dt><dd><strong>Agent operator.</strong> Runs Claude Code and Codex all day. Wants every plan and review to end in a link she can paste in Slack. Cares about the skill and about stdout being exactly one URL. This is Viktor.</dd>
+    <dt>Ada</dt><dd><strong>Agent operator.</strong> Runs Claude Code and Codex all day. Wants every plan and review to end in a link she can paste in Slack. Cares about the skill and about stdout being exactly one URL. This is the maintainer.</dd>
     <dt>Sam</dt><dd><strong>Self-hoster.</strong> Has a domain on Cloudflare, comfortable with <code>wrangler</code>, allergic to SaaS for personal infra. Wants the five-minute setup, the free tier, and to never think about it again.</dd>
     <dt>Kai</dt><dd><strong>Hosted user (v0.3).</strong> No domain, no Cloudflare account. Read about it, ran <code>npx handbill plan.html</code>, wants a link. Will tolerate a login.</dd>
     <dt>Rae</dt><dd><strong>Contributor.</strong> Wants to add markdown rendering or fix a bug. Needs tests that run without a Cloudflare account and a codebase where one file explains the whole thing.</dd>
@@ -253,7 +253,7 @@
       <caption>Roadmap</caption>
       <thead><tr><th scope="col">Version</th><th scope="col">Theme</th><th scope="col">Ships</th><th scope="col">Exit criterion</th></tr></thead>
       <tbody>
-        <tr><td><strong>0.1</strong></td><td>Print</td><td>Worker (secret auth), CLI <code>publish</code>/<code>list</code>/<code>remove</code>/<code>doctor</code>, stdin, <code>--json</code>, skill, self-host docs, Deploy button, CI, npm</td><td>Viktor&rsquo;s flow migrated; one outside self-hoster succeeds from the README alone</td></tr>
+        <tr><td><strong>0.1</strong></td><td>Print</td><td>Worker (secret auth), CLI <code>publish</code>/<code>list</code>/<code>remove</code>/<code>doctor</code>, stdin, <code>--json</code>, skill, self-host docs, Deploy button, CI, npm</td><td>the maintainer&rsquo;s flow migrated; one outside self-hoster succeeds from the README alone</td></tr>
         <tr><td><strong>0.2</strong></td><td>Words and names</td><td>Markdown &rarr; self-contained HTML in the CLI; aliases (living names) in KV; <code>--open</code>; shell completions; OpenAPI + docs endpoint; landing + docs site on <code>handbill.dev</code></td><td>Three outside self-hosters; <code>handbill notes.md</code> works; aliases documented as opt-in and guessable</td></tr>
         <tr><td><strong>0.3</strong></td><td>Hosted</td><td>Accounts auth layer (KV), <code>handbill login</code>, per-owner index, quotas, rate limits, operator takedown, ToS/abuse page, default endpoint flips to <code>api.handbill.dev</code></td><td>A stranger publishes with no config in under two minutes; abuse controls exercised in a drill</td></tr>
         <tr><td><strong>0.4</strong></td><td>Sheets and time</td><td>Inline local assets into the HTML at publish time; <code>--ttl</code> with a sweeping cron</td><td>A page with local images publishes as one object</td></tr>
@@ -397,7 +397,7 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
 
 <section id="contract">
   <h2>API contract</h2>
-  <p>Kept byte-compatible with the existing deployment so Viktor&rsquo;s migration is a config change. Additions are new endpoints only.</p>
+  <p>Kept byte-compatible with the existing deployment so the maintainer&rsquo;s migration is a config change. Additions are new endpoints only.</p>
   <div class="scroll">
     <table>
       <caption>/v1, all on <code>api.&lt;zone&gt;</code></caption>
@@ -484,7 +484,7 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
         <li>Tests on the memory layer: hash mismatch, size cap, idempotent put, list order, delete idempotency, host classification table, headers.</li>
         <li>Bundle-size check in CI (<code>wrangler deploy --dry-run --outdir</code>, fail above 1&nbsp;MB gzip).</li>
       </ul></div>
-      <div class="verify"><h4>Done when</h4><p>Deployed to Viktor&rsquo;s account as a second Worker on the existing bucket; the old publish script still works against it (contract compatibility proven), then routes move.</p></div>
+      <div class="verify"><h4>Done when</h4><p>Deployed to the maintainer&rsquo;s account as a second Worker on the existing bucket; the old publish script still works against it (contract compatibility proven), then routes move.</p></div>
     </li>
     <li class="step">
       <div class="step__head"><p class="step__n">M4 &middot; 4h</p><h3>CLI</h3></div>
@@ -494,7 +494,7 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
         <li>Tests: config precedence, hashing, and one in-process round-trip per command against the Worker handler on the memory layer.</li>
         <li>Build: <code>bun build --target=node</code> &rarr; <code>dist/cli.js</code> with shebang; <code>files: ["dist"]</code>; <code>engines.node &gt;= 22</code>.</li>
       </ul></div>
-      <div class="verify"><h4>Done when</h4><p><code>npm i -g ./apps/cli</code> on a bun-less machine publishes, lists, and removes against Viktor&rsquo;s deployment.</p></div>
+      <div class="verify"><h4>Done when</h4><p><code>npm i -g ./apps/cli</code> on a bun-less machine publishes, lists, and removes against the maintainer&rsquo;s deployment.</p></div>
     </li>
     <li class="step">
       <div class="step__head"><p class="step__n">M5 &middot; 1h</p><h3>Skill and migration</h3></div>
