@@ -26,6 +26,9 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+          # Publish workflows should not restore a package-manager cache: a poisoned
+          # cache could read the OIDC token (setup-node's trusted-publishing guidance).
+          package-manager-cache: false
 
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
