@@ -28,7 +28,7 @@ Publishing from CI uses npm **trusted publishing** (OIDC): no npm token anywhere
 
 ## Every later release
 
-1. Bump the version in **both** `apps/cli/package.json` and the `version` literal in `apps/cli/src/cli.ts`, on a branch, through a PR.
+1. Bump the version in **both** `apps/cli/package.json` and the `version` literal in `apps/cli/src/cli.ts`, then run `bun install` so `bun.lock` records the new workspace version, on a branch, through a PR.
 2. After it merges:
    ```sh
    git checkout main && git pull
