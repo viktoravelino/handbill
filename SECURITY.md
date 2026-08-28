@@ -2,7 +2,7 @@
 
 ## Threat model, in three sentences
 
-A published page is public to anyone holding its link; the link is unguessable (48 bits of content hash) and served with `noindex`, but it is not secret and it is not encrypted. Writing — publishing and unpublishing — requires the bearer token, which only the deployment's operator holds; a missing or wrong token fails closed. The Worker serves bytes exactly as stored and never executes them, but a page is a full HTML document on its own origin, so it can run its own scripts against its own origin and nothing else.
+A published page is public to anyone holding its link; the link is unguessable (48 bits of content hash) and served with `noindex`, but it is not secret and it is not encrypted. Writing — publishing and unpublishing — requires the bearer token, which only the deployment's operator holds; a missing or wrong token fails closed. The Worker serves bytes exactly as stored and never executes them, but a page is a full HTML document that runs in the reader's browser with everything any web page can do — call remote servers, load remote code, show whatever it likes — so publish only pages you trust; what the per-page origin guarantees is that a page cannot read another page's storage, cookies, or content, nor the API's.
 
 ## What handbill protects
 
@@ -15,7 +15,7 @@ A published page is public to anyone holding its link; the link is unguessable (
 
 - Anyone with a link can read the page and share the link. There is no reader authentication and no private mode.
 - The operator can read every page in the bucket.
-- A page's own JavaScript is the page author's responsibility.
+- A page's own JavaScript is the page author's responsibility. Origin isolation stops it reading other pages and the API; it does not stop it making cross-origin requests or phishing the reader.
 
 ## Reporting a vulnerability
 
