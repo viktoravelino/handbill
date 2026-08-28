@@ -53,7 +53,7 @@ Errors are one sentence on stderr and a non-zero exit; stdout is only ever the r
 
 ## How it works
 
-`hash = sha256(bytes)[0:12]`. The client computes it to form the URL; the server recomputes it and rejects a mismatch. Publishing the same bytes twice returns the same URL and stores nothing new.
+`hash = hex(sha256(bytes))[0:12]` — the first 12 hex characters of the digest. The client computes it to form the URL; the server recomputes it and rejects a mismatch. Publishing the same bytes twice returns the same URL and stores nothing new.
 
 The page is served from `https://<hash>.<zone>` — its own origin — with `text/html; charset=utf-8`, `X-Robots-Tag: noindex, nofollow`, and `Cache-Control: public, max-age=31536000, immutable`. Every path on that hostname serves the same document. The API lives at `api.<zone>` under `/v1` and needs the bearer token for every write.
 
