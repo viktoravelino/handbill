@@ -1,21 +1,19 @@
 name: Board
 
 # Keeps the project board (viktoravelino/projects/8) in step with review state:
-#   PR opened / reopened / ready     → linked issues to "In Review"
+#   PR opened / reopened / pushed     → linked issues to "In Review"
 #   Copilot review with no comments  → "Ready to Merge"
 #   Copilot review with comments     → "In Review"
 #   human approves                   → "Ready to Merge"
 #   human requests changes           → "In Review"
 # Needs the PROJECT_TOKEN secret (GITHUB_TOKEN cannot touch user-owned projects):
-# a fine-grained PAT with repository access to this repo and
-#   - Pull requests: read   (review comments, via REST)
-#   - Issues: read          (closingIssuesReferences, via GraphQL)
-#   - Metadata: read        (implied)
-# plus the account permission Projects: read & write. Without it the job is skipped.
-
+# a classic personal access token with scopes `project`, `public_repo`, and
+# `read:org` (gh's project commands look the owner up as user *and* organization,
+# and the organization lookup needs read:org even for a user-owned project).
+# Without the secret the job is skipped.
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize]
   pull_request_review:
     types: [submitted]
 
