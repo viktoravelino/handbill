@@ -20,10 +20,13 @@ const sourceFiles = readdirSync(join(root, "src"))
   .toSorted()
 
 // Every line counts, comments included — the budget is about how much there is to read.
+// Not `wc -l`: a file whose last line has no newline after it still has that line, and
+// the budget should not depend on the formatter having normalised the file first.
 const counts = await Promise.all(
-  sourceFiles.map(
-    async (name) => (await Bun.file(join(root, "src", name)).text()).split("\n").length - 1
-  )
+  sourceFiles.map(async (name) => {
+    const text = await Bun.file(join(root, "src", name)).text()
+    return text === "" ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0)
+  })
 )
 const lines = counts.reduce((total, count) => total + count, 0)
 
