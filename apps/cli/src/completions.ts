@@ -39,7 +39,7 @@ const publishFlags: ReadonlyArray<Completions.FlagDescriptor> = [
  */
 export const descriptor: Completions.CommandDescriptor = {
   name: "handbill",
-  description: "Publish one self-contained HTML file at an unguessable, immutable URL",
+  description: "Publish one self-contained HTML or markdown file at an unguessable, immutable URL",
   flags: publishFlags,
   arguments: [
     {

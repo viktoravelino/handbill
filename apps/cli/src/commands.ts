@@ -72,7 +72,7 @@ const publish = Command.make(
   )
 ).pipe(
   Command.withDescription(
-    "Hand someone a page: publish one self-contained HTML file at an unguessable, immutable URL."
+    "Hand someone a page: publish one self-contained HTML file, or a markdown file rendered to one, at an unguessable, immutable URL."
   ),
   Command.withExamples([
     { command: "handbill plan.html", description: "Publish a file and print its URL" },
