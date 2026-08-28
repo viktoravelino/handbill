@@ -48,8 +48,17 @@ jobs:
           if [[ "$EVENT" == "pull_request" ]]; then
             target="review"
           elif [[ "$REVIEWER" == "copilot-pull-request-reviewer[bot]" ]]; then
+            # Copilot's review body is never empty (it always carries an overview), so
+            # "clean" means: no inline comments AND the summary does not flag findings.
+            # Its header reads "Changes recommended" whenever it found something, including
+            # findings it chose to suppress rather than post inline.
             comments=$(gh api "repos/$REPO/pulls/$PR/reviews/$REVIEW_ID/comments" --jq length)
-            [[ "$comments" == "0" ]] && target="ready" || target="review"
+            body=$(gh api "repos/$REPO/pulls/$PR/reviews/$REVIEW_ID" --jq '.body // ""')
+            if [[ "$comments" == "0" ]] && ! grep -qi "changes recommended" <<<"$body"; then
+              target="ready"
+            else
+              target="review"
+            fi
           elif [[ "$STATE" == "approved" ]]; then
             target="ready"
           elif [[ "$STATE" == "changes_requested" ]]; then
