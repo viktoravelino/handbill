@@ -7,7 +7,7 @@ Hand someone a page: `handbill plan.html` → `https://<sha256[0:12]>.<zone>`. S
 ## Ground rules
 
 - The API contract lives in `packages/contract` and is versioned under `/v1`; it does not break inside a major version. Published links never change.
-- Keep it small. The Worker should stay readable in one sitting (about 500 lines today; do not let it grow without taking something out). If a feature needs a framework, the feature is wrong.
+- Keep it small. **The Worker budget is 750 lines of source** — every `.ts` file in `apps/worker/src` except `*.test.ts`, counted whole, comments included; tests grow freely. `bun run --cwd apps/worker size` prints the count and fails over the budget, and the CI `size` job runs it. It is a budget, not a target: once it binds, a PR that adds lines takes something out and says what. If a feature needs a framework, the feature is wrong.
 - No `any`. Prefer inferred types; brand IDs (`Hash`) with Schema. Write TypeScript Matt Pocock would sign off on.
 - Non-goals are real: no multi-file sites, no server-side transforms, no analytics, no other clouds.
 - YAGNI: build the milestone in front of you, not the next version.
@@ -24,7 +24,7 @@ Hand someone a page: `handbill plan.html` → `https://<sha256[0:12]>.<zone>`. S
 
 ```
 packages/contract   HttpApi + Schema — the single source of truth for the API
-apps/worker         Effect on Workers; services Storage / Auth (+ Aliases in 0.2, Index in 0.3)
+apps/worker         Effect on Workers; one file per service — storage / auth (+ aliases in 0.2, index in 0.3)
 apps/cli            effect/unstable/cli; npm package "handbill"; bundled to dist/cli.js
 apps/web            Astro site (0.2)
 skills/handbill     the agent skill (SKILL.md)
@@ -43,6 +43,7 @@ docs/               PRD, SELF-HOSTING.md, RELEASING.md, the original brainstorm
 ## Working here
 
 - `main` is protected: no direct pushes, no force-push, PR required with green `typecheck`, `lint`, `test`, and `size` jobs, branch up to date, squash merge only. Branches are deleted on merge. **Never merge a PR yourself and never enable auto-merge** — open it, make sure the checks are green, and stop; the maintainer merges.
+- A PR that touches `apps/worker/src` states the before/after source line count in its body, so the reviewer sees the trade rather than having to compute it.
 - One GitHub issue per milestone; work on a branch named after it (`m3-worker`), open a PR with `Closes #N`. The PR title becomes the squash commit subject and the body its message — write both as you would a commit.
 - The board is https://github.com/users/viktoravelino/projects/8. Use the `board` skill (`.claude/skills/board/`, also linked from `.agents/skills/`): `board.sh start <n>` when you begin, `board.sh add <n>` for every issue you create, `board.sh review <n>` right after opening the PR, `board.sh show` to see the state. Columns: Todo → In Progress → In Review → Ready to Merge → Done. Copilot reviews every PR; the project's own workflows move the card to Ready to Merge when the maintainer approves and to Done when the PR merges.
 - Tests are focused: hashing, host classification, headers, error mapping, one in-process round-trip per CLI command. No smoke-test sprawl.

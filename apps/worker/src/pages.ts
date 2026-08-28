@@ -1,7 +1,7 @@
 import type { Hash } from "@handbill/contract"
 import { Hash as HashSchema } from "@handbill/contract"
 import { Effect, Option } from "effect"
-import { Storage } from "./services"
+import { Storage } from "./storage"
 
 /**
  * What a request's `Host` means. Only three things live on the zone: the API,

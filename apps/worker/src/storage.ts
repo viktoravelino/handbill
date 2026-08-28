@@ -1,22 +1,6 @@
-import type { Mode } from "@handbill/contract"
-import { Hash, Owner, Unauthorized } from "@handbill/contract"
+import { Hash, Owner } from "@handbill/contract"
 import type { R2Bucket } from "@cloudflare/workers-types"
-import { Context, Effect, Layer, Option, Redacted, Schema } from "effect"
-
-/**
- * `ZONE` and `MAX_BYTES` as the handlers see them. Read once from the Worker
- * `env`; `zone` is also what the hostname classifier matches against, so it is
- * passed to `makeApp` as a plain value rather than pulled out of the layer.
- */
-export interface WorkerConfig {
-  readonly zone: string
-  readonly maxBytes: number
-}
-
-export class Config extends Context.Service<Config, WorkerConfig>()("handbill/Config") {}
-
-/** 5 MB, the cap the CLI enforces before it uploads. */
-export const DEFAULT_MAX_BYTES = 5 * 1024 * 1024
+import { Context, Effect, Layer, Option, Schema } from "effect"
 
 /** Everything about a stored document except its bytes — i.e. its `customMetadata` plus the object size. */
 export interface StoredMeta {
@@ -142,39 +126,4 @@ export const StorageR2 = (bucket: R2Bucket): Layer.Layer<Storage> =>
           cursor = page.cursor
         }
       })
-  })
-
-/**
- * Turns a bearer token into the owner it belongs to. `AuthSecret` is the
- * self-hosted layer (one `PUBLISH_TOKEN`, owner `"self"`); 0.3 swaps in an
- * accounts layer without the contract moving. `mode` is what `/v1/health`
- * reports so `handbill doctor` can say which one it reached.
- */
-export interface AuthShape {
-  readonly mode: Mode
-  readonly authorize: (token: Redacted.Redacted) => Effect.Effect<Owner, Unauthorized>
-}
-
-export class Auth extends Context.Service<Auth, AuthShape>()("handbill/Auth") {}
-
-/** Length-independent comparison, so a wrong token leaks nothing through timing. */
-const secretEquals = (a: string, b: string): boolean => {
-  let difference = a.length ^ b.length
-  const length = Math.max(a.length, b.length)
-  for (let index = 0; index < length; index++) {
-    difference |= (a.codePointAt(index) ?? 0) ^ (b.codePointAt(index) ?? 0)
-  }
-  return difference === 0
-}
-
-const SELF = Owner.make("self")
-
-/** Self-hosted auth: one shared `PUBLISH_TOKEN` from the Worker secrets, every page owned by `"self"`. */
-export const AuthSecret = (token: string): Layer.Layer<Auth> =>
-  Layer.succeed(Auth, {
-    mode: "secret",
-    authorize: (candidate) =>
-      token.length > 0 && secretEquals(token, Redacted.value(candidate))
-        ? Effect.succeed(SELF)
-        : Effect.fail(new Unauthorized())
   })

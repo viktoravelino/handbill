@@ -8,7 +8,9 @@ import {
 import { DateTime, Effect, Layer, Option } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { extractTitle, hashBytes } from "./hash"
-import { Auth, Config, Storage } from "./services"
+import { Auth } from "./auth"
+import { Config } from "./config"
+import { Storage } from "./storage"
 
 /**
  * `publishedAt` as the contract wants it. Objects written before the field

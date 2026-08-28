@@ -1,7 +1,9 @@
 import type { R2Bucket } from "@cloudflare/workers-types"
 import { Layer } from "effect"
 import { makeApp } from "./app"
-import { AuthSecret, DEFAULT_MAX_BYTES, StorageR2 } from "./services"
+import { AuthSecret } from "./auth"
+import { DEFAULT_MAX_BYTES } from "./config"
+import { StorageR2 } from "./storage"
 
 /**
  * The bindings `wrangler.jsonc` declares. `ZONE` and the bucket are config,
