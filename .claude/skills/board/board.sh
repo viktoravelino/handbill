@@ -5,7 +5,7 @@
 #   board.sh show            list every card with its status
 #   board.sh start  <issue>  → In Progress    (run when you begin work)
 #   board.sh review <issue>  → In Review      (run right after opening the PR)
-#   board.sh ready  <issue>  → Ready to Merge (set by the Board workflow when review is clean)
+#   board.sh ready  <issue>  → Ready to Merge (normally set by the project's "Code review approved" workflow)
 #   board.sh todo   <issue>  → Todo           (parked or handed back)
 #   board.sh done   <issue>  → Done           (automatic on PR merge)
 #   board.sh add   <issue>   put an issue on the board as Todo (new issues)
