@@ -17,6 +17,7 @@ Hand someone a page: `handbill plan.html` → `https://<sha256[0:12]>.<zone>`. S
 - **Effect 4**, pinned to an exact `4.0.0-rc.x` in every package (v3 is feature-frozen). Imports come from `effect/unstable/httpapi`, `effect/unstable/http`, `effect/unstable/cli`; platform code from `@effect/platform-node` (CLI). Never mix `@effect/platform` v3 packages in.
 - **Cloudflare Workers + R2** via `wrangler` as a devDependency; `HttpRouter.toWebHandler` bridges Effect to the Workers `fetch` handler.
 - **bun** workspaces, `bun test`, **oxlint** + **oxfmt**. Node ≥ 22 for the published CLI.
+- Workspace packages import each other through the workspace symlink (`@handbill/contract` → its `src/index.ts`). Do not add TypeScript `references` between packages: a composite `noEmit` project cannot be referenced (TS6310).
 - **Astro + Starlight** for `apps/web` (from 0.2). No app framework until a dashboard actually needs one.
 
 ## Layout
@@ -41,7 +42,7 @@ docs/               PRD, SELF-HOSTING.md, ADRs
 
 ## Working here
 
-- `main` is protected: no direct pushes, no force-push, PR required with green `typecheck`, `lint`, and `test` jobs, branch up to date, squash merge only. Branches are deleted on merge. **Never merge a PR yourself and never enable auto-merge** — open it, make sure the checks are green, and stop; the maintainer merges.
+- `main` is protected: no direct pushes, no force-push, PR required with green `typecheck`, `lint`, `test`, and `size` jobs, branch up to date, squash merge only. Branches are deleted on merge. **Never merge a PR yourself and never enable auto-merge** — open it, make sure the checks are green, and stop; the maintainer merges.
 - One GitHub issue per milestone; work on a branch named after it (`m3-worker`), open a PR with `Closes #N`. The PR title becomes the squash commit subject and the body its message — write both as you would a commit.
 - The board is https://github.com/users/viktoravelino/projects/8. Use the `board` skill (`.claude/skills/board/`, also linked from `.agents/skills/`): `board.sh start <n>` when you begin, `board.sh add <n>` for every issue you create, `board.sh review <n>` right after opening the PR, `board.sh show` to see the state. Columns: Todo → In Progress → In Review → Ready to Merge → Done. Copilot reviews every PR; the `Board` workflow moves the card to Ready to Merge when the review is clean, and merging moves it to Done.
 - Tests are focused: hashing, host classification, headers, error mapping, one in-process round-trip per CLI command. No smoke-test sprawl.
