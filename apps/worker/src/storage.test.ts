@@ -1,8 +1,8 @@
 import { Hash, Owner } from "@handbill/contract"
 import { expect, test } from "bun:test"
 import { Effect, Option } from "effect"
-import type { StorageShape, StoredDocument } from "./services"
-import { Storage, StorageMemory } from "./services"
+import type { StorageShape, StoredDocument } from "./storage"
+import { Storage, StorageMemory } from "./storage"
 
 const SELF = Owner.make("self")
 const OTHER = Owner.make("someone-else")

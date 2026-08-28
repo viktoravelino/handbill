@@ -4,8 +4,10 @@ import { Etag, HttpPlatform, HttpRouter } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { AuthorizationLive, MetaLive, PagesLive } from "./api"
 import { canonical, classifyHost, nothingHere, servePage } from "./pages"
-import type { Auth, Storage, WorkerConfig } from "./services"
-import { Config } from "./services"
+import type { Auth } from "./auth"
+import type { WorkerConfig } from "./config"
+import { Config } from "./config"
+import type { Storage } from "./storage"
 
 /**
  * `HttpApiBuilder` asks for the platform services that back `HttpServerResponse.file`,
