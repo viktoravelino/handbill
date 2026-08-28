@@ -24,7 +24,7 @@ On success, reply to the user with the URL and stop.
 ## List what is published
 
 ```bash
-handbill list            # one line per page, newest first: url, date, title
+handbill list            # one line per page, newest first: date, url, title
 handbill list --json
 ```
 
