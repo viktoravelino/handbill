@@ -65,21 +65,6 @@ One self-contained HTML file per link, 5 MB by default. No multi-file sites, no 
 
 Anyone holding a link can read the page; the link is unguessable and not indexed, but it is not private and not encrypted. Publishing and unpublishing need the token, which only you hold. Details in [`SECURITY.md`](SECURITY.md).
 
-## Compared with tot
-
-[tot](https://github.com/plannotator/tot) is the hosted cousin: `tot notes.md` gives you a link on tot.page with no setup. Different tool, same idea.
-
-|                          | tot                                    | handbill                             |
-| ------------------------ | -------------------------------------- | ------------------------------------ |
-| Pages live on            | tot.page                               | your domain, your Cloudflare account |
-| Setup                    | none                                   | deploy a Worker once (~10 min)       |
-| Link model               | living link + frozen `@hash` snapshots | content-addressed, immutable         |
-| Who can update or delete | anyone with the link                   | whoever holds the token              |
-| Inputs                   | Markdown, HTML + local assets          | one self-contained HTML file         |
-| Open source              | the CLI                                | Worker, CLI, skill                   |
-
-Pick tot when you want a link in ten seconds; pick handbill when the link has to be on your domain and nobody but you may change what it points to.
-
 ## Agents
 
 [`skills/handbill/SKILL.md`](skills/handbill/SKILL.md) teaches a coding agent when and how to publish with `handbill`: one file, one URL, what never to publish, how to list and unpublish, and what to do when it fails. Install it by symlinking the directory into the agent's skills folder (`~/.claude/skills/` for Claude Code, `~/.agents/skills/` for Codex); it needs only `handbill` on `PATH` and a configured endpoint and token.
