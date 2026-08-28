@@ -59,7 +59,7 @@ Errors are one sentence on stderr and a non-zero exit; stdout is only ever the r
 
 `hash = hex(sha256(bytes))[0:12]` — the first 12 hex characters of the digest. The client computes it to form the URL; the server recomputes it and rejects a mismatch. Publishing the same bytes twice returns the same URL and stores nothing new.
 
-The page is served from `https://<hash>.<zone>` — its own origin — with `text/html; charset=utf-8`, `X-Robots-Tag: noindex, nofollow`, and `Cache-Control: public, max-age=31536000, immutable`. Every path on that hostname serves the same document. The API lives at `api.<zone>` under `/v1` and needs the bearer token for every write.
+The page is served from `https://<hash>.<zone>` — its own origin — with `text/html; charset=utf-8`, `X-Robots-Tag: noindex, nofollow`, and `Cache-Control: public, max-age=31536000, immutable`. Every path on that hostname serves the same document. The API lives at `api.<zone>` under `/v1` and needs the bearer token for everything except `/v1/health`.
 
 One self-contained HTML file per link, 5 MB by default. No multi-file sites, no assets, no transforms on the server.
 
