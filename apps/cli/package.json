@@ -1,6 +1,6 @@
 {
   "name": "handbill",
-  "version": "0.1.1-rc.0",
+  "version": "0.1.1",
   "description": "Hand someone a page: publish one self-contained HTML file at an unguessable, immutable URL.",
   "keywords": [
     "cli",
