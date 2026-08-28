@@ -1,0 +1,40 @@
+---
+name: board
+description: Track handbill work on the GitHub Project board (project #8) — move an issue to In Progress when starting, back to Todo when parking, add new issues, check the board. Use at the start and end of any issue-driven work in this repo.
+---
+
+# Board
+
+Work in this repo is one GitHub issue per milestone, tracked on https://github.com/users/viktoravelino/projects/8 with three columns: **Todo → In Progress → Done**. The helper resolves all ids at runtime; never hard-code project, field, or option ids.
+
+```bash
+.claude/skills/board/board.sh show          # what is where
+.claude/skills/board/board.sh start 3       # you are starting issue #3
+.claude/skills/board/board.sh todo 3        # parking it / handing it back
+.claude/skills/board/board.sh add 7         # a new issue you just created
+```
+
+## The loop
+
+1. **Pick up an issue.** `gh issue view <n>` is the spec: tasks, acceptance criteria, "done when". Read `AGENTS.md` first if you have not.
+2. **Move it:** `board.sh start <n>`. Then branch from `main`, named after the milestone: `m3-worker`, `m4-cli`.
+3. **Comment when you begin** with the branch name and anything you decided to do differently from the issue: `gh issue comment <n> --body "..."`. Decisions live on the issue, not in chat.
+4. **Tick the checklist as you go.** Edit the issue body (`gh issue edit <n> --body-file`) so the checkboxes reflect reality; a reviewer reads the issue before the diff.
+5. **Open a PR with `Closes #<n>` in the body.** Linking the PR moves the card to In Progress if it is not already; merging moves it to Done and closes the issue. Do **not** run `board.sh done` yourself — the merge is the source of truth.
+6. **Blocked or stopping?** `board.sh todo <n>` and a comment saying what is left. A card in In Progress means someone is actively on it.
+
+## Creating issues
+
+Every new issue goes on the board in the same step it is created, even though auto-add exists:
+
+```bash
+gh issue create --title "..." --milestone 0.2 --label cli --body-file /tmp/body.md
+.claude/skills/board/board.sh add <new number>
+```
+
+Titles follow the milestone style (`M7 · …`) for planned work; plain sentences for bugs. Always set a milestone and one area label (`worker` `cli` `contract` `web` `skill` `docs`).
+
+## If it fails
+
+- `401`/`403` from `gh project` → the token lacks the scope: `gh auth refresh -s project` (interactive; ask Viktor).
+- "not on the board" → `board.sh add <n>` first.

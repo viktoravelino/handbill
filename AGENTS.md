@@ -42,6 +42,7 @@ docs/               PRD, SELF-HOSTING.md, ADRs
 ## Working here
 
 - One GitHub issue per milestone; work on a branch named after it (`m3-worker`), open a PR with `Closes #N`.
+- The board is https://github.com/users/viktoravelino/projects/8. Use the `board` skill (`.claude/skills/board/`, also linked from `.agents/skills/`): `board.sh start <n>` when you begin, `board.sh add <n>` for every issue you create, `board.sh show` to see the state. Merging the PR is what moves a card to Done.
 - Tests are focused: hashing, host classification, headers, error mapping, one in-process round-trip per CLI command. No smoke-test sprawl.
 - Comments explain how something is used, above functions and services; keep them current when code changes.
 - Commits: imperative subject, scope prefix when useful (`worker:`, `cli:`), no AI attribution, no emoji.
