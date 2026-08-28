@@ -1,7 +1,7 @@
-import type { Hash, Mode } from "@handbill/contract"
-import { Owner, Unauthorized } from "@handbill/contract"
+import type { Mode } from "@handbill/contract"
+import { Hash, Owner, Unauthorized } from "@handbill/contract"
 import type { R2Bucket } from "@cloudflare/workers-types"
-import { Context, Effect, Layer, Option, Redacted } from "effect"
+import { Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 
 /**
  * `ZONE` and `MAX_BYTES` as the handlers see them. Read once from the Worker
@@ -92,6 +92,13 @@ const metaFromR2 = (
   size
 })
 
+/**
+ * Every key this Worker writes is a hash, but the bucket may be shared or hold
+ * leftovers from something else. `list` skips whatever is not one rather than
+ * reporting a key the contract's `Hash` would reject.
+ */
+const isHash = Schema.is(Hash)
+
 /** Production storage: one R2 object per document, metadata on the object itself — no index to keep in sync. */
 export const StorageR2 = (bucket: R2Bucket): Layer.Layer<Storage> =>
   Layer.succeed(Storage, {
@@ -127,7 +134,8 @@ export const StorageR2 = (bucket: R2Bucket): Layer.Layer<Storage> =>
             ...(cursor ? { cursor } : {})
           })
           for (const object of page.objects) {
-            const meta = metaFromR2(object.key as Hash, object.size, object.customMetadata)
+            if (!isHash(object.key)) continue
+            const meta = metaFromR2(object.key, object.size, object.customMetadata)
             if (meta.owner === owner) found.push(meta)
           }
           if (!page.truncated) return found.toSorted(byNewest)

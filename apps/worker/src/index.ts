@@ -16,6 +16,16 @@ export interface Env {
 }
 
 /**
+ * `MAX_BYTES` arrives as a string or not at all. Anything that is not a positive
+ * whole number — missing, empty, a typo — falls back to the default, because a
+ * `NaN` cap silently disables the size check and a `0` cap rejects every publish.
+ */
+export const maxBytesFrom = (value: string | undefined): number => {
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_BYTES
+}
+
+/**
  * Built once per isolate. The bindings do not change between requests, so the
  * layers are built on the first one and reused.
  */
@@ -23,7 +33,7 @@ let app: ReturnType<typeof makeApp> | undefined
 
 const appFor = (env: Env) =>
   (app ??= makeApp(
-    { zone: env.ZONE, maxBytes: Number(env.MAX_BYTES ?? DEFAULT_MAX_BYTES) },
+    { zone: env.ZONE, maxBytes: maxBytesFrom(env.MAX_BYTES) },
     Layer.mergeAll(StorageR2(env.BUCKET), AuthSecret(env.PUBLISH_TOKEN ?? ""))
   ))
 
