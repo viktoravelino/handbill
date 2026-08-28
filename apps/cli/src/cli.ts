@@ -2,10 +2,11 @@ import { NodeRuntime, NodeServices } from "@effect/platform-node"
 import { Effect, Layer } from "effect"
 import { Command } from "effect/unstable/cli"
 import { FetchHttpClient } from "effect/unstable/http"
+import pkg from "../package.json" with { type: "json" }
 import { handbill } from "./commands"
 
-/** Keep in sync with the `version` field in `package.json`. */
-const version = "0.1.1-rc.0"
+/** `bun build` inlines the JSON, so `--version` is whatever package.json said at build time. */
+const version = pkg.version
 
 /**
  * The published entry point. `fetch` is the transport because Node 22 has it
