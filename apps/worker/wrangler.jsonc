@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "handbill",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+
+  // Pages are served from your own zone only; there is nothing to see on
+  // workers.dev and a *.workers.dev hostname would classify as "nothing here".
+  "workers_dev": false,
+  "observability": { "enabled": true },
+
+  "vars": {
+    // EDIT 1 — your zone. Pages are served at https://<hash>.<ZONE>.
+    "ZONE": "example.dev"
+  },
+
+  "routes": [
+    // EDIT 2 — the API. Needs a proxied DNS record for `api`.
+    { "pattern": "api.example.dev/*", "zone_name": "example.dev" },
+    // EDIT 3 — the pages. Needs a proxied wildcard DNS record for `*`.
+    { "pattern": "*.example.dev/*", "zone_name": "example.dev" }
+  ],
+
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "handbill" }]
+
+  // `PUBLISH_TOKEN` is a secret, never a var:
+  //   openssl rand -hex 32 | wrangler secret put PUBLISH_TOKEN
+  // `MAX_BYTES` is optional and defaults to 5 MB.
+}
