@@ -8,7 +8,9 @@
   },
   "rules": {
     "typescript/no-explicit-any": "error",
-    "no-console": "error"
+    "no-console": "error",
+    "no-redeclare": "off",
+    "max-classes-per-file": "off"
   },
   "ignorePatterns": ["dist", "node_modules", ".wrangler", "docs"]
 }
