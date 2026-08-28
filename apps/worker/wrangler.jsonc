@@ -11,14 +11,14 @@
 
   "vars": {
     // EDIT 1 — your zone. Pages are served at https://<hash>.<ZONE>.
-    "ZONE": "example.dev"
+    "ZONE": "handbill.dev"
   },
 
   "routes": [
     // EDIT 2 — the API. Needs a proxied DNS record for `api`.
-    { "pattern": "api.example.dev/*", "zone_name": "example.dev" },
+    { "pattern": "api.handbill.dev/*", "zone_name": "handbill.dev" },
     // EDIT 3 — the pages. Needs a proxied wildcard DNS record for `*`.
-    { "pattern": "*.example.dev/*", "zone_name": "example.dev" }
+    { "pattern": "*.handbill.dev/*", "zone_name": "handbill.dev" }
   ],
 
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "handbill" }]
