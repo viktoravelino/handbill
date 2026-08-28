@@ -47,7 +47,7 @@ bump() {
   run git -C "$ROOT" push -q -u origin "release/$v"
   local body="/tmp/release-$v.md"
   printf 'Version bump to %s. Merge, then run `scripts/release.sh tag` to publish.\n' "$v" > "$body"
-  run gh pr create --repo "$(gh repo view --json nameWithOwner --jq .nameWithOwner)" --head "release/$v" --title "cli: $v" --body-file "$body"
+  run gh pr create --head "release/$v" --title "cli: $v" --body-file "$body"
 }
 
 tag() {
