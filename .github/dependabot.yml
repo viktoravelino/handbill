@@ -1,0 +1,29 @@
+# Version updates, kept quiet: at most three PRs a month.
+# Security updates are separate and always on (repository settings).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "deps"
+    groups:
+      # Effect ships as one release train; bump the whole family in one PR.
+      effect:
+        patterns:
+          - "effect"
+          - "@effect/*"
+      everything-else:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "effect"
+          - "@effect/*"
