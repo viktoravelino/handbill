@@ -20,7 +20,7 @@ Work in this repo is one GitHub issue per milestone, tracked on https://github.c
 2. **Move it:** `board.sh start <n>`. Then branch from `main`, named after the milestone: `m3-worker`, `m4-cli`.
 3. **Comment when you begin** with the branch name and anything you decided to do differently from the issue: `gh issue comment <n> --body "..."`. Decisions live on the issue, not in chat.
 4. **Tick the checklist as you go.** Edit the issue body (`gh issue edit <n> --body-file`) so the checkboxes reflect reality; a reviewer reads the issue before the diff.
-5. **Open a PR with `Closes #<n>` in the body.** Linking the PR moves the card to In Progress if it is not already; merging moves it to Done and closes the issue. Do **not** run `board.sh done` yourself — the merge is the source of truth. `main` only accepts squash merges via PR with the `typecheck`, `lint`, and `test` jobs green; when the PR is ready, `gh pr merge <pr> --auto --squash` and let CI land it.
+5. **Open a PR with `Closes #<n>` in the body.** Linking the PR moves the card to In Progress if it is not already; merging moves it to Done and closes the issue. Do **not** run `board.sh done` yourself — the merge is the source of truth. `main` only accepts squash merges via PR with the `typecheck`, `lint`, and `test` jobs green. **Never merge the PR yourself and never enable auto-merge** — opening it with green checks is the end of your job; Viktor merges.
 6. **Blocked or stopping?** `board.sh todo <n>` and a comment saying what is left. A card in In Progress means someone is actively on it.
 
 ## Creating issues

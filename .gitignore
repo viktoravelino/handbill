@@ -5,3 +5,6 @@ dist/
 .env.*
 .DS_Store
 *.tsbuildinfo
+
+# Agent worktrees created inside the repo (Claude Code isolation)
+.claude/worktrees/
