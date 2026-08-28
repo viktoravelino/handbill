@@ -12,7 +12,8 @@ export const ZONE = "example.dev"
 export const MAX_BYTES = 4096
 
 /** Where the Worker's clock starts; every page published before an `advance` carries this instant. */
-export const PUBLISHED_AT = "2026-01-15T00:00:00.000Z"
+const CLOCK_START = Date.UTC(2026, 0, 15)
+export const PUBLISHED_AT = new Date(CLOCK_START).toISOString()
 
 /** `AuthSecret` owns every page as `"self"`, so that is who `hashes` asks about. */
 const SELF = Owner.make("self")
@@ -52,7 +53,7 @@ export const makeServer = () => {
   // without going through the API. `StorageMemory` has no finalizer, so
   // closing the scope leaves the instance alive.
   const storage = Context.get(Effect.runSync(Effect.scoped(Layer.build(StorageMemory))), Storage)
-  const time = controlledClock(Date.parse(PUBLISHED_AT))
+  const time = controlledClock(CLOCK_START)
 
   const app = makeApp(
     { zone: ZONE, maxBytes: MAX_BYTES },

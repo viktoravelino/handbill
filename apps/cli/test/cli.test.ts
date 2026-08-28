@@ -14,8 +14,11 @@ const files = mkdtempSync(join(tmpdir(), "handbill-docs-"))
 const document = (name: string, html: string) => {
   const path = join(files, name)
   writeFileSync(path, html)
-  const hash = hashDocument(new TextEncoder().encode(html))
-  return { path, html, hash, url: `https://${hash}.${ZONE}` }
+  // The bytes, not the string: `hash` and the stored `size` are both about what
+  // goes over the wire, which is not the number of UTF-16 code units.
+  const bytes = new TextEncoder().encode(html)
+  const hash = hashDocument(bytes)
+  return { path, html, bytes, hash, url: `https://${hash}.${ZONE}` }
 }
 
 const plan = document("plan.html", "<!doctype html><title>Quarter plan</title><p>Hello.</p>")
@@ -149,7 +152,7 @@ describe("list", () => {
       url,
       title: "Quarter plan",
       publishedAt: PUBLISHED_AT,
-      size: plan.html.length
+      size: plan.bytes.length
     })
   })
 
