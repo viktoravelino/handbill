@@ -37,7 +37,8 @@ bump() {
   (cd "$ROOT/apps/cli" && npm pkg set version="$v")
   # bun does not rewrite a workspace's own version on install; set the lockfile entry directly.
   perl -0pi -e 's/("apps\/cli": \{\s*"name": "handbill",\s*"version": )"[^"]+"/$1"'"$v"'"/' "$ROOT/bun.lock"
-  grep -q "\"version\": \"$v\"" "$ROOT/bun.lock" || die "could not set the apps/cli version in bun.lock"
+  V="$v" perl -0ne 'exit(/"apps\/cli": \{\s*"name": "handbill",\s*"version": "\Q$ENV{V}\E"/ ? 0 : 1)' "$ROOT/bun.lock" \
+    || die "could not set the apps/cli version in bun.lock"
 
   (cd "$ROOT" && bun install --frozen-lockfile >/dev/null && bun run typecheck && bun run lint && bun test >/dev/null)
   (cd "$ROOT" && bun run --cwd apps/cli build >/dev/null && node apps/cli/dist/cli.js --version)
@@ -54,7 +55,7 @@ tag() {
   require_clean_main
   local v; v=$(current_version); local t="v$v"
   git -C "$ROOT" rev-parse -q --verify "refs/tags/$t" >/dev/null && die "$t already exists locally"
-  [[ -z $(git -C "$ROOT" ls-remote --tags origin "$t") ]] || die "$t already exists on origin"
+  [[ -z $(git -C "$ROOT" ls-remote --tags origin "refs/tags/$t") ]] || die "$t already exists on origin"
   npm view "handbill@$v" version >/dev/null 2>&1 && die "handbill@$v is already on npm; bump first"
 
   run git -C "$ROOT" tag "$t"
