@@ -31,15 +31,15 @@ Don't have a deployment yet? It is one Worker, one bucket and two DNS records �
 
 ## Use
 
-| Command                       | What it does                                                                              |
-| ----------------------------- | ----------------------------------------------------------------------------------------- |
-| `handbill plan.html`          | Publish. Prints exactly one line: the URL.                                                |
-| `cat plan.html \| handbill -` | Publish from stdin.                                                                       |
-| `handbill plan.html --json`   | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                     |
-| `handbill list`               | What you have published, newest first: date, URL, title.                                  |
-| `handbill remove <url\|hash>` | Unpublish. Idempotent.                                                                    |
-| `handbill doctor`             | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix. |
-| `handbill completions zsh`    | Shell completions (bash, zsh, fish).                                                      |
+| Command                         | What it does                                                                              |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `handbill plan.html`            | Publish. Prints exactly one line: the URL.                                                |
+| `handbill - < plan.html`        | Publish from stdin.                                                                       |
+| `handbill plan.html --json`     | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                     |
+| `handbill list`                 | What you have published, newest first: date, URL, title.                                  |
+| `handbill remove <url-or-hash>` | Unpublish. Idempotent.                                                                    |
+| `handbill doctor`               | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix. |
+| `handbill completions zsh`      | Shell completions (bash, zsh, fish).                                                      |
 
 Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents.
 
