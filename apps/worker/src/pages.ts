@@ -15,19 +15,21 @@ export type HostKind =
 const HASH_LABEL = /^[0-9a-f]{12}$/u
 
 /**
- * Lowercased and without the trailing dot a fully-qualified name carries.
- * Applied to the configured zone as well as the request's host, so a `ZONE`
- * pasted out of DNS tooling as `example.dev.` still matches.
+ * Lowercased and without the trailing dot a fully-qualified name carries. Both
+ * the request's host and the configured zone go through it, so a `ZONE` pasted
+ * out of DNS tooling as `example.dev.` classifies — and prints — the same as
+ * `example.dev`. `makeApp` canonicalises the zone once so every URL the Worker
+ * hands out agrees with what the classifier accepts.
  */
-const normalize = (name: string): string => name.toLowerCase().replace(/\.$/u, "")
+export const canonical = (name: string): string => name.toLowerCase().replace(/\.$/u, "")
 
 /**
  * `api.<zone>` is the API, `<12-hex>.<zone>` is a page, and the apex, `www` and
  * anything else are nothing. Called on every request before any Effect runs.
  */
 export const classifyHost = (hostname: string, zone: string): HostKind => {
-  const host = normalize(hostname.split(":")[0] ?? "")
-  const suffix = `.${normalize(zone)}`
+  const host = canonical(hostname.split(":")[0] ?? "")
+  const suffix = `.${canonical(zone)}`
   if (host === `api${suffix}`) return { kind: "api" }
   if (host.endsWith(suffix)) {
     const label = host.slice(0, -suffix.length)

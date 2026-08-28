@@ -123,6 +123,25 @@ test("removing is idempotent and the page stops being served", async () => {
   expect(page.headers.get("cache-control")).toBe("no-store")
 })
 
+test("a zone configured as a fully qualified name is canonical everywhere", async () => {
+  const fq = makeApp(
+    { zone: "Example.dev.", maxBytes: MAX_BYTES },
+    Layer.mergeAll(StorageMemory, AuthSecret(TOKEN))
+  )
+  const hash = await hashOf(DOC)
+  const published = await fq.fetch(
+    new Request(`https://api.${ZONE}/v1/pages/${hash}`, {
+      method: "PUT",
+      body: bytes(DOC),
+      headers: { "content-type": "text/html", authorization: `Bearer ${TOKEN}` }
+    })
+  )
+  expect(await published.json()).toEqual({ hash, url: `https://${hash}.${ZONE}`, created: true })
+
+  const health = await fq.fetch(new Request(`https://api.${ZONE}/v1/health`))
+  expect(await health.json()).toEqual({ ok: true, mode: "secret", zone: ZONE })
+})
+
 test("the apex, www and an unpublished hash are all nothing", async () => {
   for (const url of [`https://${ZONE}/`, `https://www.${ZONE}/`, `https://a3f9c1d4e2b8.${ZONE}/`]) {
     const response = await app.fetch(new Request(url))

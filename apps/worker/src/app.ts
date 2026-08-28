@@ -3,7 +3,7 @@ import { Effect, FileSystem, Layer, ManagedRuntime, Path } from "effect"
 import { Etag, HttpPlatform, HttpRouter } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { AuthorizationLive, MetaLive, PagesLive } from "./api"
-import { classifyHost, nothingHere, servePage } from "./pages"
+import { canonical, classifyHost, nothingHere, servePage } from "./pages"
 import type { Auth, Storage, WorkerConfig } from "./services"
 import { Config } from "./services"
 
@@ -26,7 +26,10 @@ export type AppServices = Storage | Auth
  * counterparts swap in, so the tests drive exactly this function.
  */
 export const makeApp = (config: WorkerConfig, services: Layer.Layer<AppServices>) => {
-  const withConfig = Layer.provideMerge(services, Layer.succeed(Config, config))
+  // One canonical zone for the whole Worker: the classifier matches it, and
+  // `pageUrl` and `/v1/health` hand it out.
+  const zone = canonical(config.zone)
+  const withConfig = Layer.provideMerge(services, Layer.succeed(Config, { ...config, zone }))
   // One memo map, so the API handler and the page path share a single instance
   // of every service — the in-memory bucket above all.
   const memoMap = Layer.makeMemoMapUnsafe()
@@ -48,7 +51,7 @@ export const makeApp = (config: WorkerConfig, services: Layer.Layer<AppServices>
 
   return {
     fetch: async (request: Request): Promise<Response> => {
-      const host = classifyHost(new URL(request.url).hostname, config.zone)
+      const host = classifyHost(new URL(request.url).hostname, zone)
       switch (host.kind) {
         case "api": {
           const response = await api.handler(request)
