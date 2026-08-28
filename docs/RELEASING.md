@@ -11,7 +11,7 @@ Publishing from CI uses npm **trusted publishing** (OIDC): no npm token anywhere
    ```sh
    npm login                      # browser + 2FA
    bun install
-   bun --cwd apps/cli run build
+   bun run --cwd apps/cli build
    cd apps/cli && npm publish --access public
    ```
    This version has no provenance attestation; every later one will.
