@@ -14,7 +14,7 @@ Throughout, `<zone>` is your domain, for example `example.dev`. Pages will be se
 
 My Profile → API Tokens → *Create Token* → start from **Edit Cloudflare Workers**, then:
 
-- add `Account · Workers R2 Storage · Edit`, `Account · Workers KV Storage · Read` (only `wrangler delete` needs it — it checks for preview KV namespaces before removing a Worker), and `Zone · DNS · Edit`
+- add `Account · Workers R2 Storage · Edit` and `Zone · DNS · Edit`. The template already includes Workers Scripts, Workers Routes, and Workers KV Storage; if you build the token by hand instead, add those too (`wrangler delete` needs KV read — it checks for preview namespaces before removing a Worker).
 - Account Resources: *Include* → your account
 - Zone Resources: *Include · Specific zone* → `<zone>`
 
@@ -141,4 +141,4 @@ The API is versioned under `/v1` and does not break inside a major version; publ
 
 ## Removing it
 
-`bunx wrangler delete` removes the Worker and its routes (it needs the KV read permission from step 1; without it the Worker is still deleted but the command reports an authentication error). Empty and delete the bucket in the dashboard, delete the two DNS records, and remove `~/.config/handbill/config.json`. Every published link stops resolving.
+`bunx wrangler delete` removes the Worker and its routes (a hand-made token without KV read still deletes the Worker but then reports an authentication error). Empty and delete the bucket in the dashboard, delete the two DNS records, and remove `~/.config/handbill/config.json`. Every published link stops resolving.
