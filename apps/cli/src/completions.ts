@@ -20,6 +20,17 @@ const apiFlags: ReadonlyArray<Completions.FlagDescriptor> = [
   jsonDescriptor
 ]
 
+/** `--markdown` belongs to the root command alone: it is the only one that renders anything. */
+const publishFlags: ReadonlyArray<Completions.FlagDescriptor> = [
+  ...apiFlags,
+  {
+    name: "markdown",
+    aliases: [],
+    description: "Render the input as markdown",
+    type: { _tag: "Boolean" }
+  }
+]
+
 /**
  * The command tree as the completion generator wants it. The framework builds
  * this from the real commands for its own `--completions` flag but keeps the
@@ -28,12 +39,12 @@ const apiFlags: ReadonlyArray<Completions.FlagDescriptor> = [
  */
 export const descriptor: Completions.CommandDescriptor = {
   name: "handbill",
-  description: "Publish one self-contained HTML file at an unguessable, immutable URL",
-  flags: apiFlags,
+  description: "Publish one self-contained HTML or markdown file at an unguessable, immutable URL",
+  flags: publishFlags,
   arguments: [
     {
       name: "file",
-      description: "HTML file to publish, or - to read stdin",
+      description: "HTML or markdown file to publish, or - to read stdin",
       required: true,
       variadic: false,
       type: { _tag: "Path", pathType: "file" }

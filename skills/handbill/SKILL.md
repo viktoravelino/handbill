@@ -1,15 +1,17 @@
 ---
 name: handbill
-description: Publish a self-contained HTML document (plan, report, review) to an unguessable, immutable URL with the handbill CLI. Use when the user asks to publish, share, deploy, or "give me a link" for an HTML file. Also lists what is published and unpublishes.
+description: Publish a self-contained HTML or markdown document (plan, report, review) to an unguessable, immutable URL with the handbill CLI. Use when the user asks to publish, share, deploy, or "give me a link" for an HTML or markdown file. Also lists what is published and unpublishes.
 ---
 
 # handbill
 
-`handbill <file.html>` uploads one self-contained HTML file and prints its public URL. Nothing else goes to stdout. The URL is content-addressed — the first 12 hex characters of the file's sha256 — so the same bytes always give the same link and never a duplicate; a changed file is a new link, and a published link never changes under its reader.
+`handbill <file>` uploads one self-contained HTML file — or a markdown file, which it renders to one first — and prints its public URL. Nothing else goes to stdout. The URL is content-addressed — the first 12 hex characters of the file's sha256 — so the same bytes always give the same link and never a duplicate; a changed file is a new link, and a published link never changes under its reader.
 
 ```bash
 handbill plan.html              # → https://<hash>.<zone>
+handbill notes.md               # markdown, rendered to a styled page first
 cat plan.html | handbill -      # from stdin, no temp file
+cat notes.md | handbill - --markdown
 handbill plan.html --json       # → { "hash", "url", "created" }
 ```
 
@@ -17,7 +19,8 @@ On success, reply to the user with the URL and stop.
 
 ## Before publishing
 
-- **HTML only, one file.** One document per link. If the deliverable is markdown, render it to a self-contained HTML file first. Do not publish a file that references local images, stylesheets, or scripts — they will 404 on the page.
+- **One file per link.** A `.md` or `.markdown` file is rendered by the CLI into one self-contained page — built-in light/dark stylesheet, no external requests — and that page is what gets published; the deployment never sees markdown. Anything else goes up byte for byte, so HTML must be self-contained: a file that references local images, stylesheets, or scripts will 404 on the page.
+- **Write markdown when the deliverable is prose.** It is shorter than hand-writing a document shell and reads well in both themes. Reach for HTML when the page needs its own design or any JavaScript.
 - **It becomes public.** The link is unguessable and served with `noindex`, but anyone holding it can read it. Do not publish secrets, tokens, customer data, or internal material the user did not explicitly ask to share. When in doubt, say what you are about to publish and let the user confirm.
 - **Configuration must exist.** `~/.config/handbill/config.json` with `{ "endpoint", "token" }`, or the environment variables `HANDBILL_ENDPOINT` and `HANDBILL_TOKEN`. If neither is present, tell the user — do not go looking for a token elsewhere.
 
@@ -28,7 +31,7 @@ handbill list            # one line per page, newest first: date, url, title
 handbill list --json
 ```
 
-Titles come from the document's `<title>`, so give every page a meaningful one. Use this when the user asks what has been published or has lost a link.
+Titles come from the document's `<title>` — for markdown, from the first H1, or the filename when there is none — so give every page a meaningful one. Use this when the user asks what has been published or has lost a link.
 
 ## Unpublish
 

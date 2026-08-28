@@ -1,6 +1,6 @@
 # handbill
 
-Hand someone a page. One command turns a self-contained HTML file into an unguessable, immutable link on a domain you own.
+Hand someone a page. One command turns a self-contained HTML file — or a markdown file — into an unguessable, immutable link on a domain you own.
 
 ```
 $ handbill plan.html
@@ -15,7 +15,7 @@ The URL is the content hash: the same bytes always give the same link, a changed
 npm i -g handbill
 ```
 
-Node ≥ 22. `effect` is the only dependency.
+Node ≥ 22. Two dependencies: `effect` and `marked`.
 
 ## Point it at a deployment
 
@@ -34,7 +34,8 @@ Don't have a deployment yet? It is one Worker, one bucket and two DNS records �
 | Command                         | What it does                                                                              |
 | ------------------------------- | ----------------------------------------------------------------------------------------- |
 | `handbill plan.html`            | Publish. Prints exactly one line: the URL.                                                |
-| `handbill - < plan.html`        | Publish from stdin.                                                                       |
+| `handbill notes.md`             | Render markdown to a self-contained page, publish that.                                   |
+| `handbill - < plan.html`        | Publish from stdin. Add `--markdown` to render it.                                        |
 | `handbill plan.html --json`     | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                     |
 | `handbill list`                 | What you have published, newest first: date, URL, title.                                  |
 | `handbill remove <url-or-hash>` | Unpublish. Idempotent.                                                                    |
@@ -42,6 +43,15 @@ Don't have a deployment yet? It is one Worker, one bucket and two DNS records �
 | `handbill completions zsh`      | Shell completions (bash, zsh, fish).                                                      |
 
 Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents.
+
+## Markdown
+
+A `.md` or `.markdown` file is rendered by the CLI, not by the server: you get one HTML document with a built-in light/dark stylesheet and no external requests, and that document is what is hashed and published. The `<title>` comes from the first H1, or from the filename when the document has none. Raw HTML in the source is passed through as written. `--markdown` renders whatever you hand it, which is how stdin says so:
+
+```sh
+handbill notes.md
+cat notes.md | handbill - --markdown
+```
 
 ## One file, one link
 

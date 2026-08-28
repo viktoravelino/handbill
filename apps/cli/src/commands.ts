@@ -1,12 +1,12 @@
-import { DateTime, Effect, FileSystem, Option, Schema, Stdio, Stream } from "effect"
-import { Argument, Command } from "effect/unstable/cli"
+import { DateTime, Effect, Option, Schema } from "effect"
+import { Argument, Command, Flag } from "effect/unstable/cli"
 import { Hash, PageList } from "@handbill/contract"
 import * as Client from "./client"
 import { completions } from "./completions"
 import * as Config from "./config"
 import * as Doctor from "./doctor"
+import * as Document from "./document"
 import { endpointFlag, jsonFlag } from "./flags"
-import { hashDocument } from "./hash"
 import * as Output from "./output"
 
 /**
@@ -20,22 +20,11 @@ const handler =
   (input: I) =>
     body(input).pipe(Output.reporting({ json: input.json }))
 
-/** The bytes to publish: a file, or stdin when the argument is `-`. */
-const readDocument = Effect.fn(function* (file: string) {
-  if (file !== "-") {
-    const fs = yield* FileSystem.FileSystem
-    return yield* fs.readFile(file)
-  }
-  const stdio = yield* Stdio.Stdio
-  const chunks = yield* Stream.runCollect(stdio.stdin)
-  const bytes = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.length, 0))
-  let offset = 0
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset)
-    offset += chunk.length
-  }
-  return bytes
-})
+/** Only `publish` renders, so its flag lives with it rather than in `flags.ts`. */
+const markdownFlag = Flag.boolean("markdown").pipe(
+  Flag.withDescription("Render the input as markdown, whatever it is named — needed for stdin"),
+  Flag.withDefault(false)
+)
 
 /** The configuration and the client that every API-calling command starts from. */
 const connect = Effect.fn(function* (endpoint: Option.Option<string>) {
@@ -64,29 +53,31 @@ const publish = Command.make(
   "handbill",
   {
     file: Argument.string("file").pipe(
-      Argument.withDescription("Self-contained HTML file to publish, or - to read stdin")
+      Argument.withDescription("HTML or markdown file to publish, or - to read stdin")
     ),
     endpoint: endpointFlag,
-    json: jsonFlag
+    json: jsonFlag,
+    markdown: markdownFlag
   },
-  handler(({ endpoint, file, json }) =>
+  handler(({ endpoint, file, json, markdown }) =>
     Effect.gen(function* () {
       const client = yield* connect(endpoint)
-      const bytes = yield* readDocument(file)
+      const document = yield* Document.load({ file, markdown })
       const result = yield* client.pages.publish({
-        params: { hash: hashDocument(bytes) },
-        payload: bytes
+        params: { hash: document.hash },
+        payload: document.bytes
       })
       yield* json ? Output.json(result) : Output.line(result.url)
     })
   )
 ).pipe(
   Command.withDescription(
-    "Hand someone a page: publish one self-contained HTML file at an unguessable, immutable URL."
+    "Hand someone a page: publish one self-contained HTML file, or a markdown file rendered to one, at an unguessable, immutable URL."
   ),
   Command.withExamples([
     { command: "handbill plan.html", description: "Publish a file and print its URL" },
-    { command: "pandoc notes.md -s | handbill -", description: "Publish from stdin" },
+    { command: "handbill notes.md", description: "Render markdown to a page and publish that" },
+    { command: "handbill - --markdown", description: "Publish markdown from stdin" },
     { command: "handbill plan.html --json", description: "Print { hash, url, created } instead" }
   ])
 )

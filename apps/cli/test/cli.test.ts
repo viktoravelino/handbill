@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test"
 import { Layer } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 import { hashDocument } from "../src/hash"
+import { render } from "../src/markdown"
 import { configHome, run, type RunOptions } from "./harness"
 import { makeServer, PUBLISHED_AT, TOKEN, ZONE } from "./server"
 
@@ -22,6 +23,17 @@ const document = (name: string, html: string) => {
 }
 
 const plan = document("plan.html", "<!doctype html><title>Quarter plan</title><p>Hello.</p>")
+
+/** A markdown source on disk, with the page the CLI is expected to render from it. */
+const markdown = (name: string, source: string) => {
+  const path = join(files, name)
+  writeFileSync(path, source)
+  const bytes = new TextEncoder().encode(render(source, path))
+  const hash = hashDocument(bytes)
+  return { path, source, bytes, hash, url: `https://${hash}.${ZONE}` }
+}
+
+const notes = markdown("notes.md", "# Weekly notes\n\nShipped the CLI.\n")
 const kickoff = document("kickoff.html", "<!doctype html><title>Kickoff</title>")
 const retro = document("retro.html", "<!doctype html><title>Retro</title>")
 
@@ -94,6 +106,30 @@ describe("publish", () => {
     const outcome = await cli(["-"], { stdin: plan.html })
     expect(outcome.stdout).toEqual([url])
     expect(server.hashes()).toEqual([hash])
+  })
+
+  // S2.1: the Worker only ever stores HTML, so what is published is the page the
+  // CLI rendered — and `list` labels it with the H1, not the filename.
+  test("renders a markdown file and publishes the page", async () => {
+    const outcome = await cli([notes.path])
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stdout).toEqual([notes.url])
+    expect(server.hashes()).toEqual([notes.hash])
+
+    const listed = await cli(["list"])
+    expect(listed.stdout).toEqual([`2026-01-15  ${notes.url}  Weekly notes`])
+  })
+
+  // S2.1: stdin has no extension to read, so the flag is what says "markdown".
+  test("renders stdin only when told to", async () => {
+    const asMarkdown = await cli(["-", "--markdown"], { stdin: notes.source })
+    // `-` has no filename to fall back to, but this source has an H1.
+    expect(asMarkdown.stdout).toEqual([notes.url])
+
+    const asBytes = await cli(["-"], { stdin: notes.source })
+    expect(asBytes.stdout).toEqual([
+      `https://${hashDocument(new TextEncoder().encode(notes.source))}.${ZONE}`
+    ])
   })
 
   // S1.3
