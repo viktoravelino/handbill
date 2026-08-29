@@ -55,7 +55,7 @@ The workflow refuses a tag whose version does not match `apps/cli/package.json`,
 The same workflow runs every day at 05:00 UTC and publishes `main` under the `nightly` dist-tag, so a merged feature is installable before it is released:
 
 ```sh
-npx handbill@nightly --version   # 0.2.0-nightly.202608290500.g86df0a5
+npx handbill@nightly --version   # <next>-nightly.202608290500.g86df0a5
 npm i -g handbill@nightly
 ```
 
