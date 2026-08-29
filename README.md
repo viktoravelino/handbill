@@ -1,6 +1,6 @@
 # handbill
 
-[![npm](https://img.shields.io/npm/v/handbill)](https://www.npmjs.com/package/handbill) [![CI](https://github.com/viktoravelino/handbill/actions/workflows/ci.yml/badge.svg)](https://github.com/viktoravelino/handbill/actions/workflows/ci.yml) [![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![npm](https://img.shields.io/npm/v/handbill)](https://www.npmjs.com/package/handbill) [![npm downloads](https://img.shields.io/npm/dw/handbill)](https://www.npmjs.com/package/handbill) [![CI](https://github.com/viktoravelino/handbill/actions/workflows/ci.yml/badge.svg)](https://github.com/viktoravelino/handbill/actions/workflows/ci.yml) [![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Hand someone a page. One command turns a self-contained HTML file — or a markdown file — into an unguessable, immutable link on a domain you own.
 
