@@ -14,6 +14,9 @@
 # nightly version is set in the CI checkout only and never committed; scripts/release.sh bump
 # stays the one thing that edits a version in git.
 #
+# A manual run (workflow_dispatch) publishes main only: from any other ref it refuses unless
+# DRY_RUN=true (the workflow's dry_run input), which builds and rehearses but publishes nothing.
+#
 # Runs locally too — with no GITHUB_EVENT_NAME it takes the nightly path:
 #   scripts/release-version.sh
 #   GITHUB_EVENT_NAME=push GITHUB_REF_NAME=v0.1.1 scripts/release-version.sh
@@ -34,6 +37,10 @@ if [[ ${GITHUB_EVENT_NAME:-} == push ]]; then
   echo "dist_tag=$tag"
   echo "release=true"
   exit 0
+fi
+
+if [[ ${GITHUB_EVENT_NAME:-} == workflow_dispatch && ${GITHUB_REF_NAME:-main} != main && ${DRY_RUN:-false} != true ]]; then
+  die "nightlies are built from main; '${GITHUB_REF_NAME}' can only be dispatched with dry_run=true"
 fi
 
 commit=g$(git -C "$ROOT" rev-parse --short=7 HEAD)

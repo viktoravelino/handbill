@@ -34,6 +34,11 @@ bump() {
   [[ $v != $(current_version) ]] || die "apps/cli is already $v"
   git -C "$ROOT" rev-parse -q --verify "refs/tags/v$v" >/dev/null && die "tag v$v already exists"
 
+  if [[ $DRY == 1 ]]; then
+    # The version edits below are only there for the checks and the build. Put main back
+    # however the script exits — a failing check must not leave a dirty tree behind.
+    trap 'git -C "$ROOT" checkout -q -- apps/cli/package.json bun.lock; echo "dry-run: restored apps/cli/package.json and bun.lock; nothing was committed"' EXIT
+  fi
   run git -C "$ROOT" checkout -q -b "release/$v"
   (cd "$ROOT/apps/cli" && npm pkg set version="$v")
   # bun does not rewrite a workspace's own version on install; set the lockfile entry directly.
@@ -50,11 +55,6 @@ bump() {
   local body="/tmp/release-$v.md"
   printf 'Version bump to %s. Merge, then run `scripts/release.sh tag` to publish.\n' "$v" > "$body"
   run gh pr create --head "release/$v" --title "cli: $v" --body-file "$body"
-  if [[ $DRY == 1 ]]; then
-    # The version edits were only there for the checks and the build; put main back.
-    git -C "$ROOT" checkout -q -- apps/cli/package.json bun.lock
-    echo "dry-run: restored apps/cli/package.json and bun.lock; nothing was committed"
-  fi
 }
 
 tag() {

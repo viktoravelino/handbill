@@ -61,6 +61,8 @@ gh workflow run release.yml -f dry_run=true   # build and `npm publish --dry-run
 scripts/release-version.sh                    # locally: the version the next run would publish
 ```
 
+A manual run publishes `main` only. Dispatching from another ref (`--ref my-branch`) is refused unless it is a dry run, so a branch cannot end up behind the `nightly` tag.
+
 To pull a nightly back: `npm dist-tag rm handbill nightly` removes the tag, `npm deprecate handbill@<version> "<why>"` marks the version; npm does not allow unpublishing after 72 hours.
 
 ## If a release fails
