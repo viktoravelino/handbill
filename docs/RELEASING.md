@@ -38,9 +38,30 @@ scripts/release.sh tag          # tag main as v0.1.2 and push it
 
 `bump` is the only thing that edits a version: `apps/cli/package.json` is the source of truth (the CLI's `--version` reads it at build time) and the script mirrors it into the `apps/cli` entry of `bun.lock`, which bun does not rewrite on its own. `tag` refuses to run off `main`, with a dirty tree, behind origin, if the tag exists, or if that version is already on npm.
 
-The `Release` workflow then runs: typecheck, lint, test, tag-vs-version guard, build, `npm publish` via OIDC, GitHub release with generated notes.
+The `Release` workflow then runs: `scripts/release-version.sh` (the tag-vs-version guard, and the dist-tag), typecheck, lint, test, build, `npm publish` via OIDC, GitHub release with generated notes.
 
 The workflow refuses a tag whose version does not match `apps/cli/package.json`, and skips the publish step if that version is already on npm. A prerelease version (anything with a `-`, such as `0.1.1-rc.0`) is published under the `next` dist-tag and its GitHub release is marked as a prerelease, so `latest` and plain `npx handbill` are untouched — use one to rehearse the pipeline: `npx handbill@next --version`.
+
+## Nightly
+
+The same workflow runs every day at 05:00 UTC and publishes `main` under the `nightly` dist-tag, so a merged feature is installable before it is released:
+
+```sh
+npx handbill@nightly --version   # 0.1.2-nightly.202608290500.g86df0a5
+npm i -g handbill@nightly
+```
+
+The version is the next patch of `apps/cli/package.json`, the UTC date and time, and the commit (`g` + short sha, as `git describe` writes it) — a prerelease, so `latest` and `next` are never touched and nothing resolves to a nightly unless asked for by tag. It is set in the CI checkout only; `main` keeps the real version and `bump` remains the only thing that edits it. When `main` has not moved since the last nightly (the commit is already in `handbill@nightly`'s version) the job publishes nothing. Nightlies get no GitHub release; the commit in the version is the changelog.
+
+Run one by hand, or rehearse without publishing:
+
+```sh
+gh workflow run release.yml                   # publish a nightly now
+gh workflow run release.yml -f dry_run=true   # build and `npm publish --dry-run` only
+scripts/release-version.sh                    # locally: the version the next run would publish
+```
+
+To pull a nightly back: `npm dist-tag rm handbill nightly` removes the tag, `npm deprecate handbill@<version> "<why>"` marks the version; npm does not allow unpublishing after 72 hours.
 
 ## If a release fails
 
@@ -50,4 +71,4 @@ The workflow refuses a tag whose version does not match `apps/cli/package.json`,
 
 ## Why not staged publishing
 
-npm's staged publishing (`npm stage publish` in CI, a human approves with 2FA) is the other supported path. With a single maintainer who is also the one pushing the tag, the tag is the approval; revisit if more people gain release rights.
+npm's staged publishing (`npm stage publish` in CI, a human approves with 2FA) is the other supported path. With a single maintainer who is also the one pushing the tag, the tag is the approval; revisit if more people gain release rights. Nightlies publish with no human in the loop, which is fine for the same reason it is fine for `next`: they never touch `latest`.
