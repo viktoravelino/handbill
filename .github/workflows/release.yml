@@ -38,6 +38,11 @@ jobs:
         env:
           DRY_RUN: ${{ inputs.dry_run }} # lets a non-main ref be dispatched for a rehearsal only
         run: scripts/release-version.sh | tee -a "$GITHUB_OUTPUT"
+      # The only outcome the publish job cannot report, because it does not run.
+      - if: steps.resolve.outputs.skip == 'true'
+        run: |
+          echo "::notice title=nightly::main has not moved since the last nightly; nothing to publish"
+          echo "main has not moved since the last nightly; nothing to publish." >> "$GITHUB_STEP_SUMMARY"
 
   publish:
     needs: version
@@ -79,6 +84,7 @@ jobs:
       # publisher (docs/RELEASING.md). Skipped if this version is already on npm,
       # so a re-run after a failure past this point does not fail here.
       - name: Publish to npm
+        id: publish
         working-directory: apps/cli
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -88,9 +94,28 @@ jobs:
           set -euo pipefail
           if npm view "handbill@$VERSION" version >/dev/null 2>&1; then
             echo "handbill@$VERSION is already on npm; skipping publish"
+            echo "result=already on npm, publish skipped" >> "$GITHUB_OUTPUT"
           else
             npm publish --access public --tag "$DIST_TAG" $DRY_RUN
+            if [[ -n $DRY_RUN ]]; then echo "result=dry run, nothing published"; else echo "result=published"; fi >> "$GITHUB_OUTPUT"
           fi
+
+      # The run's Summary page says what was decided and what happened, so a
+      # nightly can be checked without opening a log.
+      - name: Summarize
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          DIST_TAG: ${{ needs.version.outputs.dist_tag }}
+          RESULT: ${{ steps.publish.outputs.result }}
+        run: |
+          {
+            echo "### handbill@$VERSION"
+            echo
+            echo "| dist-tag | result | install |"
+            echo "| --- | --- | --- |"
+            echo "| \`$DIST_TAG\` | $RESULT | \`npx handbill@$DIST_TAG --version\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=handbill@$VERSION::$RESULT under $DIST_TAG"
 
       - name: GitHub release
         if: needs.version.outputs.release == 'true' && inputs.dry_run != true
