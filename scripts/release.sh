@@ -2,7 +2,9 @@
 # Releases the CLI in two moves, because main only takes PRs and the tag must land after them:
 #
 #   scripts/release.sh bump <version>   branch from main, set the version in apps/cli/package.json
-#                                       and bun.lock, run the checks, commit, push, open the PR
+#                                       and bun.lock, run the checks, commit, push, open the PR;
+#                                       a -dev version (0.2.0-dev) names the release main is heading
+#                                       toward, so nightlies carry it, and cannot be tagged
 #   scripts/release.sh tag              after that PR merged: tag main as v<version> and push the
 #                                       tag; the Release workflow publishes to npm and creates the
 #                                       GitHub release
@@ -60,6 +62,7 @@ bump() {
 tag() {
   require_clean_main
   local v; v=$(current_version); local t="v$v"
+  [[ $v != *-dev ]] || die "$v is a development version; bump to the release version first"
   git -C "$ROOT" rev-parse -q --verify "refs/tags/$t" >/dev/null && die "$t already exists locally"
   [[ -z $(git -C "$ROOT" ls-remote --tags origin "refs/tags/$t") ]] || die "$t already exists on origin"
   npm view "handbill@$v" version >/dev/null 2>&1 && die "handbill@$v is already on npm; bump first"
