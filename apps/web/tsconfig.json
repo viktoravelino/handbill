@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["astro/client", "bun"],
+    // `astro check` owns this package (tsc --build would type Starlight's own
+    // sources through content.config.ts), and it needs no declaration output.
+    "composite": false
+  },
+  "include": ["src", "scripts", ".astro/types.d.ts"]
+}

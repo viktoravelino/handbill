@@ -13,6 +13,8 @@ https://a3f9c1d4e2b8.yourdomain.dev
 - **Immutable.** The URL is the content hash. A link never changes under its reader; a new version is a new link.
 - **Agent-native.** Ships an installable skill so coding agents end a task with a link instead of a file.
 
+Docs: [handbill.dev/docs](https://handbill.dev/docs).
+
 ## Install
 
 ```sh
@@ -86,6 +88,7 @@ bun run typecheck && bun run lint && bun test
 packages/contract   the HttpApi — schemas, errors, endpoints; the single source of truth
 apps/worker         Effect on Cloudflare Workers; deploy with wrangler
 apps/cli            the npm package; bun build → dist/cli.js
+apps/web            handbill.dev: Astro + Starlight, this README and docs/ rendered; deployed from main
 skills/handbill     the agent skill
 docs/               PRD, self-hosting, releasing
 ```
@@ -95,7 +98,7 @@ Effect 4 end to end, pinned to an exact release candidate. Conventions and invar
 ## Roadmap
 
 - **0.1** — self-host kit: Worker, CLI, skill (released)
-- **0.2** — markdown input rendered in the CLI, living names on KV with `alias` commands, `--open`, OpenAPI + `/docs` (all on `main`); the docs site still to come
+- **0.2** — markdown input rendered in the CLI, living names on KV with `alias` commands, `--open`, OpenAPI + `/docs`, the site at [handbill.dev](https://handbill.dev) (all on `main`); 0.2.0 still to release
 - **0.3** — hosted mode: the same Worker with accounts instead of a single token
 - later — inline local assets at publish time, expiring pages, encrypted pages
 

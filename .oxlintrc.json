@@ -12,5 +12,5 @@
     "no-redeclare": "off",
     "max-classes-per-file": "off"
   },
-  "ignorePatterns": ["dist", "node_modules", ".wrangler", "docs"]
+  "ignorePatterns": ["dist", "node_modules", ".wrangler", ".astro", "docs"]
 }

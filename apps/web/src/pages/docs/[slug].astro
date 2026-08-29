@@ -1,0 +1,28 @@
+---
+import type { MarkdownInstance } from "astro"
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro"
+import { docs, sidebar } from "../../docs"
+
+export const getStaticPaths = () =>
+  docs.map((doc) => ({ params: { slug: doc.slug }, props: { doc } }))
+
+// The files src/docs.ts may name. Vite keys a glob's matches by their path from
+// this file when every pattern is relative and by their path from the site root
+// otherwise, so the repository's files and the site's own come from two globs.
+type Source = MarkdownInstance<Record<string, unknown>>
+const repo = import.meta.glob<Source>(
+  ["../../../../../*.md", "../../../../../docs/*.md", "../../../../../skills/*/SKILL.md"],
+  { eager: true }
+)
+const site = import.meta.glob<Source>(["/src/docs/*.md", "/src/generated/*.md"], { eager: true })
+const { doc } = Astro.props
+const source = doc.path.startsWith("apps/web/")
+  ? site[doc.path.slice("apps/web".length)]
+  : repo[`../../../../../${doc.path}`]
+if (source === undefined) throw new Error(`${doc.path}: no such file to serve at /docs/${doc.slug}/`)
+const { Content, getHeadings } = source
+---
+
+<StarlightPage frontmatter={{ title: doc.title }} headings={getHeadings()} sidebar={sidebar}>
+  <Content />
+</StarlightPage>

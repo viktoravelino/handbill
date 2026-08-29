@@ -7,7 +7,7 @@
   ],
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --build",
+    "typecheck": "tsc --build && bun run --cwd apps/web check",
     "lint": "oxlint && oxfmt --check .",
     "format": "oxfmt .",
     "test": "bun test"

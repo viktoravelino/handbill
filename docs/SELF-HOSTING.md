@@ -140,6 +140,10 @@ The page is *served* at the name, not redirected to the hash — the reader's ad
 
 Your instance describes itself. `GET https://api.<zone>/v1/openapi.json` is the OpenAPI 3.1 document generated from the same contract the Worker implements and the CLI is built from, so it can never describe an API your deployment does not serve. It needs no token and is cacheable — point a client generator at it, or read it and write the four `curl`s by hand. `https://api.<zone>/docs` renders that same document as a browsable reference; it pulls the viewer from a CDN, so it wants an internet connection, while the spec itself is served by the Worker alone. Neither route exposes anything you published.
 
+## The apex, optional
+
+The five steps leave `https://<zone>` itself alone: the pages route is `*.<zone>/*`, which does not match the bare zone, so the apex is free for whatever you like — an existing site, a parked page, nothing at all. On `handbill.dev` it is the project site, `apps/web`: a static Astro build deployed as a second Worker (`apps/web/wrangler.jsonc` — assets only, no script, no bindings) on the route `<zone>/*`, which needs a proxied DNS record for `@` just as `api` and `*` need theirs. The maintainer's copy is deployed from `main` by `.github/workflows/deploy-web.yml`; to put it on your own zone, change the two `handbill.dev` in that `wrangler.jsonc` and run `bun run build && bunx wrangler deploy` from `apps/web`. `www.<zone>` is one label under the wildcard, so it answers "Nothing here" like any name you have not set.
+
 ## Deploy to Cloudflare button
 
 The button in the README clones the repo into your account and provisions the Worker and the bucket from `wrangler.jsonc`. It cannot know your zone, so after it finishes you still do steps 2 (edit the routes and `ZONE` in the generated repo), 3, and the `secret put` in step 4.
