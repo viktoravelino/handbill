@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { HandbillApi } from "./api"
 import { HashMismatch, NotFound, TooLarge, Unauthorized } from "./errors"
-import { Hash, Page } from "./schemas"
+import { AliasName, Hash, Page } from "./schemas"
 
 const spec = OpenApi.fromApi(HandbillApi)
 
@@ -34,6 +34,27 @@ describe("Hash", () => {
     ["not hex", "a3f9c1d4e2bz"]
   ])("rejects %s", (_, input) => {
     expect(() => Schema.decodeUnknownSync(Hash)(input)).toThrow()
+  })
+})
+
+describe("AliasName", () => {
+  test.each(["plan", "plan-v2", "notes2026", "w", "a3f9c1d4e2b"])("accepts %s", (input) => {
+    expect(Schema.encodeSync(AliasName)(Schema.decodeUnknownSync(AliasName)(input))).toBe(input)
+  })
+
+  test.each([
+    // `api` is the API's own hostname and 12 hex is a hash: an alias with
+    // either name could be stored but never resolved.
+    ["the API label", "api"],
+    ["a hash", "a3f9c1d4e2b8"],
+    ["a leading hyphen", "-plan"],
+    ["a trailing hyphen", "plan-"],
+    ["an uppercase letter", "Plan"],
+    ["a dot", "plan.v2"],
+    ["nothing", ""],
+    ["more than 63 characters", "p".repeat(64)]
+  ])("rejects %s", (_, input) => {
+    expect(() => Schema.decodeUnknownSync(AliasName)(input)).toThrow()
   })
 })
 
@@ -88,12 +109,18 @@ describe("spec", () => {
     expect(errorStatuses(spec.paths, "/v1/pages/{hash}", "put")).toEqual(["400", "401", "413"])
     expect(errorStatuses(spec.paths, "/v1/pages", "get")).toEqual(["401"])
     expect(errorStatuses(spec.paths, "/v1/pages/{hash}", "delete")).toEqual(["401"])
+    // Every alias route can 404: a deployment without a KV binding has no
+    // aliases to speak of, not an empty list of them.
+    expect(errorStatuses(spec.paths, "/v1/aliases", "get")).toEqual(["401", "404"])
+    expect(errorStatuses(spec.paths, "/v1/aliases/{name}", "put")).toEqual(["401", "404"])
+    expect(errorStatuses(spec.paths, "/v1/aliases/{name}", "delete")).toEqual(["401", "404"])
     // health needs no token, so it has nothing to fail with.
     expect(errorStatuses(spec.paths, "/v1/health", "get")).toEqual([])
   })
 
-  test("only the pages group is behind the bearer token", () => {
+  test("only the meta group is outside the bearer token", () => {
     expect(spec.paths["/v1/pages"]?.get?.security).toEqual([{ bearer: [] }])
+    expect(spec.paths["/v1/aliases"]?.get?.security).toEqual([{ bearer: [] }])
     expect(spec.paths["/v1/health"]?.get?.security).toEqual([])
   })
 

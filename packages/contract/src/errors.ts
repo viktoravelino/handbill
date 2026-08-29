@@ -24,8 +24,9 @@ export class Unauthorized extends Schema.TaggedError<Unauthorized>()(
 ) {}
 
 /**
- * No such page. Raised by the page-serving path on a hash hostname (which is not
- * part of the API) and, from 0.2, by alias lookups.
+ * Nothing to serve here. Raised by the page-serving path on a hash hostname
+ * (which is not part of the API), and by every alias route on a deployment with
+ * no KV binding, where the whole feature is absent rather than empty.
  */
 export class NotFound extends Schema.TaggedError<NotFound>()(
   "NotFound",

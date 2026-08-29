@@ -8,6 +8,7 @@ import {
 import { DateTime, Effect, Layer, Option } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { extractTitle, hashBytes } from "./hash"
+import { Aliases } from "./aliases"
 import { Auth } from "./auth"
 import { Config } from "./config"
 import { Storage } from "./storage"
@@ -19,8 +20,11 @@ import { Storage } from "./storage"
 const publishedAt = (iso: string): DateTime.Utc =>
   Option.getOrElse(DateTime.make(iso), () => DateTime.makeUnsafe(0))
 
-/** The public URL of a page: the hash is the hostname, so the link never changes under a reader. */
-export const pageUrl = (zone: string, hash: string): string => `https://${hash}.${zone}`
+/**
+ * The public URL of a page: the label is the whole hostname, so a hash link
+ * never changes under a reader and an alias link changes only its contents.
+ */
+export const pageUrl = (zone: string, label: string): string => `https://${label}.${zone}`
 
 /**
  * Bearer auth for the `pages` group. It resolves the token through whichever
@@ -84,6 +88,38 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
     // Idempotent by design: 204 whether or not the page was there.
     .handle("remove", ({ params }) =>
       Effect.flatMap(Storage, (storage) => storage.remove(params.hash))
+    )
+)
+
+/**
+ * Living names. Nothing here checks whether aliases are enabled: `AliasesDisabled`
+ * fails these three with `NotFound`, so a deployment without a KV binding serves
+ * a 404 on every route in the group.
+ */
+export const AliasesLive = HttpApiBuilder.group(HandbillApi, "aliases", (handlers) =>
+  handlers
+    .handle("set", ({ params, payload }) =>
+      Effect.gen(function* () {
+        const { zone } = yield* Config
+        const aliases = yield* Aliases
+        const owner = yield* CurrentOwner
+        yield* aliases.set(params.name, payload.hash, owner)
+        return { name: params.name, hash: payload.hash, url: pageUrl(zone, params.name) }
+      })
+    )
+    .handle("list", () =>
+      Effect.gen(function* () {
+        const { zone } = yield* Config
+        const aliases = yield* Aliases
+        const owner = yield* CurrentOwner
+        const stored = yield* aliases.list(owner)
+        return {
+          aliases: stored.map(({ hash, name }) => ({ name, hash, url: pageUrl(zone, name) }))
+        }
+      })
+    )
+    .handle("remove", ({ params }) =>
+      Effect.flatMap(Aliases, (aliases) => aliases.remove(params.name))
     )
 )
 

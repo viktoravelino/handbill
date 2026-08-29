@@ -29,7 +29,7 @@ CLOUDFLARE_ACCOUNT_ID=<account id>   # Workers & Pages overview, right-hand colu
 
 ## 2. Three edits in `wrangler.jsonc`
 
-`apps/worker/wrangler.jsonc` ships pointing at the maintainer's deployment. Change the three lines marked `EDIT`:
+`apps/worker/wrangler.jsonc` ships pointing at the maintainer's deployment. Change the three lines marked `EDIT`; the fourth is optional and belongs to [living names](#living-names-optional):
 
 ```jsonc
 "vars": { "ZONE": "<zone>" },
@@ -107,6 +107,36 @@ handbill list
 handbill remove <hash>
 ```
 
+## Living names (optional)
+
+A hash link is the bytes, forever. An alias is a name you can point somewhere else: `plan.<zone>` serves whatever it currently points at, while every hash link ever handed out keeps working.
+
+**Aliases are guessable by construction.** `plan`, `notes`, `roadmap` — someone who knows your zone can try names until one answers. A hash is 48 random bits and a name is a word, so put behind a name only what you would not mind a stranger reading. This is why the feature is off until you switch it on: no binding, no aliases.
+
+From `apps/worker`:
+
+```sh
+bunx wrangler kv namespace create ALIASES
+```
+
+Uncomment the `kv_namespaces` line in `wrangler.jsonc` (marked `EDIT 4`), paste in the id it printed, and `bunx wrangler deploy` again. Then:
+
+```sh
+API=https://api.<zone>
+
+curl -s -X PUT "$API/v1/aliases/plan" -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' -d '{"hash":"<hash>"}'
+# {"name":"plan","hash":"<hash>","url":"https://plan.<zone>"}
+
+curl -si "https://plan.<zone>/" | head -4
+# HTTP/2 200 · cache-control: public, max-age=60
+
+curl -s "$API/v1/aliases" -H "authorization: Bearer $TOKEN"
+curl -s -X DELETE "$API/v1/aliases/plan" -H "authorization: Bearer $TOKEN"
+```
+
+The page is *served* at the name, not redirected to the hash — the reader's address bar keeps the name. It is cached for a minute rather than a year, so re-pointing an alias is visible almost immediately; a hash page is unaffected either way. Names are one DNS label: lowercase letters, digits and inner hyphens, up to 63 characters, and neither `api` nor anything shaped like a hash. Without the binding, every `/v1/aliases` route answers `404 {"_tag":"NotFound"}` and `<name>.<zone>` serves "Nothing here".
+
 ## Scripting against it
 
 Your instance describes itself. `GET https://api.<zone>/v1/openapi.json` is the OpenAPI 3.1 document generated from the same contract the Worker implements and the CLI is built from, so it can never describe an API your deployment does not serve. It needs no token and is cacheable — point a client generator at it, or read it and write the four `curl`s by hand. `https://api.<zone>/docs` renders that same document as a browsable reference; it pulls the viewer from a CDN, so it wants an internet connection, while the spec itself is served by the Worker alone. Neither route exposes anything you published.
@@ -118,6 +148,7 @@ The button in the README clones the repo into your account and provisions the Wo
 ## Limits and cost
 
 - Documents: one self-contained HTML file per link, 5 MB cap by default.
+- Aliases: optional, and free at any personal scale — KV's free tier is 100 000 reads and 1 000 writes a day, and a cached alias page costs neither.
 - Free tier: Workers 100 000 requests/day; R2 10 GB stored, 1 million writes and 10 million reads per month. A published page is one object; a read is one R2 get on cache miss — Cloudflare's cache serves the rest because responses are `immutable`.
 - Nothing phones home. Your account, your bucket, your token.
 
@@ -130,6 +161,7 @@ The button in the README clones the repo into your account and provisions the Wo
 | `handbill` exits with `401` | Token mismatch: what is in `config.json` is not what `wrangler secret put` stored. |
 | `400 hash_mismatch` | The file changed between hashing and upload, or something rewrote the bytes in transit. Publish again. |
 | `413` | Over `MAX_BYTES`. Inline less, or raise the var. |
+| `<name>.<zone>` says "Nothing here" | No `ALIASES` binding, the name is not set, or it points at a hash you have unpublished. |
 | Certificate error on `https://<hash>.<zone>` | Universal SSL for the wildcard can take a few minutes after the `*` record is created. |
 | `whoami` shows the wrong account | Set `CLOUDFLARE_ACCOUNT_ID` in `.env`. |
 
@@ -145,4 +177,4 @@ The API is versioned under `/v1` and does not break inside a major version; publ
 
 ## Removing it
 
-`bunx wrangler delete` removes the Worker and its routes (a hand-made token without KV read still deletes the Worker but then reports an authentication error). Empty and delete the bucket in the dashboard, delete the two DNS records, and remove `~/.config/handbill/config.json`. Every published link stops resolving.
+`bunx wrangler delete` removes the Worker and its routes (a hand-made token without KV read still deletes the Worker but then reports an authentication error). Empty and delete the bucket in the dashboard, delete the `ALIASES` namespace if you created one, delete the two DNS records, and remove `~/.config/handbill/config.json`. Every published link stops resolving.

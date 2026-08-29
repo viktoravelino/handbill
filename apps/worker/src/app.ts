@@ -2,8 +2,9 @@ import { HandbillApi } from "@handbill/contract"
 import { Effect, FileSystem, Layer, ManagedRuntime, Path } from "effect"
 import { Etag, HttpPlatform, HttpRouter, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
-import { AuthorizationLive, MetaLive, PagesLive } from "./api"
-import { canonical, classifyHost, nothingHere, servePage } from "./pages"
+import { AliasesLive, AuthorizationLive, MetaLive, PagesLive } from "./api"
+import { canonical, classifyHost, nothingHere, serveAlias, servePage } from "./pages"
+import type { Aliases } from "./aliases"
 import type { Auth } from "./auth"
 import type { WorkerConfig } from "./config"
 import { Config } from "./config"
@@ -18,8 +19,8 @@ const PlatformLive = Layer.mergeAll(Etag.layer, Path.layer, HttpPlatform.layer).
   Layer.provideMerge(FileSystem.layerNoop({}))
 )
 
-/** Everything the handlers need beyond the platform: config, storage, auth. */
-export type AppServices = Storage | Auth
+/** Everything the handlers need beyond the platform: config, storage, auth, aliases. */
+export type AppServices = Storage | Auth | Aliases
 
 /** The spec generated from the contract, and the Scalar page that renders it. Neither needs a token. */
 const OPENAPI_PATH = "/v1/openapi.json"
@@ -81,7 +82,7 @@ export const makeApp = (config: WorkerConfig, services: Layer.Layer<AppServices>
   const memoMap = Layer.makeMemoMapUnsafe()
   const api = HttpRouter.toWebHandler(
     Layer.mergeAll(HttpApiBuilder.layer(HandbillApi, { openapiPath: OPENAPI_PATH }), DocsLive).pipe(
-      Layer.provide([PagesLive, MetaLive]),
+      Layer.provide([PagesLive, AliasesLive, MetaLive]),
       Layer.provide(AuthorizationLive),
       // Handler requirements are per-request in Effect 4's router; the same
       // layer also satisfies the middleware's build-time need for `Auth`.
@@ -107,6 +108,8 @@ export const makeApp = (config: WorkerConfig, services: Layer.Layer<AppServices>
         }
         case "page":
           return runtime.runPromise(servePage(host.hash))
+        case "alias":
+          return runtime.runPromise(serveAlias(host.name))
         case "unknown":
           return nothingHere()
       }

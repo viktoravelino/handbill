@@ -1,5 +1,6 @@
-import type { R2Bucket } from "@cloudflare/workers-types"
+import type { KVNamespace, R2Bucket } from "@cloudflare/workers-types"
 import { Layer } from "effect"
+import { AliasesDisabled, AliasesKV } from "./aliases"
 import { makeApp } from "./app"
 import { AuthSecret } from "./auth"
 import { DEFAULT_MAX_BYTES } from "./config"
@@ -8,13 +9,15 @@ import { StorageR2 } from "./storage"
 /**
  * The bindings `wrangler.jsonc` declares. `ZONE` and the bucket are config,
  * `PUBLISH_TOKEN` is a secret (`wrangler secret put PUBLISH_TOKEN`) and
- * `MAX_BYTES` is optional — it defaults to the CLI's 5 MB cap.
+ * `MAX_BYTES` is optional — it defaults to the CLI's 5 MB cap. `ALIASES` is the
+ * opt-in KV namespace: without it the alias feature is absent, not empty.
  */
 export interface Env {
   readonly ZONE: string
   readonly MAX_BYTES?: string
   readonly PUBLISH_TOKEN?: string
   readonly BUCKET: R2Bucket
+  readonly ALIASES?: KVNamespace
 }
 
 /**
@@ -36,7 +39,11 @@ let app: ReturnType<typeof makeApp> | undefined
 const appFor = (env: Env) =>
   (app ??= makeApp(
     { zone: env.ZONE, maxBytes: maxBytesFrom(env.MAX_BYTES) },
-    Layer.mergeAll(StorageR2(env.BUCKET), AuthSecret(env.PUBLISH_TOKEN ?? ""))
+    Layer.mergeAll(
+      StorageR2(env.BUCKET),
+      AuthSecret(env.PUBLISH_TOKEN ?? ""),
+      env.ALIASES === undefined ? AliasesDisabled : AliasesKV(env.ALIASES)
+    )
   ))
 
 export default {
