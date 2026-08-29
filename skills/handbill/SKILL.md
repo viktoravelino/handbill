@@ -41,6 +41,20 @@ handbill remove <url-or-hash>
 
 Idempotent: succeeds even if the page is already gone. Use it immediately if something sensitive was published by mistake, then tell the user.
 
+## Name a page
+
+```bash
+handbill alias plan <url-or-hash>   # → https://plan.<zone>, serving that page from now on
+handbill alias list                 # one line per alias: url, hash
+handbill alias remove plan          # the name stops answering; the page stays published
+```
+
+An alias is a living name: point `plan` at the new hash after each revision and the reader's link keeps showing the latest version, while every hash link stays exactly what it was. Only use one when the user asks for a stable or readable link, and say two things when you do: **names are guessable** (a hash is unguessable; `plan` is a word anyone who knows the zone can try), and **the feature is opt-in** — a deployment without its KV binding answers every `alias` command with one sentence saying how to enable it. Report that sentence to the user; do not work around it.
+
+## Showing the page
+
+`--open` on `handbill <file>` and `handbill alias` opens the printed URL in the user's default browser after printing it. stdout is still exactly one line. Use it only when the user asked to see the page, not by default.
+
 ## When something fails
 
 - Every failure is one sentence on stderr and a non-zero exit (`{ "error", "message" }` on stderr with `--json`). Report it; do not retry in a loop.

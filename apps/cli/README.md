@@ -31,18 +31,26 @@ Don't have a deployment yet? It is one Worker, one bucket and two DNS records �
 
 ## Use
 
-| Command                         | What it does                                                                              |
-| ------------------------------- | ----------------------------------------------------------------------------------------- |
-| `handbill plan.html`            | Publish. Prints exactly one line: the URL.                                                |
-| `handbill notes.md`             | Render markdown to a self-contained page, publish that.                                   |
-| `handbill - < plan.html`        | Publish from stdin. Add `--markdown` to render it.                                        |
-| `handbill plan.html --json`     | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                     |
-| `handbill list`                 | What you have published, newest first: date, URL, title.                                  |
-| `handbill remove <url-or-hash>` | Unpublish. Idempotent.                                                                    |
-| `handbill doctor`               | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix. |
-| `handbill completions zsh`      | Shell completions (bash, zsh, fish).                                                      |
+| Command                             | What it does                                                                              |
+| ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| `handbill plan.html`                | Publish. Prints exactly one line: the URL.                                                |
+| `handbill notes.md`                 | Render markdown to a self-contained page, publish that.                                   |
+| `handbill - < plan.html`            | Publish from stdin. Add `--markdown` to render it.                                        |
+| `handbill plan.html --json`         | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                     |
+| `handbill list`                     | What you have published, newest first: date, URL, title.                                  |
+| `handbill remove <url-or-hash>`     | Unpublish. Idempotent.                                                                    |
+| `handbill alias plan <url-or-hash>` | Point a name at a page: `https://plan.yourdomain.dev` serves it. Opt-in, see below.       |
+| `handbill alias list`               | Your aliases: URL, then the hash each points at. `handbill alias remove plan` drops one.  |
+| `handbill doctor`                   | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix. |
+| `handbill completions zsh`          | Shell completions (bash, zsh, fish).                                                      |
 
-Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents.
+Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents. `--open` on `handbill <file>` and `handbill alias` opens the URL in your browser after printing it; stdout is still that one line.
+
+## Names
+
+A hash link is the bytes, forever. An alias is a name you can point somewhere else: `plan.yourdomain.dev` serves whatever `plan` currently points at, and re-pointing it is visible within a minute, while every hash link ever handed out keeps working. Names are one DNS label — lowercase letters, digits and inner hyphens — and neither `api`, a hash, `list` nor `remove`.
+
+**Names are guessable by construction.** A hash is 48 random bits; `plan` is a word anyone who knows your zone can try. Put behind a name only what you would not mind a stranger reading. That is why the feature is off until you switch it on: it needs a KV namespace bound to the Worker (`ALIASES`, in the [self-hosting guide](https://github.com/viktoravelino/handbill/blob/main/docs/SELF-HOSTING.md#living-names-optional)), and until then every `alias` command says so.
 
 ## Markdown
 

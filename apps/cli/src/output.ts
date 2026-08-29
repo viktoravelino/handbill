@@ -1,6 +1,7 @@
 import { Console, Data, Effect, Match, type PlatformError, Runtime, type Schema } from "effect"
 import type { HttpClientError } from "effect/unstable/http"
-import type { HashMismatch, TooLarge, Unauthorized } from "@handbill/contract"
+import type { HashMismatch, NotFound, TooLarge, Unauthorized } from "@handbill/contract"
+import type { CannotOpen } from "./browser"
 import type { BadConfigFile, MissingSetting } from "./config"
 
 /** stdout carries the result and nothing else: one line, or one JSON object. */
@@ -19,9 +20,14 @@ export class Reported extends Data.TaggedError("Reported") {
   override readonly [Runtime.errorReported] = false
 }
 
-/** `remove` was handed something that is neither a hash nor a handbill URL. */
+/** `remove` or `alias` was handed a page that is neither a hash nor a handbill URL. */
 export class BadTarget extends Data.TaggedError("BadTarget")<{
   readonly target: string
+}> {}
+
+/** `alias` was handed a name the contract will not store. */
+export class BadName extends Data.TaggedError("BadName")<{
+  readonly name: string
 }> {}
 
 /** `doctor` ran to the end and something it checked is broken. */
@@ -35,11 +41,14 @@ export class ChecksFailed extends Data.TaggedError("ChecksFailed")<{
  */
 export type Failure =
   | BadConfigFile
+  | BadName
   | BadTarget
+  | CannotOpen
   | ChecksFailed
   | HashMismatch
   | HttpClientError.HttpClientError
   | MissingSetting
+  | NotFound
   | PlatformError.PlatformError
   | Schema.SchemaError
   | TooLarge
@@ -58,9 +67,17 @@ export const describe = Match.typeTags<Failure, Described>()({
     error: "BadConfigFile",
     message: `Could not read ${failure.path}: ${failure.reason}.`
   }),
+  BadName: (failure) => ({
+    error: "BadName",
+    message: `"${failure.name}" is not a name an alias can have: one DNS label of lowercase letters, digits and inner hyphens, and neither "api" nor a hash.`
+  }),
   BadTarget: (failure) => ({
     error: "BadTarget",
     message: `"${failure.target}" is not a handbill URL or a 12-character hash.`
+  }),
+  CannotOpen: (failure) => ({
+    error: "CannotOpen",
+    message: `Could not open ${failure.url} in a browser: ${failure.reason}`
   }),
   ChecksFailed: (failure) => ({
     error: "ChecksFailed",
@@ -80,6 +97,13 @@ export const describe = Match.typeTags<Failure, Described>()({
       failure.setting === "endpoint"
         ? `No endpoint configured. Pass --endpoint, set HANDBILL_ENDPOINT, or put it in ${failure.path}.`
         : `No token configured. Set HANDBILL_TOKEN or put it in ${failure.path}.`
+  }),
+  // The API only answers 404 on the alias routes, and only when the deployment
+  // has no KV binding: the feature is absent, not the name.
+  NotFound: () => ({
+    error: "NotFound",
+    message:
+      "Aliases are off on this deployment: it has no ALIASES KV binding. Create one (docs/SELF-HOSTING.md) and redeploy."
   }),
   PlatformError: (failure) => ({
     error: "PlatformError",
