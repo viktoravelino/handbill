@@ -107,6 +107,10 @@ handbill list
 handbill remove <hash>
 ```
 
+## Scripting against it
+
+Your instance describes itself. `GET https://api.<zone>/v1/openapi.json` is the OpenAPI 3.1 document generated from the same contract the Worker implements and the CLI is built from, so it can never describe an API your deployment does not serve. It needs no token and is cacheable — point a client generator at it, or read it and write the four `curl`s by hand. `https://api.<zone>/docs` renders that same document as a browsable reference; it pulls the viewer from a CDN, so it wants an internet connection, while the spec itself is served by the Worker alone. Neither route exposes anything you published.
+
 ## Deploy to Cloudflare button
 
 The button in the README clones the repo into your account and provisions the Worker and the bucket from `wrangler.jsonc`. It cannot know your zone, so after it finishes you still do steps 2 (edit the routes and `ZONE` in the generated repo), 3, and the `secret put` in step 4.

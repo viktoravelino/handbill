@@ -1,6 +1,6 @@
 import { HandbillApi } from "@handbill/contract"
 import { Effect, FileSystem, Layer, ManagedRuntime, Path } from "effect"
-import { Etag, HttpPlatform, HttpRouter } from "effect/unstable/http"
+import { Etag, HttpPlatform, HttpRouter, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { AuthorizationLive, MetaLive, PagesLive } from "./api"
 import { canonical, classifyHost, nothingHere, servePage } from "./pages"
@@ -21,6 +21,40 @@ const PlatformLive = Layer.mergeAll(Etag.layer, Path.layer, HttpPlatform.layer).
 /** Everything the handlers need beyond the platform: config, storage, auth. */
 export type AppServices = Storage | Auth
 
+/** The spec generated from the contract, and the Scalar page that renders it. Neither needs a token. */
+const OPENAPI_PATH = "/v1/openapi.json"
+const DOCS_PATH = "/docs"
+
+/**
+ * The docs page: Scalar, told where the spec is. `HttpApiScalar` would write this
+ * page for us, but importing it drags the 3 MB browser build of Scalar into the
+ * Worker bundle even when only its CDN variant is used, so the page is nine lines
+ * here instead. The Scalar version is pinned because the page runs it — bump it
+ * deliberately, not by drift. Nothing here describes the API; the spec does.
+ */
+const DocsLive = HttpRouter.add(
+  "GET",
+  DOCS_PATH,
+  HttpServerResponse.html(`<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>handbill API</title>
+<div id="docs"></div>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.67.0/dist/browser/standalone.min.js" crossorigin></script>
+<script>
+  Scalar.createApiReference(document.getElementById("docs"), { url: "${OPENAPI_PATH}" })
+</script>
+`)
+)
+
+/**
+ * Those two are the only API responses worth caching: they are derived from the
+ * contract, so they change on deploy and nowhere else. Everything else is
+ * per-request state a shared cache must never hold on to.
+ */
+const cacheControl = (pathname: string): string =>
+  pathname === OPENAPI_PATH || pathname === DOCS_PATH ? "public, max-age=300" : "no-store"
+
 /**
  * The Worker as a single `fetch`: classify the hostname, then either hand the
  * request to the Effect web handler for the API or read the document out of
@@ -36,7 +70,7 @@ export const makeApp = (config: WorkerConfig, services: Layer.Layer<AppServices>
   // of every service — the in-memory bucket above all.
   const memoMap = Layer.makeMemoMapUnsafe()
   const api = HttpRouter.toWebHandler(
-    HttpApiBuilder.layer(HandbillApi).pipe(
+    Layer.mergeAll(HttpApiBuilder.layer(HandbillApi, { openapiPath: OPENAPI_PATH }), DocsLive).pipe(
       Layer.provide([PagesLive, MetaLive]),
       Layer.provide(AuthorizationLive),
       // Handler requirements are per-request in Effect 4's router; the same
@@ -53,11 +87,12 @@ export const makeApp = (config: WorkerConfig, services: Layer.Layer<AppServices>
 
   return {
     fetch: async (request: Request): Promise<Response> => {
-      const host = classifyHost(new URL(request.url).hostname, zone)
+      const url = new URL(request.url)
+      const host = classifyHost(url.hostname, zone)
       switch (host.kind) {
         case "api": {
           const response = await api.handler(request)
-          response.headers.set("cache-control", "no-store")
+          response.headers.set("cache-control", cacheControl(url.pathname))
           return response
         }
         case "page":

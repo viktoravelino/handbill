@@ -1,5 +1,7 @@
 import { beforeEach, expect, test } from "bun:test"
+import { HandbillApi } from "@handbill/contract"
 import { Effect, Layer } from "effect"
+import { OpenApi } from "effect/unstable/httpapi"
 import { makeApp } from "./app"
 import { hashBytes } from "./hash"
 import { AuthSecret } from "./auth"
@@ -149,4 +151,28 @@ test("the apex, www and an unpublished hash are all nothing", async () => {
     expect(response.status).toBe(404)
     expect(await response.text()).toBe("Nothing here\n")
   }
+})
+
+// The spec is the contract's, not a second description of the API kept in the
+// Worker: `OpenApi.fromApi` here is the same call the route makes, and the
+// contract's own snapshot test is what keeps that document honest.
+test("the spec is served from the contract, with no token", async () => {
+  const response = await app.fetch(new Request(`https://api.${ZONE}/v1/openapi.json`))
+  expect(response.status).toBe(200)
+  expect(response.headers.get("content-type")).toBe("application/json")
+  expect(response.headers.get("cache-control")).toBe("public, max-age=300")
+  expect(await response.json()).toEqual(JSON.parse(JSON.stringify(OpenApi.fromApi(HandbillApi))))
+})
+
+// The page carries no description of the API — it points Scalar at the spec
+// route, so the two can never drift apart.
+test("the docs page renders and needs no token", async () => {
+  const response = await app.fetch(new Request(`https://api.${ZONE}/docs`))
+  expect(response.status).toBe(200)
+  expect(response.headers.get("content-type")).toBe("text/html")
+  expect(response.headers.get("cache-control")).toBe("public, max-age=300")
+
+  const page = await response.text()
+  expect(page).toContain("@scalar/api-reference@1.67.0/")
+  expect(page).toContain('{ url: "/v1/openapi.json" }')
 })
