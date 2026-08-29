@@ -36,7 +36,15 @@ scripts/release.sh bump 0.1.2   # branch, set the version, run the checks, open 
 scripts/release.sh tag          # tag main as v0.1.2 and push it
 ```
 
-`bump` is the only thing that edits a version: `apps/cli/package.json` is the source of truth (the CLI's `--version` reads it at build time) and the script mirrors it into the `apps/cli` entry of `bun.lock`, which bun does not rewrite on its own. `tag` refuses to run off `main`, with a dirty tree, behind origin, if the tag exists, or if that version is already on npm. `DRY_RUN=1` in front of either command runs the checks and the build but prints the branch, commit, push, PR and tag steps instead of doing them, and leaves the tree as it found it.
+`bump` is the only thing that edits a version: `apps/cli/package.json` is the source of truth (the CLI's `--version` reads it at build time) and the script mirrors it into the `apps/cli` entry of `bun.lock`, which bun does not rewrite on its own. `tag` refuses to run off `main`, with a dirty tree, behind origin, if the tag exists, if that version is already on npm, or if it is a `-dev` version. `DRY_RUN=1` in front of either command runs the checks and the build but prints the branch, commit, push, PR and tag steps instead of doing them, and leaves the tree as it found it.
+
+When `main` starts carrying the next minor's features, say so with a `-dev` version, so nightlies name the release they lead up to instead of the next patch:
+
+```sh
+scripts/release.sh bump 0.2.0-dev   # main is heading toward 0.2.0; nightlies become 0.2.0-nightly.…
+```
+
+A `-dev` version is never published: `tag` and the workflow both refuse it, and the release is the same two commands as always (`bump 0.2.0`, merge, `tag`). Leaving `main` on a release version is fine too — nightlies then take the next patch, which is right while only fixes are landing.
 
 The `Release` workflow then runs: `scripts/release-version.sh` (the tag-vs-version guard, and the dist-tag), typecheck, lint, test, build, `npm publish` via OIDC, GitHub release with generated notes.
 
@@ -47,11 +55,11 @@ The workflow refuses a tag whose version does not match `apps/cli/package.json`,
 The same workflow runs every day at 05:00 UTC and publishes `main` under the `nightly` dist-tag, so a merged feature is installable before it is released:
 
 ```sh
-npx handbill@nightly --version   # 0.1.2-nightly.202608290500.g86df0a5
+npx handbill@nightly --version   # 0.2.0-nightly.202608290500.g86df0a5
 npm i -g handbill@nightly
 ```
 
-The version is the next patch of `apps/cli/package.json`, the UTC date and time, and the commit (`g` + short sha, as `git describe` writes it) — a prerelease, so `latest` and `next` are never touched and nothing resolves to a nightly unless asked for by tag. It is set in the CI checkout only; `main` keeps the real version and `bump` remains the only thing that edits it. When `main` has not moved since the last nightly (the commit is already in `handbill@nightly`'s version) the job publishes nothing. Nightlies get no GitHub release; the commit in the version is the changelog.
+The version is the release `main` is heading toward — the `-dev` version of `apps/cli/package.json` without its suffix, or the next patch of a release version — then the UTC date and time, and the commit (`g` + short sha, as `git describe` writes it) — a prerelease, so `latest` and `next` are never touched and nothing resolves to a nightly unless asked for by tag. It is set in the CI checkout only; `main` keeps the real version and `bump` remains the only thing that edits it. When `main` has not moved since the last nightly (the commit is already in `handbill@nightly`'s version) the job publishes nothing. Nightlies get no GitHub release; the commit in the version is the changelog.
 
 Run one by hand, or rehearse without publishing:
 
