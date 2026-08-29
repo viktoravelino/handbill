@@ -2,6 +2,7 @@ import { Clock, Context, Duration, Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 import type { Hash } from "@handbill/contract"
 import { Owner } from "@handbill/contract"
+import { AliasesMemory } from "@handbill/worker/src/aliases"
 import { makeApp } from "@handbill/worker/src/app"
 import { AuthSecret } from "@handbill/worker/src/auth"
 import { Storage, StorageMemory } from "@handbill/worker/src/storage"
@@ -61,6 +62,7 @@ export const makeServer = () => {
     Layer.mergeAll(
       Layer.succeed(Storage, storage),
       AuthSecret(TOKEN),
+      AliasesMemory,
       // `Clock` is a reference, so this only replaces the default the Worker's
       // own runtime would have used; it adds nothing to `AppServices`.
       Layer.succeed(Clock.Clock, time.clock)

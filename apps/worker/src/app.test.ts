@@ -2,6 +2,7 @@ import { beforeEach, expect, test } from "bun:test"
 import { HandbillApi } from "@handbill/contract"
 import { Effect, Layer } from "effect"
 import { OpenApi } from "effect/unstable/httpapi"
+import { AliasesDisabled, AliasesMemory } from "./aliases"
 import { makeApp } from "./app"
 import { hashBytes } from "./hash"
 import { AuthSecret } from "./auth"
@@ -19,7 +20,7 @@ let app: ReturnType<typeof makeApp>
 beforeEach(() => {
   app = makeApp(
     { zone: ZONE, maxBytes: MAX_BYTES },
-    Layer.mergeAll(StorageMemory, AuthSecret(TOKEN))
+    Layer.mergeAll(StorageMemory, AuthSecret(TOKEN), AliasesMemory)
   )
 })
 
@@ -129,7 +130,7 @@ test("removing is idempotent and the page stops being served", async () => {
 test("a zone configured as a fully qualified name is canonical everywhere", async () => {
   const fq = makeApp(
     { zone: "Example.dev.", maxBytes: MAX_BYTES },
-    Layer.mergeAll(StorageMemory, AuthSecret(TOKEN))
+    Layer.mergeAll(StorageMemory, AuthSecret(TOKEN), AliasesMemory)
   )
   const hash = await hashOf(DOC)
   const published = await fq.fetch(
@@ -145,12 +146,105 @@ test("a zone configured as a fully qualified name is canonical everywhere", asyn
   expect(await health.json()).toEqual({ ok: true, mode: "secret", zone: ZONE })
 })
 
-test("the apex, www and an unpublished hash are all nothing", async () => {
+test("the apex, an unset name and an unpublished hash are all nothing", async () => {
   for (const url of [`https://${ZONE}/`, `https://www.${ZONE}/`, `https://a3f9c1d4e2b8.${ZONE}/`]) {
     const response = await app.fetch(new Request(url))
     expect(response.status).toBe(404)
     expect(await response.text()).toBe("Nothing here\n")
   }
+})
+
+// Short on purpose: `DOC` plus a version marker would be over `MAX_BYTES`.
+const OTHER = "<html><title>Plan v2</title>hello</html>"
+
+const setAlias = (name: string, hash: string) =>
+  api(`/v1/aliases/${name}`, {
+    method: "PUT",
+    body: JSON.stringify({ hash }),
+    headers: { "content-type": "application/json" }
+  })
+
+// S2.2: the name is what a reader keeps, the hash is what never moves.
+test("an alias serves the page it points at, and follows it when it moves", async () => {
+  const first = await hashOf(DOC)
+  const second = await hashOf(OTHER)
+  await publish(first, DOC)
+  await publish(second, OTHER)
+
+  const set = await setAlias("plan", first)
+  expect(set.status).toBe(200)
+  expect(await set.json()).toEqual({ name: "plan", hash: first, url: `https://plan.${ZONE}` })
+
+  const page = await app.fetch(new Request(`https://plan.${ZONE}/anything`))
+  expect(page.status).toBe(200)
+  expect(await page.text()).toBe(DOC)
+  expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8")
+  expect(page.headers.get("cache-control")).toBe("public, max-age=60")
+  expect(page.headers.get("x-robots-tag")).toBe("noindex, nofollow")
+
+  await setAlias("plan", second)
+  expect(await (await app.fetch(new Request(`https://plan.${ZONE}/`))).text()).toBe(OTHER)
+
+  // The old link is still the old bytes, cached as if nothing had happened.
+  const old = await app.fetch(new Request(`https://${first}.${ZONE}/`))
+  expect(await old.text()).toBe(DOC)
+  expect(old.headers.get("cache-control")).toBe("public, max-age=31536000, immutable")
+})
+
+test("aliases are listed with their URLs and removing one is idempotent", async () => {
+  const hash = await hashOf(DOC)
+  await publish(hash, DOC)
+  await setAlias("plan", hash)
+  await setAlias("notes", hash)
+
+  expect(await (await api("/v1/aliases")).json()).toEqual({
+    aliases: [
+      { name: "notes", hash, url: `https://notes.${ZONE}` },
+      { name: "plan", hash, url: `https://plan.${ZONE}` }
+    ]
+  })
+
+  expect((await api("/v1/aliases/plan", { method: "DELETE" })).status).toBe(204)
+  expect((await api("/v1/aliases/plan", { method: "DELETE" })).status).toBe(204)
+  expect((await app.fetch(new Request(`https://plan.${ZONE}/`))).status).toBe(404)
+})
+
+// `api` is the API's own hostname and a 12-hex name is a hash: neither could
+// ever be resolved as an alias, so the contract refuses to store them.
+test.each(["api", "a3f9c1d4e2b8", "-plan", "plan.v2"])(
+  "%s is not a name an alias can have",
+  async (name) => {
+    expect((await setAlias(name, await hashOf(DOC))).status).toBe(400)
+  }
+)
+
+test("without a KV binding the whole alias feature is absent", async () => {
+  const off = makeApp(
+    { zone: ZONE, maxBytes: MAX_BYTES },
+    Layer.mergeAll(StorageMemory, AuthSecret(TOKEN), AliasesDisabled)
+  )
+  const request = (path: string, init?: RequestInit) =>
+    off.fetch(
+      new Request(`https://api.${ZONE}${path}`, {
+        ...init,
+        headers: { authorization: `Bearer ${TOKEN}`, ...init?.headers }
+      })
+    )
+
+  for (const response of [
+    await request("/v1/aliases"),
+    await request("/v1/aliases/plan", { method: "DELETE" }),
+    await request("/v1/aliases/plan", {
+      method: "PUT",
+      body: JSON.stringify({ hash: await hashOf(DOC) }),
+      headers: { "content-type": "application/json" }
+    })
+  ]) {
+    expect(response.status).toBe(404)
+    expect(await response.json()).toEqual({ _tag: "NotFound" })
+  }
+
+  expect((await off.fetch(new Request(`https://plan.${ZONE}/`))).status).toBe(404)
 })
 
 // The spec is the contract's, not a second description of the API kept in the

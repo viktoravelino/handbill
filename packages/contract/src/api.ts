@@ -8,8 +8,18 @@ import {
   HttpApiSecurity,
   OpenApi
 } from "effect/unstable/httpapi"
-import { HashMismatch, TooLarge, Unauthorized } from "./errors"
-import { Hash, Health, Owner, PageList, PublishResult } from "./schemas"
+import { HashMismatch, NotFound, TooLarge, Unauthorized } from "./errors"
+import {
+  Alias,
+  AliasList,
+  AliasName,
+  AliasTarget,
+  Hash,
+  Health,
+  Owner,
+  PageList,
+  PublishResult
+} from "./schemas"
 
 /**
  * The owner the bearer token resolved to. `Authorization` provides it, so every
@@ -73,6 +83,38 @@ export class PagesGroup extends HttpApiGroup.make("pages")
     })
   ) {}
 
+/**
+ * Living names. The whole group is optional: a deployment without a KV binding
+ * answers `404 NotFound` on every route here, which is why `NotFound` is on all
+ * three rather than only on the lookups.
+ */
+export class AliasesGroup extends HttpApiGroup.make("aliases")
+  .add(
+    HttpApiEndpoint.put("set", "/aliases/:name", {
+      params: { name: AliasName },
+      payload: AliasTarget,
+      success: Alias,
+      error: NotFound
+    }),
+    HttpApiEndpoint.get("list", "/aliases", {
+      success: AliasList,
+      error: NotFound
+    }),
+    // Idempotent like unpublishing: 204 whether or not the name was in use.
+    HttpApiEndpoint.delete("remove", "/aliases/:name", {
+      params: { name: AliasName },
+      success: HttpApiSchema.NoContent,
+      error: NotFound
+    })
+  )
+  .middleware(Authorization)
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Aliases",
+      description: "Point a readable name at a hash. Absent unless the deployment enables it."
+    })
+  ) {}
+
 /** Unauthenticated endpoints. `health` is what `handbill doctor` probes. */
 export class MetaGroup extends HttpApiGroup.make("meta")
   .add(
@@ -94,6 +136,7 @@ export class MetaGroup extends HttpApiGroup.make("meta")
  */
 export class HandbillApi extends HttpApi.make("handbill")
   .add(PagesGroup)
+  .add(AliasesGroup)
   .add(MetaGroup)
   .prefix("/v1")
   .annotateMerge(

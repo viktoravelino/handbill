@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { Hash } from "@handbill/contract"
+import { AliasName, Hash } from "@handbill/contract"
 import { classifyHost } from "./pages"
 
 const ZONE = "example.dev"
@@ -13,14 +13,22 @@ const table = [
   // Fully qualified, trailing dot and all.
   ["api.example.dev.", "api"],
   ["a3f9c1d4e2b8.example.dev.", "page"],
+  ["plan.example.dev", "alias"],
+  ["PLAN.example.dev", "alias"],
+  ["plan-v2.example.dev", "alias"],
+  ["www.example.dev", "alias"],
+  // Not 12 hex, so not a hash — a readable name to look up instead.
+  ["a3f9c1d4e2b.example.dev", "alias"],
+  ["a3f9c1d4e2b8c.example.dev", "alias"],
+  ["a3f9c1d4e2bg.example.dev", "alias"],
+  // Not a hostname label at all: hyphen at an end, too long, empty.
+  ["-plan.example.dev", "unknown"],
+  [`${"p".repeat(64)}.example.dev`, "unknown"],
   ["example.dev", "unknown"],
-  ["www.example.dev", "unknown"],
-  // Not 12 hex: too short, too long, out of alphabet.
-  ["a3f9c1d4e2b.example.dev", "unknown"],
-  ["a3f9c1d4e2b8c.example.dev", "unknown"],
-  ["a3f9c1d4e2bg.example.dev", "unknown"],
-  // A hash label has to be the whole subdomain.
+  [".example.dev", "unknown"],
+  // A label has to be the whole subdomain, for a hash and for a name.
   ["x.a3f9c1d4e2b8.example.dev", "unknown"],
+  ["x.plan.example.dev", "unknown"],
   // Another zone that merely ends the same way.
   ["a3f9c1d4e2b8.notexample.dev", "unknown"],
   ["api.example.dev.evil.test", "unknown"]
@@ -39,5 +47,12 @@ test("a page host carries the hash", () => {
   expect(classifyHost("a3f9c1d4e2b8.example.dev", ZONE)).toEqual({
     kind: "page",
     hash: Hash.make("a3f9c1d4e2b8")
+  })
+})
+
+test("an alias host carries the name, lowercased", () => {
+  expect(classifyHost("Plan.example.dev", ZONE)).toEqual({
+    kind: "alias",
+    name: AliasName.make("plan")
   })
 })

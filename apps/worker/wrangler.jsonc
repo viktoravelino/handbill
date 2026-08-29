@@ -21,6 +21,13 @@
     { "pattern": "*.handbill.dev/*", "zone_name": "handbill.dev" }
   ],
 
+  // EDIT 4 (optional) — living names. Create the namespace, paste the id it
+  // prints, and uncomment the line; the trailing comma is part of it:
+  //   bunx wrangler kv namespace create ALIASES
+  // Without this binding the alias routes answer 404 and `<name>.<zone>` serves
+  // nothing. Aliases are guessable by construction — see docs/SELF-HOSTING.md.
+  // "kv_namespaces": [{ "binding": "ALIASES", "id": "<id>" }],
+
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "handbill" }]
 
   // `PUBLISH_TOKEN` is a secret, never a var:

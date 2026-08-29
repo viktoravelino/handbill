@@ -63,3 +63,36 @@ export const Health = Schema.Struct({
   zone: Schema.String
 }).annotate({ identifier: "Health" })
 export type Health = typeof Health.Type
+
+/**
+ * A living name for a page: one DNS label under the zone, so `plan` is served at
+ * `https://plan.<zone>`. The pattern is a hostname label (1–63 characters,
+ * alphanumeric ends, hyphens inside) minus the two labels the zone has already
+ * spoken for — `api`, which the API answers on, and anything shaped like a
+ * hash, which the classifier resolves out of storage and never out of KV.
+ * Unlike a hash, an alias is guessable by construction and mutable on purpose.
+ */
+export const AliasName = Schema.String.check(
+  Schema.isPattern(/^(?!api$)(?![0-9a-f]{12}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u)
+).pipe(Schema.brand("AliasName"))
+export type AliasName = typeof AliasName.Type
+
+/** Where an alias points, as `PUT /v1/aliases/:name` takes it. */
+export const AliasTarget = Schema.Struct({
+  hash: Hash
+}).annotate({ identifier: "AliasTarget" })
+export type AliasTarget = typeof AliasTarget.Type
+
+/** One alias: the name, what it currently points at, and the URL it is served from. */
+export const Alias = Schema.Struct({
+  name: AliasName,
+  hash: Hash,
+  url: Schema.String
+}).annotate({ identifier: "Alias" })
+export type Alias = typeof Alias.Type
+
+/** The body of `GET /v1/aliases`: every alias the caller owns, by name. */
+export const AliasList = Schema.Struct({
+  aliases: Schema.Array(Alias)
+}).annotate({ identifier: "AliasList" })
+export type AliasList = typeof AliasList.Type
