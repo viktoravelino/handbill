@@ -48,7 +48,7 @@ Errors are one sentence on stderr and a non-zero exit; stdout is only ever the r
 
 ## Names
 
-A hash link is the bytes, forever. An alias is a name you can point somewhere else: `plan.yourdomain.dev` serves whatever `plan` currently points at, and re-pointing it is visible within a minute, while every hash link ever handed out keeps working. Names are one DNS label — lowercase letters, digits and inner hyphens — and neither `api`, a hash, `list` nor `remove`.
+A hash link is the bytes, forever. An alias is a name you can point somewhere else: `plan.yourdomain.dev` serves whatever `plan` currently points at, and re-pointing it is visible within a minute, while every hash link ever handed out keeps working. The name answers as soon as `alias` prints its URL; `alias list` can lag a fresh name by up to a minute (KV lists are eventually consistent), so "No aliases set." straight after setting one is the lag, not a failure. Names are one DNS label — lowercase letters, digits and inner hyphens — and neither `api`, a hash, `list` nor `remove`.
 
 **Names are guessable by construction.** A hash is 48 random bits; `plan` is a word anyone who knows your zone can try. Put behind a name only what you would not mind a stranger reading. That is why the feature is off until you switch it on: it needs a KV namespace bound to the Worker (`ALIASES`, in the [self-hosting guide](https://github.com/viktoravelino/handbill/blob/main/docs/SELF-HOSTING.md#living-names-optional)), and until then every `alias` command says so.
 
