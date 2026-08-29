@@ -4,6 +4,7 @@
  * not. Writes src/generated/cli.md (gitignored); `build` and `dev` run it first.
  */
 import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { handbill } from "handbill/src/commands"
 
@@ -40,7 +41,7 @@ const sections = paths(handbill).map(
   (path) => `## ${["handbill", ...path].join(" ")}\n\n\`\`\`text\n${help(path)}\n\`\`\``
 )
 
-mkdirSync(new URL(".", `file://${OUT}`), { recursive: true })
+mkdirSync(dirname(OUT), { recursive: true })
 writeFileSync(
   OUT,
   `Every command answers \`--help\`; this page is that output, generated from the CLI at build time. Success prints exactly one line on stdout — the URL — or one JSON object with \`--json\`; everything else goes to stderr, and a failure exits non-zero.\n\n${sections.join("\n\n")}\n`
