@@ -15,7 +15,7 @@ The URL is the content hash: the same bytes always give the same link, a changed
 npm i -g handbill
 ```
 
-Node ≥ 22. Two dependencies: `effect` and `marked`.
+Node ≥ 22. Two dependencies: `effect` and `marked`. Bleeding edge from `main`: `npm i -g handbill@nightly`.
 
 ## Point it at a deployment
 

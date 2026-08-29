@@ -1,19 +1,47 @@
 name: Release
 
-# Tag main with v<version> (matching apps/cli/package.json) to publish the CLI
-# to npm via trusted publishing (OIDC, provenance attached automatically) and
-# create the GitHub release. See docs/RELEASING.md.
+# Two ways in, one publish job. Tag main with v<version> (matching
+# apps/cli/package.json) to release the CLI to npm and create the GitHub
+# release; every night, and on demand, main is published under the `nightly`
+# dist-tag when it has moved since the last nightly. scripts/release-version.sh
+# decides which, and what version. npm trusted publishing (OIDC, provenance
+# attached automatically) is bound to this file's name. See docs/RELEASING.md.
 
 on:
   push:
     tags: ["v*"]
+  schedule:
+    - cron: "0 5 * * *" # 05:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and run npm publish --dry-run; publish nothing"
+        type: boolean
+        default: false
 
 permissions:
   contents: write # create the GitHub release
   id-token: write # npm provenance
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      dist_tag: ${{ steps.resolve.outputs.dist_tag }}
+      release: ${{ steps.resolve.outputs.release }}
+      skip: ${{ steps.resolve.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: resolve
+        shell: bash # -o pipefail, so a failing script fails the step through the tee
+        env:
+          DRY_RUN: ${{ inputs.dry_run }} # lets a non-main ref be dispatched for a rehearsal only
+        run: scripts/release-version.sh | tee -a "$GITHUB_OUTPUT"
+
   publish:
+    needs: version
+    if: needs.version.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -35,12 +63,13 @@ jobs:
       - run: bun run lint
       - run: bun test
 
-      - name: Check the tag matches the package version
-        run: |
-          set -euo pipefail
-          tag="${GITHUB_REF_NAME#v}"
-          pkg=$(node -p "require('./apps/cli/package.json').version")
-          [[ "$tag" == "$pkg" ]] || { echo "tag v$tag does not match apps/cli version $pkg" >&2; exit 1; }
+      # Nightlies carry a computed version. It goes into the checkout after the
+      # frozen install (the lockfile holds the real one) and before the build,
+      # which reads it, so `handbill --version` names the nightly.
+      - name: Set the nightly version in the checkout
+        if: needs.version.outputs.dist_tag == 'nightly'
+        working-directory: apps/cli
+        run: npm pkg set version="${{ needs.version.outputs.version }}"
 
       - run: bun run --cwd apps/cli build
       - run: node apps/cli/dist/cli.js --version
@@ -51,18 +80,20 @@ jobs:
       # so a re-run after a failure past this point does not fail here.
       - name: Publish to npm
         working-directory: apps/cli
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          DIST_TAG: ${{ needs.version.outputs.dist_tag }}
+          DRY_RUN: ${{ inputs.dry_run == true && '--dry-run' || '' }}
         run: |
           set -euo pipefail
-          pkg=$(node -p "require('./package.json').version")
-          # Prereleases (0.1.1-rc.0) go to the `next` dist-tag so `latest` is untouched.
-          tag=latest; [[ "$pkg" == *-* ]] && tag=next
-          if npm view "handbill@$pkg" version >/dev/null 2>&1; then
-            echo "handbill@$pkg is already on npm; skipping publish"
+          if npm view "handbill@$VERSION" version >/dev/null 2>&1; then
+            echo "handbill@$VERSION is already on npm; skipping publish"
           else
-            npm publish --access public --tag "$tag"
+            npm publish --access public --tag "$DIST_TAG" $DRY_RUN
           fi
 
       - name: GitHub release
+        if: needs.version.outputs.release == 'true' && inputs.dry_run != true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
