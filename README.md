@@ -43,18 +43,19 @@ The full walkthrough — token scopes, verification curls, limits, troubleshooti
 
 ## Use
 
-| Command                       | What it does                                                                              |
-| ----------------------------- | ----------------------------------------------------------------------------------------- |
-| `handbill plan.html`          | Publish. Prints exactly one line: the URL.                                                |
-| `handbill notes.md`           | Render markdown to a self-contained page, publish that.                                   |
-| `cat plan.html \| handbill -` | Publish from stdin. Add `--markdown` to render it.                                        |
-| `handbill plan.html --json`   | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                     |
-| `handbill list`               | What you have published, newest first: date, URL, title.                                  |
-| `handbill remove <url\|hash>` | Unpublish. Idempotent.                                                                    |
-| `handbill doctor`             | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix. |
-| `handbill completions zsh`    | Shell completions (bash, zsh, fish).                                                      |
+| Command                           | What it does                                                                                   |
+| --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `handbill plan.html`              | Publish. Prints exactly one line: the URL.                                                     |
+| `handbill notes.md`               | Render markdown to a self-contained page, publish that.                                        |
+| `cat plan.html \| handbill -`     | Publish from stdin. Add `--markdown` to render it.                                             |
+| `handbill plan.html --json`       | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                          |
+| `handbill list`                   | What you have published, newest first: date, URL, title.                                       |
+| `handbill remove <url\|hash>`     | Unpublish. Idempotent.                                                                         |
+| `handbill alias plan <url\|hash>` | Point a name at a page: `plan.yourdomain.dev` serves it. Opt-in; `alias list`, `alias remove`. |
+| `handbill doctor`                 | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix.      |
+| `handbill completions zsh`        | Shell completions (bash, zsh, fish).                                                           |
 
-Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result.
+Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result. `--open` on `handbill <file>` and `handbill alias` opens the URL in your browser after printing it.
 
 ## How it works
 
@@ -62,7 +63,7 @@ Errors are one sentence on stderr and a non-zero exit; stdout is only ever the r
 
 The page is served from `https://<hash>.<zone>` — its own origin — with `text/html; charset=utf-8`, `X-Robots-Tag: noindex, nofollow`, and `Cache-Control: public, max-age=31536000, immutable`. Every path on that hostname serves the same document. The API lives at `api.<zone>` under `/v1` and needs the bearer token for everything except `/v1/health`, the generated spec at `/v1/openapi.json`, and the reference that renders it at `/docs`.
 
-Optionally, a **living name**: `plan.<zone>` serves whatever hash you currently point it at (cached for a minute, not a year), while every hash link ever handed out keeps working. Names are guessable by construction, so the feature is off until you bind a KV namespace — [`docs/SELF-HOSTING.md`](docs/SELF-HOSTING.md#living-names-optional) has the trade-off and the setup.
+Optionally, a **living name**: `handbill alias plan <hash>` makes `plan.<zone>` serve that page (cached for a minute, not a year) until you point the name elsewhere, while every hash link ever handed out keeps working. Names are guessable by construction, so the feature is off until you bind a KV namespace — [`docs/SELF-HOSTING.md`](docs/SELF-HOSTING.md#living-names-optional) has the trade-off and the setup.
 
 One self-contained HTML file per link, 5 MB by default. No multi-file sites, no assets, no transforms on the server — a `.md` file is rendered to a page by the CLI, with a built-in light/dark stylesheet, before anything is uploaded.
 
@@ -72,7 +73,7 @@ Anyone holding a link can read the page; the link is unguessable and not indexed
 
 ## Agents
 
-[`skills/handbill/SKILL.md`](skills/handbill/SKILL.md) teaches a coding agent when and how to publish with `handbill`: one file, one URL, what never to publish, how to list and unpublish, and what to do when it fails. Install it by symlinking the directory into the agent's skills folder (`~/.claude/skills/` for Claude Code, `~/.agents/skills/` for Codex); it needs only `handbill` on `PATH` and a configured endpoint and token.
+[`skills/handbill/SKILL.md`](skills/handbill/SKILL.md) teaches a coding agent when and how to publish with `handbill`: one file, one URL, what never to publish, how to list, name and unpublish, and what to do when it fails. Install it by symlinking the directory into the agent's skills folder (`~/.claude/skills/` for Claude Code, `~/.agents/skills/` for Codex); it needs only `handbill` on `PATH` and a configured endpoint and token.
 
 ## Development
 
@@ -94,7 +95,7 @@ Effect 4 end to end, pinned to an exact release candidate. Conventions and invar
 ## Roadmap
 
 - **0.1** — self-host kit: Worker, CLI, skill (released)
-- **0.2** — markdown input rendered in the CLI, living names on KV, OpenAPI + `/docs` (all on `main`); `--open`, alias commands in the CLI, and the docs site still to come
+- **0.2** — markdown input rendered in the CLI, living names on KV with `alias` commands, `--open`, OpenAPI + `/docs` (all on `main`); the docs site still to come
 - **0.3** — hosted mode: the same Worker with accounts instead of a single token
 - later — inline local assets at publish time, expiring pages, encrypted pages
 

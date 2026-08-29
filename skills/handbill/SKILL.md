@@ -1,6 +1,6 @@
 ---
 name: handbill
-description: Publish a self-contained HTML or markdown document (plan, report, review) to an unguessable, immutable URL with the handbill CLI. Use when the user asks to publish, share, deploy, or "give me a link" for an HTML or markdown file. Also lists what is published and unpublishes.
+description: Publish a self-contained HTML or markdown document (plan, report, review) to an unguessable, immutable URL with the handbill CLI. Use when the user asks to publish, share, deploy, or "give me a link" for an HTML or markdown file. Also lists what is published, names a page with an alias, and unpublishes.
 ---
 
 # handbill
