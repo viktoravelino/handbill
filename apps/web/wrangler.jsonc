@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "handbill-web",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": false,
+
+  // Static files and nothing else: no script, no bindings. `astro build` writes dist/.
+  "assets": { "directory": "./dist", "not_found_handling": "404-page" },
+
+  // The apex. The pages Worker's `*.handbill.dev/*` route does not match the bare
+  // zone, so this one is free; it needs a proxied DNS record for `@`, like the
+  // other two need theirs — docs/SELF-HOSTING.md, "The apex".
+  "routes": [{ "pattern": "handbill.dev/*", "zone_name": "handbill.dev" }]
+}

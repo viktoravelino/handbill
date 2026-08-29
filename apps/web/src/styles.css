@@ -1,0 +1,9 @@
+/*
+ * Starlight lays every image out as a block. The README's badges are images in
+ * a paragraph and belong on one line, as GitHub shows them.
+ */
+.sl-markdown-content p > a > img,
+.sl-markdown-content p > img {
+  display: inline;
+  vertical-align: middle;
+}

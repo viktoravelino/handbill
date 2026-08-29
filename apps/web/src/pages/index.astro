@@ -1,0 +1,31 @@
+---
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro"
+import { Content } from "../../../../README.md"
+---
+
+<!-- The landing page is the README: one source, so the two cannot drift. -->
+<StarlightPage
+  frontmatter={{
+    title: "handbill",
+    template: "splash",
+    hero: {
+      tagline: "Hand someone a page.",
+      actions: [
+        { text: "Self-host in five steps", link: "/docs/self-hosting/", icon: "right-arrow" },
+        {
+          text: "npm i -g handbill",
+          link: "https://www.npmjs.com/package/handbill",
+          variant: "secondary"
+        },
+        {
+          text: "GitHub",
+          link: "https://github.com/viktoravelino/handbill",
+          variant: "minimal",
+          icon: "github"
+        }
+      ]
+    }
+  }}
+>
+  <Content />
+</StarlightPage>

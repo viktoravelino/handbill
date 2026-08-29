@@ -7,6 +7,8 @@ dist/
 .dev.vars.*
 .DS_Store
 *.tsbuildinfo
+.astro/
+apps/web/src/generated/
 
 # Agent worktrees created inside the repo (Claude Code isolation)
 .claude/worktrees/

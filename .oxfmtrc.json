@@ -3,5 +3,5 @@
   "semi": false,
   "printWidth": 100,
   "trailingComma": "none",
-  "ignorePatterns": ["docs/**"]
+  "ignorePatterns": ["docs/**", "**/.astro/**"]
 }
