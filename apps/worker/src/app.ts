@@ -35,7 +35,12 @@ const DOCS_PATH = "/docs"
 const DocsLive = HttpRouter.add(
   "GET",
   DOCS_PATH,
-  HttpServerResponse.html(`<!doctype html>
+  // `text` rather than `html` only so the charset is spelled out: every textual
+  // response this Worker sends says `charset=utf-8`. The two safety headers are
+  // the ones a served page gets — an instance's own reference is for whoever
+  // runs it, not for a search index.
+  HttpServerResponse.text(
+    `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>handbill API</title>
@@ -44,7 +49,12 @@ const DocsLive = HttpRouter.add(
 <script>
   Scalar.createApiReference(document.getElementById("docs"), { url: "${OPENAPI_PATH}" })
 </script>
-`)
+`,
+    {
+      contentType: "text/html; charset=utf-8",
+      headers: { "x-robots-tag": "noindex, nofollow", "x-content-type-options": "nosniff" }
+    }
+  )
 )
 
 /**

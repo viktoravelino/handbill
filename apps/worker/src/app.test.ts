@@ -169,8 +169,10 @@ test("the spec is served from the contract, with no token", async () => {
 test("the docs page renders and needs no token", async () => {
   const response = await app.fetch(new Request(`https://api.${ZONE}/docs`))
   expect(response.status).toBe(200)
-  expect(response.headers.get("content-type")).toBe("text/html")
+  expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8")
   expect(response.headers.get("cache-control")).toBe("public, max-age=300")
+  expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow")
+  expect(response.headers.get("x-content-type-options")).toBe("nosniff")
 
   const page = await response.text()
   expect(page).toContain("@scalar/api-reference@1.67.0/")
