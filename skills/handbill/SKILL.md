@@ -49,7 +49,7 @@ handbill alias list                 # one line per alias: url, hash
 handbill alias remove plan          # the name stops answering; the page stays published
 ```
 
-An alias is a living name: point `plan` at the new hash after each revision and the reader's link keeps showing the latest version, while every hash link stays exactly what it was. Only use one when the user asks for a stable or readable link, and say two things when you do: **names are guessable** (a hash is unguessable; `plan` is a word anyone who knows the zone can try), and **the feature is opt-in** — a deployment without its KV binding answers every `alias` command with one sentence saying how to enable it. Report that sentence to the user; do not work around it.
+An alias is a living name: point `plan` at the new hash after each revision and the reader's link keeps showing the latest version, while every hash link stays exactly what it was. Only use one when the user asks for a stable or readable link, and say two things when you do: **names are guessable** (a hash is unguessable; `plan` is a word anyone who knows the zone can try), and **the feature is opt-in** — a deployment without its KV binding answers every `alias` command with one sentence saying how to enable it. Report that sentence to the user; do not work around it. One more thing to expect: the name works the moment `alias` prints its URL, but `alias list` can take up to a minute to show a fresh name (the deployment's key listing is eventually consistent). "No aliases set." right after a successful `alias` is that lag — trust the printed URL, do not set the name again.
 
 ## Showing the page
 
