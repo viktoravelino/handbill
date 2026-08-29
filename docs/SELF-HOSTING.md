@@ -122,20 +122,19 @@ bunx wrangler kv namespace create ALIASES
 Uncomment the `kv_namespaces` line in `wrangler.jsonc` (marked `EDIT 4`), paste in the id it printed, and `bunx wrangler deploy` again. Then:
 
 ```sh
-API=https://api.<zone>
-
-curl -s -X PUT "$API/v1/aliases/plan" -H "authorization: Bearer $TOKEN" \
-  -H 'content-type: application/json' -d '{"hash":"<hash>"}'
-# {"name":"plan","hash":"<hash>","url":"https://plan.<zone>"}
+handbill alias plan <hash>          # https://plan.<zone>
+handbill alias plan <hash> --open   # the same, then open it in the browser
 
 curl -si "https://plan.<zone>/" | head -4
 # HTTP/2 200 · cache-control: public, max-age=60
 
-curl -s "$API/v1/aliases" -H "authorization: Bearer $TOKEN"
-curl -s -X DELETE "$API/v1/aliases/plan" -H "authorization: Bearer $TOKEN"
+handbill alias list                 # https://plan.<zone>  <hash>
+handbill alias remove plan
 ```
 
-The page is *served* at the name, not redirected to the hash — the reader's address bar keeps the name. It is cached for a minute rather than a year, so re-pointing an alias is visible almost immediately; a hash page is unaffected either way. Names are one DNS label: lowercase letters, digits and inner hyphens, up to 63 characters, and neither `api` nor anything shaped like a hash. Without the binding, every `/v1/aliases` route answers `404 {"_tag":"NotFound"}` and `<name>.<zone>` serves "Nothing here".
+The same three calls by hand are `PUT` and `DELETE /v1/aliases/plan` (body `{"hash":"<hash>"}`) and `GET /v1/aliases`, with the bearer token, as the spec at `/v1/openapi.json` describes them.
+
+The page is *served* at the name, not redirected to the hash — the reader's address bar keeps the name. It is cached for a minute rather than a year, so re-pointing an alias is visible almost immediately; a hash page is unaffected either way. Names are one DNS label: lowercase letters, digits and inner hyphens, up to 63 characters, and neither `api` nor anything shaped like a hash (nor `list` or `remove`, which the CLI takes as subcommands). Without the binding, every `/v1/aliases` route answers `404 {"_tag":"NotFound"}`, `handbill alias` says "Aliases are off on this deployment", and `<name>.<zone>` serves "Nothing here".
 
 ## Scripting against it
 
@@ -161,6 +160,7 @@ The button in the README clones the repo into your account and provisions the Wo
 | `handbill` exits with `401` | Token mismatch: what is in `config.json` is not what `wrangler secret put` stored. |
 | `400 hash_mismatch` | The file changed between hashing and upload, or something rewrote the bytes in transit. Publish again. |
 | `413` | Over `MAX_BYTES`. Inline less, or raise the var. |
+| `handbill alias` says "Aliases are off on this deployment" | No `ALIASES` binding: create the namespace, uncomment `kv_namespaces`, deploy again. |
 | `<name>.<zone>` says "Nothing here" | No `ALIASES` binding, the name is not set, or it points at a hash you have unpublished. |
 | Certificate error on `https://<hash>.<zone>` | Universal SSL for the wildcard can take a few minutes after the `*` record is created. |
 | `whoami` shows the wrong account | Set `CLOUDFLARE_ACCOUNT_ID` in `.env`. |

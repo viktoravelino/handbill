@@ -1,12 +1,13 @@
 import { DateTime, Effect, Option, Schema } from "effect"
 import { Argument, Command, Flag } from "effect/unstable/cli"
-import { Hash, PageList } from "@handbill/contract"
+import { AliasName, Hash, PageList } from "@handbill/contract"
+import { Browser } from "./browser"
 import * as Client from "./client"
 import { completions } from "./completions"
 import * as Config from "./config"
 import * as Doctor from "./doctor"
 import * as Document from "./document"
-import { endpointFlag, jsonFlag } from "./flags"
+import { endpointFlag, jsonFlag, openFlag } from "./flags"
 import * as Output from "./output"
 
 /**
@@ -32,9 +33,14 @@ const connect = Effect.fn(function* (endpoint: Option.Option<string>) {
   return yield* Client.make(yield* Config.credentials(settings))
 })
 
-const decodeHash = Schema.decodeUnknownOption(Hash)
+/** An `Option` a command cannot go on without: its value, or the failure that says why. */
+const required = <A, E>(option: Option.Option<A>, failure: () => E): Effect.Effect<A, E> =>
+  Option.match(option, { onNone: () => Effect.fail(failure()), onSome: Effect.succeed })
 
-/** The hash inside a `remove` target: a bare hash, or the first label of a URL. */
+const decodeHash = Schema.decodeUnknownOption(Hash)
+const decodeName = Schema.decodeUnknownOption(AliasName)
+
+/** The hash inside a page target: a bare hash, or the first label of a URL. */
 const targetHash = (target: string): Option.Option<Hash> => {
   const bare = decodeHash(target)
   if (Option.isSome(bare)) return bare
@@ -44,6 +50,13 @@ const targetHash = (target: string): Option.Option<Hash> => {
     return Option.none()
   }
 }
+
+/**
+ * `--open`, once the result is on stdout. The browser is a second reader of the
+ * URL, never the first: stdout is still exactly one line.
+ */
+const openIf = (open: boolean, url: string) =>
+  open ? Effect.flatMap(Browser, (browser) => browser.open(url)) : Effect.void
 
 /**
  * The default command. `handbill plan.html` prints one URL and nothing else, so
@@ -57,9 +70,10 @@ const publish = Command.make(
     ),
     endpoint: endpointFlag,
     json: jsonFlag,
-    markdown: markdownFlag
+    markdown: markdownFlag,
+    open: openFlag
   },
-  handler(({ endpoint, file, json, markdown }) =>
+  handler(({ endpoint, file, json, markdown, open }) =>
     Effect.gen(function* () {
       const client = yield* connect(endpoint)
       const document = yield* Document.load({ file, markdown })
@@ -68,6 +82,7 @@ const publish = Command.make(
         payload: document.bytes
       })
       yield* json ? Output.json(result) : Output.line(result.url)
+      yield* openIf(open, result.url)
     })
   )
 ).pipe(
@@ -78,6 +93,10 @@ const publish = Command.make(
     { command: "handbill plan.html", description: "Publish a file and print its URL" },
     { command: "handbill notes.md", description: "Render markdown to a page and publish that" },
     { command: "handbill - --markdown", description: "Publish markdown from stdin" },
+    {
+      command: "handbill plan.html --open",
+      description: "Publish, then open the URL in the browser"
+    },
     { command: "handbill plan.html --json", description: "Print { hash, url, created } instead" }
   ])
 )
@@ -112,10 +131,7 @@ const remove = Command.make(
   },
   handler(({ endpoint, json, target }) =>
     Effect.gen(function* () {
-      const hash = yield* Option.match(targetHash(target), {
-        onNone: () => Effect.fail(new Output.BadTarget({ target })),
-        onSome: Effect.succeed
-      })
+      const hash = yield* required(targetHash(target), () => new Output.BadTarget({ target }))
       const client = yield* connect(endpoint)
       // The endpoint is idempotent, so unpublishing twice is not an error.
       yield* client.pages.remove({ params: { hash } })
@@ -123,6 +139,98 @@ const remove = Command.make(
     })
   )
 ).pipe(Command.withDescription("Unpublish a page. Idempotent: removing it twice is not an error."))
+
+/** `alias remove <name>`: the name stops answering; the page it pointed at stays published. */
+const aliasRemove = Command.make(
+  "remove",
+  {
+    name: Argument.string("name").pipe(Argument.withDescription("The alias to remove")),
+    endpoint: endpointFlag,
+    json: jsonFlag
+  },
+  handler(({ endpoint, json, name }) =>
+    Effect.gen(function* () {
+      const aliasName = yield* required(decodeName(name), () => new Output.BadName({ name }))
+      const client = yield* connect(endpoint)
+      // Idempotent like `remove`: a name that was never set is not an error.
+      yield* client.aliases.remove({ params: { name: aliasName } })
+      yield* json ? Output.json({ name: aliasName, removed: true }) : Output.line(aliasName)
+    })
+  )
+).pipe(
+  Command.withDescription(
+    "Remove an alias. Idempotent, and the page it pointed at stays published."
+  )
+)
+
+/** `alias list`: the column style of `list` — the URL, then what it points at. */
+const aliasList = Command.make(
+  "list",
+  { endpoint: endpointFlag, json: jsonFlag },
+  handler(({ endpoint, json }) =>
+    Effect.gen(function* () {
+      const client = yield* connect(endpoint)
+      const { aliases } = yield* client.aliases.list({})
+      if (json) return yield* Output.json({ aliases })
+      if (aliases.length === 0) return yield* Output.note("No aliases set.")
+      for (const alias of aliases) yield* Output.line(`${alias.url}  ${alias.hash}`)
+    })
+  )
+).pipe(Command.withDescription("List your aliases by name: the URL and the hash it points at."))
+
+/**
+ * `alias <name> <target>`: a living name for a page. `https://<name>.<zone>`
+ * serves whatever the name points at now, while every hash link keeps serving
+ * the bytes it always did. `list` and `remove` are subcommands here, so those
+ * two words are the one thing a name cannot be.
+ */
+const alias = Command.make(
+  "alias",
+  {
+    name: Argument.string("name").pipe(
+      Argument.withDescription("The name, one DNS label: served at https://<name>.<zone>")
+    ),
+    target: Argument.string("target").pipe(
+      Argument.withDescription("The URL of a published page, or its 12-character hash")
+    ),
+    endpoint: endpointFlag,
+    json: jsonFlag,
+    open: openFlag
+  },
+  handler(({ endpoint, json, name, open, target }) =>
+    Effect.gen(function* () {
+      const aliasName = yield* required(decodeName(name), () => new Output.BadName({ name }))
+      const hash = yield* required(targetHash(target), () => new Output.BadTarget({ target }))
+      const client = yield* connect(endpoint)
+      const result = yield* client.aliases.set({ params: { name: aliasName }, payload: { hash } })
+      yield* json ? Output.json(result) : Output.line(result.url)
+      yield* openIf(open, result.url)
+    })
+  )
+).pipe(
+  Command.withDescription(
+    "Point a name at a page: https://<name>.<zone> serves it until the name is pointed elsewhere. Names are guessable, and the deployment has to switch aliases on."
+  ),
+  Command.withExamples([
+    {
+      command: "handbill alias plan https://a3f9c1d4e2b8.example.dev",
+      description: "plan.example.dev now serves that page"
+    },
+    {
+      command: "handbill alias plan a3f9c1d4e2b8 --open",
+      description: "The same by hash, then open it"
+    },
+    {
+      command: "handbill alias list",
+      description: "Every alias: its URL and the hash it points at"
+    },
+    {
+      command: "handbill alias remove plan",
+      description: "The name stops answering; the page stays"
+    }
+  ]),
+  Command.withSubcommands([aliasRemove, aliasList])
+)
 
 const doctor = Command.make(
   "doctor",
@@ -146,4 +254,6 @@ const doctor = Command.make(
 )
 
 /** The whole CLI: publish by default, everything else as a subcommand. */
-export const handbill = publish.pipe(Command.withSubcommands([list, remove, doctor, completions]))
+export const handbill = publish.pipe(
+  Command.withSubcommands([list, remove, alias, doctor, completions])
+)

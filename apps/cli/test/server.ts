@@ -2,7 +2,7 @@ import { Clock, Context, Duration, Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 import type { Hash } from "@handbill/contract"
 import { Owner } from "@handbill/contract"
-import { AliasesMemory } from "@handbill/worker/src/aliases"
+import { AliasesDisabled, AliasesMemory } from "@handbill/worker/src/aliases"
 import { makeApp } from "@handbill/worker/src/app"
 import { AuthSecret } from "@handbill/worker/src/auth"
 import { Storage, StorageMemory } from "@handbill/worker/src/storage"
@@ -48,9 +48,9 @@ const controlledClock = (start: number) => {
  * The real Worker on `StorageMemory`, handed to the CLI as its `fetch`. The
  * round-trip tests drive `makeApp` — the same function `wrangler` calls — so
  * they exercise the Worker's own layers, routing and headers with no network
- * and no account.
+ * and no account. `aliases: false` is a deployment with no KV binding.
  */
-export const makeServer = () => {
+export const makeServer = (options: { readonly aliases?: boolean } = {}) => {
   // Built here rather than inside `makeApp` so the test can read the store
   // without going through the API. `StorageMemory` has no finalizer, so
   // closing the scope leaves the instance alive.
@@ -62,7 +62,7 @@ export const makeServer = () => {
     Layer.mergeAll(
       Layer.succeed(Storage, storage),
       AuthSecret(TOKEN),
-      AliasesMemory,
+      options.aliases === false ? AliasesDisabled : AliasesMemory,
       // `Clock` is a reference, so this only replaces the default the Worker's
       // own runtime would have used; it adds nothing to `AppServices`.
       Layer.succeed(Clock.Clock, time.clock)
@@ -82,6 +82,8 @@ export const makeServer = () => {
   return {
     /** Point the CLI's `HttpClient` at the Worker instead of the network. */
     layer: Layer.succeed(FetchHttpClient.Fetch, fetch).pipe(Layer.merge(FetchHttpClient.layer)),
+    /** What a reader would get from a hostname, for assertions about what an alias serves. */
+    fetch: (url: string) => app.fetch(new Request(url)),
     dispose: () => app.dispose(),
     /** Move the Worker's clock, so pages published after it are demonstrably newer. */
     advance: time.advance,

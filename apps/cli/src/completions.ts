@@ -20,6 +20,14 @@ const apiFlags: ReadonlyArray<Completions.FlagDescriptor> = [
   jsonDescriptor
 ]
 
+/** `--open` is on the two commands whose result is a page: publish and alias. */
+const openDescriptor: Completions.FlagDescriptor = {
+  name: "open",
+  aliases: [],
+  description: "Open the printed URL in the default browser",
+  type: { _tag: "Boolean" }
+}
+
 /** `--markdown` belongs to the root command alone: it is the only one that renders anything. */
 const publishFlags: ReadonlyArray<Completions.FlagDescriptor> = [
   ...apiFlags,
@@ -28,7 +36,8 @@ const publishFlags: ReadonlyArray<Completions.FlagDescriptor> = [
     aliases: [],
     description: "Render the input as markdown",
     type: { _tag: "Boolean" }
-  }
+  },
+  openDescriptor
 ]
 
 /**
@@ -72,6 +81,51 @@ export const descriptor: Completions.CommandDescriptor = {
         }
       ],
       subcommands: []
+    },
+    {
+      name: "alias",
+      description: "Point a name at a page",
+      flags: [...apiFlags, openDescriptor],
+      arguments: [
+        {
+          name: "name",
+          description: "The name, one DNS label",
+          required: true,
+          variadic: false,
+          type: { _tag: "String" }
+        },
+        {
+          name: "target",
+          description: "URL or hash",
+          required: true,
+          variadic: false,
+          type: { _tag: "String" }
+        }
+      ],
+      subcommands: [
+        {
+          name: "remove",
+          description: "Remove an alias",
+          flags: apiFlags,
+          arguments: [
+            {
+              name: "name",
+              description: "The alias to remove",
+              required: true,
+              variadic: false,
+              type: { _tag: "String" }
+            }
+          ],
+          subcommands: []
+        },
+        {
+          name: "list",
+          description: "List aliases by name",
+          flags: apiFlags,
+          arguments: [],
+          subcommands: []
+        }
+      ]
     },
     {
       name: "doctor",

@@ -255,7 +255,7 @@
       <thead><tr><th scope="col">Version</th><th scope="col">Theme</th><th scope="col">Ships</th><th scope="col">Exit criterion</th></tr></thead>
       <tbody>
         <tr><td><strong>0.1</strong></td><td>Print &middot; <em>shipped 2026-08-28</em></td><td>Worker (secret auth), CLI <code>publish</code>/<code>list</code>/<code>remove</code>/<code>doctor</code>, stdin, <code>--json</code>, skill, self-host docs, Deploy button, CI, npm</td><td>The maintainer&rsquo;s flow migrated; one outside self-hoster succeeds from the README alone</td></tr>
-        <tr><td><strong>0.2</strong></td><td>Words and names &middot; <em>in progress</em></td><td>Markdown &rarr; self-contained HTML in the CLI; aliases (living names) in KV; OpenAPI + docs endpoint (all three on <code>main</code>); <code>--open</code> and alias commands in the CLI; landing + docs site on <code>handbill.dev</code>. Shell completions shipped early, in 0.1</td><td>Three outside self-hosters; <code>handbill notes.md</code> works; aliases documented as opt-in and guessable</td></tr>
+        <tr><td><strong>0.2</strong></td><td>Words and names &middot; <em>in progress</em></td><td>Markdown &rarr; self-contained HTML in the CLI; aliases (living names) in KV; OpenAPI + docs endpoint; <code>--open</code> and <code>alias</code> commands in the CLI (all four on <code>main</code>); landing + docs site on <code>handbill.dev</code>. Shell completions shipped early, in 0.1</td><td>Three outside self-hosters; <code>handbill notes.md</code> works; aliases documented as opt-in and guessable</td></tr>
         <tr><td><strong>0.3</strong></td><td>Hosted</td><td>Accounts auth layer (KV), <code>handbill login</code>, per-owner index, quotas, rate limits, operator takedown, ToS/abuse page, default endpoint flips to <code>api.handbill.dev</code></td><td>A stranger publishes with no config in under two minutes; abuse controls exercised in a drill</td></tr>
         <tr><td><strong>0.4</strong></td><td>Sheets and time</td><td>Inline local assets into the HTML at publish time; <code>--ttl</code> with a sweeping cron</td><td>A page with local images publishes as one object</td></tr>
         <tr><td><strong>1.0</strong></td><td>Stable</td><td>Contract frozen, Effect on stable v4, <code>@handbill/contract</code> published, Public Suffix List entry for <code>handbill.dev</code>, encrypted pages behind an experimental flag</td><td>No breaking change for two minor versions</td></tr>
@@ -379,14 +379,12 @@ fetch(request, env)
   <h3>CLI</h3>
   <figure class="code">
     <figcaption class="code__bar"><span class="code__label">apps/cli &mdash; surface</span></figcaption>
-    <pre><code>handbill &lt;file.html | file.md | -&gt;  [--markdown] [--json] [--endpoint &lt;url&gt;]
+    <pre><code>handbill &lt;file.html | file.md | -&gt;  [--markdown] [--json] [--open] [--endpoint &lt;url&gt;]
 handbill list               [--json]
 handbill remove &lt;url|hash&gt;  [--json]
+handbill alias &lt;name&gt; &lt;url|hash&gt; [--json] [--open] | alias remove &lt;name&gt; | alias list
 handbill doctor
 handbill completions &lt;shell&gt;
-                                                        v0.2, still to ship
-handbill &lt;file&gt; --open      opens the printed URL
-handbill alias &lt;name&gt; &lt;url|hash&gt; | alias remove &lt;name&gt; | alias list
                                                         v0.3+
 handbill login              mints a key against api.handbill.dev
 handbill admin takedown &lt;hash&gt;
@@ -553,7 +551,8 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
     <li><strong>OpenAPI + <code>/docs</code> (0.2, on <code>main</code>).</strong> The spec comes from <code>HttpApiBuilder.layer(&hellip;, { openapiPath })</code>, token-free and cached five minutes. The docs page is nine lines of hand-written HTML loading a pinned Scalar from a CDN &mdash; <code>HttpApiScalar</code> would have inlined Scalar&rsquo;s 3&nbsp;MB browser build and blown the 1&nbsp;MiB gzip gate.</li>
     <li><strong>Aliases (0.2, on <code>main</code>).</strong> <code>AliasesKV</code> when the <code>ALIASES</code> binding exists, <code>AliasesDisabled</code> when it does not, chosen in <code>index.ts</code>; the handlers never ask. Names are one DNS label that is not a hash and not <code>api</code>; the page is served at the name, never redirected, with <code>max-age=60</code>. Without the binding the routes answer 404 and the docs say why the feature is off by default: names are guessable.</li>
     <li><strong>Deferred from 0.1 to 0.3</strong>, recorded on the milestone: no separate <code>Index</code> service yet (<code>list</code> walks the bucket inside <code>StorageR2</code>), <code>remove</code> does not check <code>owner</code> (one owner in secret mode), request logging left to Cloudflare.</li>
-    <li><strong>Still to ship in 0.2:</strong> <code>--open</code> and the CLI <code>alias</code> commands, <code>apps/web</code> on <code>handbill.dev</code>, the 0.2.0 release with three outside self-hosters confirmed.</li>
+    <li><strong>Alias commands and <code>--open</code> (0.2, on <code>main</code>).</strong> <code>handbill alias &lt;name&gt; &lt;url|hash&gt;</code>, <code>alias list</code>, <code>alias remove</code>; a deployment without the binding gets one sentence naming it. <code>--open</code> goes through a <code>Browser</code> service the tests replace, so stdout stays one line and no test opens a window. <code>list</code> and <code>remove</code> are subcommands, so a page cannot carry those two names.</li>
+    <li><strong>Still to ship in 0.2:</strong> <code>apps/web</code> on <code>handbill.dev</code>, the 0.2.0 release with three outside self-hosters confirmed.</li>
   </ul>
 </section>
 

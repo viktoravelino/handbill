@@ -1,7 +1,7 @@
 import { Flag } from "effect/unstable/cli"
 
 /**
- * The two flags more than one command takes. They live here rather than in
+ * The flags more than one command takes. They live here rather than in
  * `commands.ts` so `completions.ts` can use them without importing the command
  * tree that imports it back.
  */
@@ -12,5 +12,11 @@ export const endpointFlag = Flag.string("endpoint").pipe(
 
 export const jsonFlag = Flag.boolean("json").pipe(
   Flag.withDescription("Print the result as one JSON object on stdout"),
+  Flag.withDefault(false)
+)
+
+/** On the two commands whose result is a page worth looking at: publish and alias. */
+export const openFlag = Flag.boolean("open").pipe(
+  Flag.withDescription("Open the printed URL in the default browser"),
   Flag.withDefault(false)
 )
