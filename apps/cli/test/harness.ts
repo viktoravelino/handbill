@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { NodeServices } from "@effect/platform-node"
 import { Console, ConfigProvider, Effect, Exit, Layer, Stdio, Stream } from "effect"
-import { Command } from "effect/unstable/cli"
+import { CliOutput, Command } from "effect/unstable/cli"
 import type { HttpClient } from "effect/unstable/http"
 import { handbill } from "../src/commands"
 
@@ -26,8 +26,10 @@ const runCommand = Command.runWith(handbill, { version: "0.1.0-test" })
 
 /**
  * Runs the real command tree with captured output. Everything a command touches
- * — arguments, environment, standard input, HTTP — comes from a layer, so a
- * test never mutates the process.
+ * — arguments, environment, standard input, HTTP, the help formatter — comes
+ * from a layer, so a test never mutates the process and never depends on it:
+ * without the formatter the framework colours `--help` whenever stdout is a
+ * TTY, and the tests that read help text pass in CI but fail in a terminal.
  */
 export const run = async (args: ReadonlyArray<string>, options: RunOptions): Promise<Outcome> => {
   const stdout: Array<string> = []
@@ -48,6 +50,7 @@ export const run = async (args: ReadonlyArray<string>, options: RunOptions): Pro
     runCommand(args).pipe(
       Effect.provideService(Console.Console, capture),
       Effect.provide(options.http),
+      Effect.provide(CliOutput.layer(CliOutput.defaultFormatter({ colors: false }))),
       Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnvRecord(options.env ?? {}))),
       // Stdio comes first so the test's standard input wins over the process's.
       Effect.provide(stdio),
