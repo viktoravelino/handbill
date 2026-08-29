@@ -19,7 +19,7 @@ https://a3f9c1d4e2b8.yourdomain.dev
 npm i -g handbill
 ```
 
-Node ≥ 22. Two dependencies: `effect` and `marked`. Then point it at a deployment — yours (below) — with `~/.config/handbill/config.json`:
+Node ≥ 22. Two dependencies: `effect` and `marked`. Every night `main` is published as `handbill@nightly` if you want what has merged but not shipped. Then point it at a deployment — yours (below) — with `~/.config/handbill/config.json`:
 
 ```json
 { "endpoint": "https://api.yourdomain.dev", "token": "…" }
@@ -60,7 +60,9 @@ Errors are one sentence on stderr and a non-zero exit; stdout is only ever the r
 
 `hash = hex(sha256(bytes))[0:12]` — the first 12 hex characters of the digest. The client computes it to form the URL; the server recomputes it and rejects a mismatch. Publishing the same bytes twice returns the same URL and stores nothing new.
 
-The page is served from `https://<hash>.<zone>` — its own origin — with `text/html; charset=utf-8`, `X-Robots-Tag: noindex, nofollow`, and `Cache-Control: public, max-age=31536000, immutable`. Every path on that hostname serves the same document. The API lives at `api.<zone>` under `/v1` and needs the bearer token for everything except `/v1/health`.
+The page is served from `https://<hash>.<zone>` — its own origin — with `text/html; charset=utf-8`, `X-Robots-Tag: noindex, nofollow`, and `Cache-Control: public, max-age=31536000, immutable`. Every path on that hostname serves the same document. The API lives at `api.<zone>` under `/v1` and needs the bearer token for everything except `/v1/health`, the generated spec at `/v1/openapi.json`, and the reference that renders it at `/docs`.
+
+Optionally, a **living name**: `plan.<zone>` serves whatever hash you currently point it at (cached for a minute, not a year), while every hash link ever handed out keeps working. Names are guessable by construction, so the feature is off until you bind a KV namespace — [`docs/SELF-HOSTING.md`](docs/SELF-HOSTING.md#living-names-optional) has the trade-off and the setup.
 
 One self-contained HTML file per link, 5 MB by default. No multi-file sites, no assets, no transforms on the server — a `.md` file is rendered to a page by the CLI, with a built-in light/dark stylesheet, before anything is uploaded.
 
@@ -92,7 +94,7 @@ Effect 4 end to end, pinned to an exact release candidate. Conventions and invar
 ## Roadmap
 
 - **0.1** — self-host kit: Worker, CLI, skill (released)
-- **0.2** — Markdown input rendered in the CLI, named aliases (living links) on KV, OpenAPI, docs site
+- **0.2** — markdown input rendered in the CLI, living names on KV, OpenAPI + `/docs` (all on `main`); `--open`, alias commands in the CLI, and the docs site still to come
 - **0.3** — hosted mode: the same Worker with accounts instead of a single token
 - later — inline local assets at publish time, expiring pages, encrypted pages
 
