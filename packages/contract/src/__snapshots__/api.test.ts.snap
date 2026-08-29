@@ -4,6 +4,56 @@ exports[`spec matches the published spec 1`] = `
 {
   "components": {
     "schemas": {
+      "Alias": {
+        "additionalProperties": false,
+        "properties": {
+          "hash": {
+            "pattern": "^[0-9a-f]{12}$",
+            "type": "string",
+          },
+          "name": {
+            "pattern": "^(?!api$)(?![0-9a-f]{12}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+            "type": "string",
+          },
+          "url": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "name",
+          "hash",
+          "url",
+        ],
+        "type": "object",
+      },
+      "AliasList": {
+        "additionalProperties": false,
+        "properties": {
+          "aliases": {
+            "items": {
+              "$ref": "#/components/schemas/Alias",
+            },
+            "type": "array",
+          },
+        },
+        "required": [
+          "aliases",
+        ],
+        "type": "object",
+      },
+      "AliasTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "hash": {
+            "pattern": "^[0-9a-f]{12}$",
+            "type": "string",
+          },
+        },
+        "required": [
+          "hash",
+        ],
+        "type": "object",
+      },
       "HashMismatchEncoded": {
         "additionalProperties": false,
         "properties": {
@@ -45,6 +95,21 @@ exports[`spec matches the published spec 1`] = `
           "ok",
           "mode",
           "zone",
+        ],
+        "type": "object",
+      },
+      "NotFoundEncoded": {
+        "additionalProperties": false,
+        "properties": {
+          "_tag": {
+            "enum": [
+              "NotFound",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "_tag",
         ],
         "type": "object",
       },
@@ -164,6 +229,165 @@ exports[`spec matches the published spec 1`] = `
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/aliases": {
+      "get": {
+        "operationId": "aliases.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AliasList",
+                },
+              },
+            },
+            "description": "AliasList",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded",
+                },
+              },
+            },
+            "description": "Unauthorized",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundEncoded",
+                },
+              },
+            },
+            "description": "NotFound",
+          },
+        },
+        "security": [
+          {
+            "bearer": [],
+          },
+        ],
+        "tags": [
+          "Aliases",
+        ],
+      },
+    },
+    "/v1/aliases/{name}": {
+      "delete": {
+        "operationId": "aliases.remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "pattern": "^(?!api$)(?![0-9a-f]{12}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded",
+                },
+              },
+            },
+            "description": "Unauthorized",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundEncoded",
+                },
+              },
+            },
+            "description": "NotFound",
+          },
+        },
+        "security": [
+          {
+            "bearer": [],
+          },
+        ],
+        "tags": [
+          "Aliases",
+        ],
+      },
+      "put": {
+        "operationId": "aliases.set",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "pattern": "^(?!api$)(?![0-9a-f]{12}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AliasTarget",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alias",
+                },
+              },
+            },
+            "description": "Alias",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded",
+                },
+              },
+            },
+            "description": "Unauthorized",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundEncoded",
+                },
+              },
+            },
+            "description": "NotFound",
+          },
+        },
+        "security": [
+          {
+            "bearer": [],
+          },
+        ],
+        "tags": [
+          "Aliases",
+        ],
+      },
+    },
     "/v1/health": {
       "get": {
         "operationId": "meta.health",
@@ -342,6 +566,10 @@ exports[`spec matches the published spec 1`] = `
     {
       "description": "Publish, list and unpublish documents.",
       "name": "Pages",
+    },
+    {
+      "description": "Point a readable name at a hash. Absent unless the deployment enables it.",
+      "name": "Aliases",
     },
     {
       "description": "Endpoints that need no token.",

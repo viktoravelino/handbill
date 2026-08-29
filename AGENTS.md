@@ -24,7 +24,7 @@ Hand someone a page: `handbill plan.html` → `https://<sha256[0:12]>.<zone>`. S
 
 ```
 packages/contract   HttpApi + Schema — the single source of truth for the API
-apps/worker         Effect on Workers; one file per service — storage / auth (+ aliases in 0.2, index in 0.3)
+apps/worker         Effect on Workers; one file per service — storage / auth / aliases (+ index in 0.3)
 apps/cli            effect/unstable/cli; npm package "handbill"; bundled to dist/cli.js
 apps/web            Astro site (0.2)
 skills/handbill     the agent skill (SKILL.md)
@@ -36,7 +36,7 @@ docs/               PRD, SELF-HOSTING.md, RELEASING.md, the original brainstorm
 - `hash = hex(sha256(bytes)).slice(0, 12)`; client computes it for the URL, server recomputes and rejects a mismatch (400).
 - Served pages: `Content-Type: text/html; charset=utf-8`, `X-Robots-Tag: noindex, nofollow`, `Cache-Control: public, max-age=31536000, immutable`. Every path on a hash hostname serves the same document.
 - Every stored object carries `customMetadata: { owner, title, publishedAt }` from day one — `owner` is what makes hosted mode (0.3) additive.
-- Swappable layers: `StorageR2` / `StorageMemory` today, `AuthSecret` / `AuthAccounts` and `IndexBucket` / `IndexKV` when 0.3 adds accounts. Tests run on the memory layers; no Miniflare, no network.
+- Swappable layers: `StorageR2` / `StorageMemory` and `AliasesKV` / `AliasesDisabled` today, `AuthSecret` / `AuthAccounts` and `IndexBucket` / `IndexKV` when 0.3 adds accounts. A binding that may be missing picks its layer in `index.ts`; the handlers never ask whether a feature is on. Tests run on the memory layers; no Miniflare, no network.
 - CLI stdout discipline: success prints exactly one line (the URL) or the `--json` object; everything else goes to stderr; non-zero exit on failure.
 - Errors are `Schema.TaggedError`s with status annotations in the contract: `HashMismatch` 400, `Unauthorized` 401, `NotFound` 404, `TooLarge` 413.
 
