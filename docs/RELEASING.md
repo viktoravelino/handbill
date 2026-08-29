@@ -36,11 +36,11 @@ scripts/release.sh bump 0.1.2   # branch, set the version, run the checks, open 
 scripts/release.sh tag          # tag main as v0.1.2 and push it
 ```
 
-`bump` is the only thing that edits a version: `apps/cli/package.json` is the source of truth (the CLI's `--version` reads it at build time) and the script mirrors it into the `apps/cli` entry of `bun.lock`, which bun does not rewrite on its own. `tag` refuses to run off `main`, with a dirty tree, behind origin, if the tag exists, or if that version is already on npm.
+`bump` is the only thing that edits a version: `apps/cli/package.json` is the source of truth (the CLI's `--version` reads it at build time) and the script mirrors it into the `apps/cli` entry of `bun.lock`, which bun does not rewrite on its own. `tag` refuses to run off `main`, with a dirty tree, behind origin, if the tag exists, or if that version is already on npm. `DRY_RUN=1` in front of either command runs the checks and the build but prints the branch, commit, push, PR and tag steps instead of doing them, and leaves the tree as it found it.
 
 The `Release` workflow then runs: `scripts/release-version.sh` (the tag-vs-version guard, and the dist-tag), typecheck, lint, test, build, `npm publish` via OIDC, GitHub release with generated notes.
 
-The workflow refuses a tag whose version does not match `apps/cli/package.json`, and skips the publish step if that version is already on npm. A prerelease version (anything with a `-`, such as `0.1.1-rc.0`) is published under the `next` dist-tag and its GitHub release is marked as a prerelease, so `latest` and plain `npx handbill` are untouched — use one to rehearse the pipeline: `npx handbill@next --version`.
+The workflow refuses a tag whose version does not match `apps/cli/package.json`, and skips the publish step if that version is already on npm. A prerelease version (anything with a `-`, such as `0.2.0-rc.0`) is published under the `next` dist-tag and its GitHub release is marked as a prerelease, so `latest` and plain `npx handbill` are untouched. To rehearse the pipeline without a version at all, use the nightly dry run below.
 
 ## Nightly
 

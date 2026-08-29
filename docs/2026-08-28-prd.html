@@ -203,6 +203,7 @@
     <li><a href="#repo">Repository</a></li>
     <li><a href="#build">Implementation plan &middot; v0.1</a></li>
     <li><a href="#later">Implementation outline &middot; v0.2 &ndash; v1.0</a></li>
+    <li><a href="#status">Status &middot; what shipped, what changed</a></li>
     <li><a href="#risks">Risks</a></li>
     <li><a href="#open">Open questions</a></li>
   </ol>
@@ -253,8 +254,8 @@
       <caption>Roadmap</caption>
       <thead><tr><th scope="col">Version</th><th scope="col">Theme</th><th scope="col">Ships</th><th scope="col">Exit criterion</th></tr></thead>
       <tbody>
-        <tr><td><strong>0.1</strong></td><td>Print</td><td>Worker (secret auth), CLI <code>publish</code>/<code>list</code>/<code>remove</code>/<code>doctor</code>, stdin, <code>--json</code>, skill, self-host docs, Deploy button, CI, npm</td><td>The maintainer&rsquo;s flow migrated; one outside self-hoster succeeds from the README alone</td></tr>
-        <tr><td><strong>0.2</strong></td><td>Words and names</td><td>Markdown &rarr; self-contained HTML in the CLI; aliases (living names) in KV; <code>--open</code>; shell completions; OpenAPI + docs endpoint; landing + docs site on <code>handbill.dev</code></td><td>Three outside self-hosters; <code>handbill notes.md</code> works; aliases documented as opt-in and guessable</td></tr>
+        <tr><td><strong>0.1</strong></td><td>Print &middot; <em>shipped 2026-08-28</em></td><td>Worker (secret auth), CLI <code>publish</code>/<code>list</code>/<code>remove</code>/<code>doctor</code>, stdin, <code>--json</code>, skill, self-host docs, Deploy button, CI, npm</td><td>The maintainer&rsquo;s flow migrated; one outside self-hoster succeeds from the README alone</td></tr>
+        <tr><td><strong>0.2</strong></td><td>Words and names &middot; <em>in progress</em></td><td>Markdown &rarr; self-contained HTML in the CLI; aliases (living names) in KV; OpenAPI + docs endpoint (all three on <code>main</code>); <code>--open</code> and alias commands in the CLI; landing + docs site on <code>handbill.dev</code>. Shell completions shipped early, in 0.1</td><td>Three outside self-hosters; <code>handbill notes.md</code> works; aliases documented as opt-in and guessable</td></tr>
         <tr><td><strong>0.3</strong></td><td>Hosted</td><td>Accounts auth layer (KV), <code>handbill login</code>, per-owner index, quotas, rate limits, operator takedown, ToS/abuse page, default endpoint flips to <code>api.handbill.dev</code></td><td>A stranger publishes with no config in under two minutes; abuse controls exercised in a drill</td></tr>
         <tr><td><strong>0.4</strong></td><td>Sheets and time</td><td>Inline local assets into the HTML at publish time; <code>--ttl</code> with a sweeping cron</td><td>A page with local images publishes as one object</td></tr>
         <tr><td><strong>1.0</strong></td><td>Stable</td><td>Contract frozen, Effect on stable v4, <code>@handbill/contract</code> published, Public Suffix List entry for <code>handbill.dev</code>, encrypted pages behind an experimental flag</td><td>No breaking change for two minor versions</td></tr>
@@ -338,7 +339,7 @@
     <li><b>Effect <code>4.0.0-rc</code>, pinned exact.</b> v3 is feature-frozen and v4 is at release candidate with a unified version across the ecosystem. Everything we use lives in <code>effect/unstable/httpapi</code>, <code>effect/unstable/http</code>, and <code>effect/unstable/cli</code>. The <code>unstable</code> path means minor-version API churn until stable; pinning and a small surface make that a one-afternoon migration when it comes.</li>
     <li><b>Worker = <code>HttpRouter.toWebHandler(appLayer)</code>.</b> The Workers <code>fetch</code> handler classifies the hostname, then hands API requests to the Effect web handler and page requests to a small Effect that reads storage. No framework besides Effect.</li>
     <li><b>Contract is a package.</b> <code>packages/contract</code> exports the <code>HttpApi</code> definition and schemas. The Worker implements it with <code>HttpApiBuilder</code>; the CLI consumes it with <code>HttpApiClient.make</code>; <code>OpenApi.fromApi</code> generates the spec. Nobody hand-writes a fetch or a status code.</li>
-    <li><b>CLI = <code>effect/unstable/cli</code> on <code>@effect/platform-node</code>.</b> Runs under Node &ge;&nbsp;22 and bun. Bundled with <code>bun build --target=node</code> into one <code>dist/cli.js</code>; the published package has one runtime dependency (<code>effect</code>) and one file. Help, completions, and prompts come free.</li>
+    <li><b>CLI = <code>effect/unstable/cli</code> on <code>@effect/platform-node</code>.</b> Runs under Node &ge;&nbsp;22 and bun. Bundled with <code>bun build --target=node</code> into one <code>dist/cli.js</code>; the published package has two runtime dependencies (<code>effect</code>, and <code>marked</code> since 0.2 rendered markdown) and one file. Help, completions, and prompts come free.</li>
     <li><b>Web = Astro + Starlight, static, on Workers static assets.</b> Landing and docs only, from v0.2. A hosted-mode dashboard (v0.3) starts as an Astro page with one island; if it ever needs routing and auth state, TanStack Start. Not decided until it hurts.</li>
     <li><b>bun workspaces, oxlint + oxfmt, bun test.</b> One package manager, one lint/format tool, no config sprawl.</li>
   </ol>
@@ -378,13 +379,13 @@ fetch(request, env)
   <h3>CLI</h3>
   <figure class="code">
     <figcaption class="code__bar"><span class="code__label">apps/cli &mdash; surface</span></figcaption>
-    <pre><code>handbill &lt;file.html | -&gt;  [--open] [--json] [--endpoint &lt;url&gt;]
+    <pre><code>handbill &lt;file.html | file.md | -&gt;  [--markdown] [--json] [--endpoint &lt;url&gt;]
 handbill list               [--json]
 handbill remove &lt;url|hash&gt;  [--json]
 handbill doctor
 handbill completions &lt;shell&gt;
-                                                        v0.2+
-handbill &lt;file.md&gt;          rendered to HTML client-side
+                                                        v0.2, still to ship
+handbill &lt;file&gt; --open      opens the printed URL
 handbill alias &lt;name&gt; &lt;url|hash&gt; | alias remove &lt;name&gt; | alias list
                                                         v0.3+
 handbill login              mints a key against api.handbill.dev
@@ -432,24 +433,30 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
   <figure class="code">
     <figcaption class="code__bar"><span class="code__label">~/projects/handbill</span></figcaption>
     <pre><code>handbill/
-  README.md                       pitch, 30-second demo, Deploy button, self-host in 5 steps, "why not tot"
-  LICENSE                         MIT
-  SECURITY.md                     threat model in three sentences + contact
+  README.md                       pitch, Deploy button, self-host in 5 steps, use, how it works
+  LICENSE  SECURITY.md  AGENTS.md  MIT; threat model + contact; conventions for agents and humans
   package.json                    bun workspaces: packages/*, apps/*
   tsconfig.base.json  .oxlintrc.json  .oxfmtrc.json
   packages/
-    contract/                     HttpApi + Schema: Hash, Page, errors; OpenAPI generation
+    contract/src/                 api.ts (HttpApi: pages, aliases, meta), schemas.ts, errors.ts; spec snapshot test
   apps/
-    worker/                       Effect on Workers; wrangler.jsonc; StorageR2, AuthSecret, ...
-      src/{index,api,pages,services}.ts   src/*.test.ts
+    worker/                       Effect on Workers; wrangler.jsonc; 750-line source budget
+      src/index.ts                fetch handler; picks layers from the bindings that exist
+      src/app.ts  api.ts  pages.ts   router + OpenAPI/docs routes; handlers; host classes and page/alias serving
+      src/config.ts  storage.ts  auth.ts  aliases.ts  hash.ts   one file per service, R2/KV + memory layers
+      scripts/size.ts             source lines and bundle gzip, the CI size job
     cli/                          effect/unstable/cli; npm "handbill"; bin dist/cli.js
-      src/{main,commands,config,client}.ts test/
-    web/                          Astro + Starlight (v0.2)
+      src/cli.ts  commands.ts  flags.ts  config.ts  client.ts  doctor.ts  completions.ts  output.ts  hash.ts
+      src/document.ts  markdown.ts  stylesheet.ts   what gets uploaded; markdown &rarr; one page
+      test/                       harness (everything from layers), in-process server, one round-trip per command
+    web/                          Astro + Starlight (v0.2, not started)
   skills/handbill/SKILL.md        the agent skill
-  docs/                           this PRD, SELF-HOSTING.md, ADRs, release notes
-  .github/workflows/ci.yml        typecheck, lint, test, bundle-size check; tag &rarr; npm publish --provenance</code></pre>
+  scripts/                        release.sh (bump | tag), release-version.sh (tag guard or nightly version)
+  docs/                           this PRD, SELF-HOSTING.md, RELEASING.md, the original brainstorm
+  .github/workflows/ci.yml        typecheck, lint, test, size
+  .github/workflows/release.yml   tag &rarr; npm publish via OIDC + GitHub release; nightly at 05:00 UTC</code></pre>
   </figure>
-  <p>Nothing is copied from <code>publish-plan</code>. The contract is re-derived from its documented behaviour so the two deployments stay compatible; the code is new.</p>
+  <p>As built. Nothing is copied from <code>publish-plan</code>. The contract is re-derived from its documented behaviour so the two deployments stay compatible; the code is new.</p>
 </section>
 
 <section id="build">
@@ -533,6 +540,23 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
   </div>
 </section>
 
+<section id="status">
+  <h2>Status &middot; what shipped, what changed</h2>
+  <p>As of 2026-08-29. Where the build departed from the plan above, the departure and its reason are here so the plan stays readable as a plan.</p>
+  <ul>
+    <li><strong>0.1 shipped 2026-08-28</strong> as <code>handbill@0.1.0</code> and <code>0.1.1</code>; the maintainer&rsquo;s flow is migrated and <code>publish-plan</code> retired. The &ldquo;one outside self-hoster&rdquo; exit criterion is not yet confirmed.</li>
+    <li><strong>Publishing is npm trusted publishing (OIDC) from <code>release.yml</code></strong>, with provenance; no npm token anywhere. <code>scripts/release.sh bump | tag</code> is the two-move release, and it has a real dry run.</li>
+    <li><strong>Nightlies, not in the plan.</strong> Every night at 05:00 UTC, and on demand, <code>main</code> is published under the <code>nightly</code> dist-tag as <code>&lt;next patch&gt;-nightly.&lt;UTC date-time&gt;.g&lt;sha&gt;</code>, skipped when <code>main</code> has not moved; <code>latest</code> and <code>next</code> are never touched. A merged feature is installable the next morning instead of at the next release.</li>
+    <li><strong>Worker budget is 750 source lines</strong>, not the &ldquo;~400&rdquo; first written here: tests excluded, enforced by the CI <code>size</code> job, and <code>services.ts</code> split into <code>config</code> / <code>storage</code> / <code>auth</code> / <code>aliases</code>. 738 of 750 used after aliases.</li>
+    <li><strong>Shell completions shipped in 0.1</strong> (M4), a version early. The descriptor is written by hand because the framework keeps its conversion internal; a test pins it to the real command tree.</li>
+    <li><strong>Markdown (0.2, on <code>main</code>).</strong> Parser is <code>marked</code>, chosen on bundle size (57&nbsp;KB, no transitive dependencies, versus 195&nbsp;KB / 209&nbsp;KB for the alternatives) and kept as a real dependency rather than inlined. Title from the first H1 with inline markup resolved, else the filename; <code>--markdown</code> is how stdin opts in. Raw HTML in the source passes through unchanged &mdash; right for a self-hoster publishing to their own zone, to be revisited when hosted mode serves strangers (recorded on the 0.3 milestone).</li>
+    <li><strong>OpenAPI + <code>/docs</code> (0.2, on <code>main</code>).</strong> The spec comes from <code>HttpApiBuilder.layer(&hellip;, { openapiPath })</code>, token-free and cached five minutes. The docs page is nine lines of hand-written HTML loading a pinned Scalar from a CDN &mdash; <code>HttpApiScalar</code> would have inlined Scalar&rsquo;s 3&nbsp;MB browser build and blown the 1&nbsp;MiB gzip gate.</li>
+    <li><strong>Aliases (0.2, on <code>main</code>).</strong> <code>AliasesKV</code> when the <code>ALIASES</code> binding exists, <code>AliasesDisabled</code> when it does not, chosen in <code>index.ts</code>; the handlers never ask. Names are one DNS label that is not a hash and not <code>api</code>; the page is served at the name, never redirected, with <code>max-age=60</code>. Without the binding the routes answer 404 and the docs say why the feature is off by default: names are guessable.</li>
+    <li><strong>Deferred from 0.1 to 0.3</strong>, recorded on the milestone: no separate <code>Index</code> service yet (<code>list</code> walks the bucket inside <code>StorageR2</code>), <code>remove</code> does not check <code>owner</code> (one owner in secret mode), request logging left to Cloudflare.</li>
+    <li><strong>Still to ship in 0.2:</strong> <code>--open</code> and the CLI <code>alias</code> commands, <code>apps/web</code> on <code>handbill.dev</code>, the 0.2.0 release with three outside self-hosters confirmed.</li>
+  </ul>
+</section>
+
 <section id="risks">
   <h2>Risks</h2>
   <ul class="flags">
@@ -549,15 +573,16 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
   <h2>Open questions</h2>
   <ul>
     <li>Hosted identical-bytes rule: first-owner-wins or owner-salted hash? (Decide at 0.3.)</li>
-    <li>Should <code>@handbill/contract</code> be public from 0.2 so people can write clients, or wait for the 1.0 freeze? Leaning 1.0.</li>
-    <li>Markdown parser choice at 0.2 (size vs CommonMark fidelity).</li>
+    <li>Should <code>@handbill/contract</code> be public from 0.2 so people can write clients, or wait for the 1.0 freeze? Leaning 1.0; a self-hoster can already generate a client from <code>/v1/openapi.json</code>, which weakens the case for 0.2.</li>
+    <li><s>Markdown parser choice at 0.2 (size vs CommonMark fidelity).</s> Decided 2026-08-29: <code>marked</code>, on size &mdash; see Status.</li>
+    <li>Raw HTML inside markdown: passed through today. Sanitize, keep, or only document it once hosted mode serves other people&rsquo;s pages? (Decide at 0.3.)</li>
     <li>Does the hosted key-minting page justify a real app framework, or is one Astro island enough? Decide when building 0.3, not before.</li>
   </ul>
   <p class="note">Assumptions: the name is <code>handbill</code> and the domain is bought under a separate Cloudflare account; the existing API contract is kept byte-compatible; Cloudflare is the only target; there is no hosted tier before 0.3.</p>
 </section>
 
 <footer>
-  <p>PRD &middot; 2026-08-28 &middot; <code>~/projects/handbill/docs/2026-08-28-prd.html</code>. Effect versions verified against npm the same day (<code>effect@rc</code> = 4.0.0-rc.112; v3 feature-frozen).</p>
+  <p>PRD &middot; 2026-08-28 &middot; <code>~/projects/handbill/docs/2026-08-28-prd.html</code>. Effect versions verified against npm the same day (<code>effect@rc</code> = 4.0.0-rc.112; v3 feature-frozen). Updated 2026-08-29 with the Status section, the decisions taken, and the repository as built.</p>
 </footer>
 
 </div>
