@@ -20,7 +20,7 @@ const apiFlags: ReadonlyArray<Completions.FlagDescriptor> = [
   jsonDescriptor
 ]
 
-/** `--open` is on the two commands whose result is a page: publish and alias. */
+/** `--open` is on the commands whose result is a page: publish, update and alias. */
 const openDescriptor: Completions.FlagDescriptor = {
   name: "open",
   aliases: [],
@@ -28,8 +28,8 @@ const openDescriptor: Completions.FlagDescriptor = {
   type: { _tag: "Boolean" }
 }
 
-/** `--markdown` belongs to the root command alone: it is the only one that renders anything. */
-const publishFlags: ReadonlyArray<Completions.FlagDescriptor> = [
+/** `--markdown` belongs to the two commands that take a document: the root and `update`. */
+const documentFlags: ReadonlyArray<Completions.FlagDescriptor> = [
   ...apiFlags,
   {
     name: "markdown",
@@ -49,7 +49,7 @@ const publishFlags: ReadonlyArray<Completions.FlagDescriptor> = [
 export const descriptor: Completions.CommandDescriptor = {
   name: "handbill",
   description: "Publish one self-contained HTML or markdown file at an unguessable, immutable URL",
-  flags: publishFlags,
+  flags: documentFlags,
   arguments: [
     {
       name: "file",
@@ -60,6 +60,28 @@ export const descriptor: Completions.CommandDescriptor = {
     }
   ],
   subcommands: [
+    {
+      name: "update",
+      description: "Republish a page, moving its names and dropping the old hash",
+      flags: documentFlags,
+      arguments: [
+        {
+          name: "target",
+          description: "URL or hash of the page being replaced",
+          required: true,
+          variadic: false,
+          type: { _tag: "String" }
+        },
+        {
+          name: "file",
+          description: "HTML or markdown file to publish in its place, or - to read stdin",
+          required: true,
+          variadic: false,
+          type: { _tag: "Path", pathType: "file" }
+        }
+      ],
+      subcommands: []
+    },
     {
       name: "list",
       description: "List published pages, newest first",
