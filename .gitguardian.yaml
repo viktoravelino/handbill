@@ -1,0 +1,5 @@
+secret:
+  ignored_matches:
+  - match: 13b992e035ee970b874c37ab0d1710e25abbde2d58a71c2d61f2ad97e8eb8c03
+    name: Cloudflare Web Analytics beacon token (public by design) - apps/web/astro.config.ts
+version: 2
