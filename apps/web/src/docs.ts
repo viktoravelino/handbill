@@ -1,4 +1,11 @@
 /**
+ * What the site is, in one sentence: Starlight's meta description and the
+ * blockquote /llms.txt opens with, from one place so the two cannot disagree.
+ */
+export const summary =
+  "Hand someone a page: one self-contained HTML file, or a markdown file, at an unguessable, immutable URL on a domain you own."
+
+/**
  * The docs section: one page per markdown file the repository already has, so
  * the site and GitHub cannot disagree. `path` is the file, relative to the
  * repository root; `slug` is where it is served, `/docs/<slug>/`. Two of the
