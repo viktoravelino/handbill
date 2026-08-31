@@ -1,6 +1,7 @@
 import { unified } from "@astrojs/markdown-remark"
 import starlight from "@astrojs/starlight"
 import { defineConfig } from "astro/config"
+import { summary } from "./src/docs"
 import { repoDocs } from "./src/remark"
 
 /**
@@ -16,8 +17,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "handbill",
-      description:
-        "Hand someone a page: one self-contained HTML file, or a markdown file, at an unguessable, immutable URL on a domain you own.",
+      description: summary,
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/viktoravelino/handbill" },
         { icon: "npm", label: "npm", href: "https://www.npmjs.com/package/handbill" }
