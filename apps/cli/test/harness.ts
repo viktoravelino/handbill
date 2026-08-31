@@ -7,6 +7,7 @@ import { CliOutput, Command } from "effect/unstable/cli"
 import type { HttpClient } from "effect/unstable/http"
 import { Browser } from "../src/browser"
 import { handbill } from "../src/commands"
+import { layer as qrLayer } from "../src/qr"
 
 export interface Outcome {
   /** Everything the command wrote to stdout, one entry per line. */
@@ -23,6 +24,8 @@ export interface RunOptions {
   readonly http: Layer.Layer<HttpClient.HttpClient>
   readonly env?: Record<string, string | undefined>
   readonly stdin?: string
+  /** Whether stderr looks like a terminal to `--qr`; a pipe when false. Defaults to a terminal. */
+  readonly tty?: boolean
 }
 
 const runCommand = Command.runWith(handbill, { version: "0.1.0-test" })
@@ -60,6 +63,9 @@ export const run = async (args: ReadonlyArray<string>, options: RunOptions): Pro
       Effect.provideService(Console.Console, capture),
       Effect.provide(options.http),
       Effect.provide(browser),
+      // stderr is a terminal unless the test says otherwise, so `--qr` renders
+      // and the capture above sees the block a user would.
+      Effect.provide(qrLayer({ tty: options.tty ?? true })),
       Effect.provide(CliOutput.layer(CliOutput.defaultFormatter({ colors: false }))),
       Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnvRecord(options.env ?? {}))),
       // Stdio comes first so the test's standard input wins over the process's.

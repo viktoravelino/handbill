@@ -28,6 +28,14 @@ const openDescriptor: Completions.FlagDescriptor = {
   type: { _tag: "Boolean" }
 }
 
+/** `--qr` is on publish and `alias`, the two commands that print a shareable URL. */
+const qrDescriptor: Completions.FlagDescriptor = {
+  name: "qr",
+  aliases: [],
+  description: "Also print a scannable QR code for the URL to stderr",
+  type: { _tag: "Boolean" }
+}
+
 /** `--markdown` belongs to the two commands that take a document: the root and `update`. */
 const documentFlags: ReadonlyArray<Completions.FlagDescriptor> = [
   ...apiFlags,
@@ -49,7 +57,7 @@ const documentFlags: ReadonlyArray<Completions.FlagDescriptor> = [
 export const descriptor: Completions.CommandDescriptor = {
   name: "handbill",
   description: "Publish one self-contained HTML or markdown file at an unguessable, immutable URL",
-  flags: documentFlags,
+  flags: [...documentFlags, qrDescriptor],
   arguments: [
     {
       name: "file",
@@ -107,7 +115,7 @@ export const descriptor: Completions.CommandDescriptor = {
     {
       name: "alias",
       description: "Point a name at a page",
-      flags: [...apiFlags, openDescriptor],
+      flags: [...apiFlags, openDescriptor, qrDescriptor],
       arguments: [
         {
           name: "name",

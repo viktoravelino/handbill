@@ -7,8 +7,9 @@ import { completions } from "./completions"
 import * as Config from "./config"
 import * as Doctor from "./doctor"
 import * as Document from "./document"
-import { endpointFlag, jsonFlag, markdownFlag, openFlag } from "./flags"
+import { endpointFlag, jsonFlag, markdownFlag, openFlag, qrFlag } from "./flags"
 import * as Output from "./output"
+import { Qr } from "./qr"
 
 /**
  * Every command reports its own failures, so stdout only ever carries a result
@@ -53,6 +54,13 @@ const openIf = (open: boolean, url: string) =>
   open ? Effect.flatMap(Browser, (browser) => browser.open(url)) : Effect.void
 
 /**
+ * `--qr`, once the result is on stdout: the code goes to stderr, so a pipe or a
+ * `--json` consumer never sees it, and only when stderr is a terminal at all.
+ */
+const qrIf = (qr: boolean, url: string) =>
+  qr ? Effect.flatMap(Qr, (service) => service.print(url)) : Effect.void
+
+/**
  * The default command. `handbill plan.html` prints one URL and nothing else, so
  * an agent's last line is the deliverable.
  */
@@ -65,9 +73,10 @@ const publish = Command.make(
     endpoint: endpointFlag,
     json: jsonFlag,
     markdown: markdownFlag,
-    open: openFlag
+    open: openFlag,
+    qr: qrFlag
   },
-  handler(({ endpoint, file, json, markdown, open }) =>
+  handler(({ endpoint, file, json, markdown, open, qr }) =>
     Effect.gen(function* () {
       const client = yield* connect(endpoint)
       const document = yield* Document.load({ file, markdown })
@@ -76,6 +85,7 @@ const publish = Command.make(
         payload: document.bytes
       })
       yield* json ? Output.json(result) : Output.line(result.url)
+      yield* qrIf(qr, result.url)
       yield* openIf(open, result.url)
     })
   )
@@ -90,6 +100,10 @@ const publish = Command.make(
     {
       command: "handbill plan.html --open",
       description: "Publish, then open the URL in the browser"
+    },
+    {
+      command: "handbill plan.html --qr",
+      description: "Publish, and print a scannable code for the URL to stderr"
     },
     { command: "handbill plan.html --json", description: "Print { hash, url, created } instead" }
   ])
@@ -290,15 +304,17 @@ const alias = Command.make(
     ),
     endpoint: endpointFlag,
     json: jsonFlag,
-    open: openFlag
+    open: openFlag,
+    qr: qrFlag
   },
-  handler(({ endpoint, json, name, open, target }) =>
+  handler(({ endpoint, json, name, open, qr, target }) =>
     Effect.gen(function* () {
       const aliasName = yield* required(decodeName(name), () => new Output.BadName({ name }))
       const hash = yield* required(targetHash(target), () => new Output.BadTarget({ target }))
       const client = yield* connect(endpoint)
       const result = yield* client.aliases.set({ params: { name: aliasName }, payload: { hash } })
       yield* json ? Output.json(result) : Output.line(result.url)
+      yield* qrIf(qr, result.url)
       yield* openIf(open, result.url)
     })
   )
