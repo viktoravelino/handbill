@@ -96,6 +96,11 @@ export const makeServer = (options: { readonly aliases?: boolean } = {}) => {
     advance: time.advance,
     /** The API calls made so far, method and path, in order. */
     requests: (): ReadonlyArray<string> => [...requests],
+    /**
+     * The CLI-facing handler itself, so a test can wrap it and break one call.
+     * The rotation `update` performs is only interesting when it is interrupted.
+     */
+    transport: (request: Request) => fetch(request),
     /** What the store holds, for assertions that do not go through the API. */
     hashes: (): ReadonlyArray<Hash> => Effect.runSync(storage.list(SELF)).map((meta) => meta.hash)
   }

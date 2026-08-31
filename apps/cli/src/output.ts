@@ -20,13 +20,22 @@ export class Reported extends Data.TaggedError("Reported") {
   override readonly [Runtime.errorReported] = false
 }
 
-/** `remove` or `alias` was handed a page that is neither a hash nor a handbill URL. */
+/** `remove`, `update` or `alias` was handed a page that is neither a hash nor a handbill URL. */
 export class BadTarget extends Data.TaggedError("BadTarget")<{
   readonly target: string
 }> {}
 
 /** `alias` was handed a name the contract will not store. */
 export class BadName extends Data.TaggedError("BadName")<{
+  readonly name: string
+}> {}
+
+/**
+ * `update` could not move a name the deployment had just listed for it. The
+ * feature is plainly on — the listing answered — so this is not the 404
+ * {@link describe} explains as "aliases are off", and it says which name.
+ */
+export class CannotRepoint extends Data.TaggedError("CannotRepoint")<{
   readonly name: string
 }> {}
 
@@ -44,6 +53,7 @@ export type Failure =
   | BadName
   | BadTarget
   | CannotOpen
+  | CannotRepoint
   | ChecksFailed
   | HashMismatch
   | HttpClientError.HttpClientError
@@ -73,11 +83,15 @@ export const describe = Match.typeTags<Failure, Described>()({
   }),
   BadTarget: (failure) => ({
     error: "BadTarget",
-    message: `"${failure.target}" is not a handbill URL or a 12-character hash.`
+    message: `"${failure.target}" is not a handbill URL or a 12-character hash. An alias URL names a page without being one: pass the hash it points at, which \`handbill alias list\` prints.`
   }),
   CannotOpen: (failure) => ({
     error: "CannotOpen",
     message: `Could not open ${failure.url} in a browser: ${failure.reason}`
+  }),
+  CannotRepoint: (failure) => ({
+    error: "CannotRepoint",
+    message: `Could not point "${failure.name}" at the new page: the endpoint answered 404 for a name it had just listed. The page is published; the name still points at the old one.`
   }),
   ChecksFailed: (failure) => ({
     error: "ChecksFailed",
@@ -99,7 +113,9 @@ export const describe = Match.typeTags<Failure, Described>()({
         : `No token configured. Set HANDBILL_TOKEN or put it in ${failure.path}.`
   }),
   // The API only answers 404 on the alias routes, and only when the deployment
-  // has no KV binding: the feature is absent, not the name.
+  // has no KV binding: the feature is absent, not the name. `update` is the one
+  // caller that can tell the two apart — it has already had a listing answered
+  // — and it raises `CannotRepoint` instead.
   NotFound: () => ({
     error: "NotFound",
     message:

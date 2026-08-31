@@ -40,9 +40,11 @@ handbill update <old-url-or-hash> plan.html   # → the new URL
 handbill update <old-url-or-hash> notes.md --json
 ```
 
-Use this, not a second `handbill <file>`, whenever the user asks to fix, revise or re-publish something already published. It does the whole rotation in one command and in the order that matters: publish the new file, re-point every alias that named the old page, then unpublish the old hash — so a reader following an alias never hits a 404 in between. stdout is still exactly the new URL; the names it moved and the hash it removed are reported on stderr, and `--json` adds them as `{ "hash", "url", "created", "removed", "aliases" }`.
+Use this, not a second `handbill <file>`, whenever the user asks to fix, revise or re-publish something already published. It does the whole rotation in one command and in the order that matters: publish the new file, re-point every alias that named the old page, then unpublish the old hash — so a reader following an alias is not left on a 404. stdout is still exactly the new URL; the names it moved and the hash it removed are reported on stderr, and `--json` adds them as `{ "hash", "url", "created", "removed", "aliases" }`.
 
-Two things to expect: the old link stops working, so hand the user the new URL and say the old one is gone; and updating to bytes that are already published is a no-op that prints the same URL, which is the right answer, not a failure. On a deployment with aliases switched off, `update` prints the one-sentence notice on stderr and finishes anyway.
+Three things to expect: the old link stops working, so hand the user the new URL and say the old one is gone; updating to bytes that are already published is a no-op that prints the same URL, which is the right answer, not a failure; and on a deployment with aliases switched off, `update` prints the one-sentence notice on stderr and finishes anyway.
+
+**Do not `update` a page within a minute of setting an alias on it.** `update` moves the names that `alias list` reports, and that listing lags a freshly set name by up to a minute (same lag as under "Name a page"). A name the listing has not caught up with is not moved, and `update` still unpublishes the old hash — leaving that name serving a 404. If you have just run `alias`, publish the revision with `handbill <file>` and re-point the name yourself with `alias`, or wait a minute.
 
 ## Unpublish
 

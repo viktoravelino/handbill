@@ -56,6 +56,27 @@ const unreachable = Layer.succeed(FetchHttpClient.Fetch, unreachableFetch).pipe(
   Layer.merge(FetchHttpClient.layer)
 )
 
+/**
+ * The in-process server with one call handed to `instead` — another server, or a
+ * rejection standing in for a connection that drops. A command that rotates
+ * several calls is only half specified by its happy path: this is how the tests
+ * reach what `update` does when a call after the publish fails.
+ */
+const broken = (
+  fails: (request: Request) => boolean,
+  instead: (request: Request) => ReturnType<typeof server.transport>
+) => {
+  const fetch: typeof globalThis.fetch = Object.assign(
+    (input: string | URL | Request, init?: RequestInit) => {
+      const request =
+        input instanceof Request ? new Request(input, init) : new Request(String(input), init)
+      return fails(request) ? instead(request) : server.transport(request)
+    },
+    { preconnect: () => Promise.resolve() }
+  )
+  return Layer.succeed(FetchHttpClient.Fetch, fetch).pipe(Layer.merge(FetchHttpClient.layer))
+}
+
 /** The CLI as a configured user runs it, talking to the in-process server. */
 const cli = (
   args: ReadonlyArray<string>,
@@ -383,11 +404,57 @@ describe("update", () => {
     }
   })
 
-  test("refuses a target that is not a hash or a URL", async () => {
-    const outcome = await cli(["update", "plan.html", retro.path])
+  // An alias URL is a handbill URL; it just is not the one `update` can act on.
+  // Saying only "not a handbill URL" would deny the URL the user most likely
+  // kept, so the sentence names the way out.
+  test("refuses a target that is not a hash or a URL, and says what to pass instead", async () => {
+    const outcome = await cli(["update", `https://plan.${ZONE}`, retro.path])
     expect(outcome.ok).toBe(false)
     expect(outcome.stdout).toEqual([])
     expect(outcome.stderr.join("\n")).toContain("not a handbill URL")
+    expect(outcome.stderr.join("\n")).toContain("handbill alias list")
+  })
+
+  // The page is permanent the moment the publish returns. Losing its URL
+  // because the tidying-up failed would be the one unrecoverable outcome, so
+  // the URL is on stderr even though the command exits non-zero.
+  test("still says where the new page is when the removal fails", async () => {
+    await cli([plan.path])
+    const outcome = await cli(["update", url, retro.path], {
+      // The connection drops on the removal, after the page is already up.
+      http: broken(
+        (request) => request.method === "DELETE",
+        () => Promise.reject(new Error("ECONNRESET"))
+      )
+    })
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stdout).toEqual([])
+    expect(outcome.stderr).toContain(`The new page is published at ${retro.url}.`)
+    // Nothing was lost: the rotation stopped, so both pages are still up.
+    expect(server.hashes().toSorted()).toEqual([retro.hash, hash].toSorted())
+  })
+
+  // A 404 from `alias set` is not the 404 that means "aliases are off": the
+  // listing answered a moment earlier. Blaming the KV binding would send the
+  // user to create one they already have.
+  test("names the alias it could not move, rather than blaming the binding", async () => {
+    await cli([plan.path])
+    await cli(["alias", "plan", hash])
+    // The 404 is a real one: a deployment with no KV binding answers every
+    // alias route that way, and only the `set` is routed to it.
+    const off = makeServer({ aliases: false })
+    const outcome = await cli(["update", url, retro.path], {
+      http: broken(
+        (request) => request.method === "PUT" && request.url.includes("/aliases/"),
+        (request) => off.transport(request)
+      )
+    }).finally(() => off.dispose())
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stderr.join("\n")).toContain('Could not point "plan" at the new page')
+    expect(outcome.stderr.join("\n")).not.toContain("ALIASES KV binding")
+    // The remove comes after the re-point, so the old page is still there for
+    // the alias that still names it.
+    expect(server.hashes()).toContain(hash)
   })
 })
 

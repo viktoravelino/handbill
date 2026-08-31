@@ -99,7 +99,14 @@ const publish = Command.make(
  * Points every alias that currently names `from` at `to`, and returns the names
  * it moved. A deployment with aliases switched off answers 404 on the listing:
  * there is nothing to re-point, so `update` says so once on stderr and finishes
- * the rotation anyway.
+ * the rotation anyway. A 404 on a *set* is a different animal — the listing had
+ * just answered, so the feature is plainly on — and fails the command by name.
+ *
+ * The listing is the deployment's KV `list`, which lags a freshly set name by up
+ * to a minute: a name set seconds ago can be invisible here, and `update` would
+ * then remove the hash it still points at. That is the one hole in the ordering
+ * below, and there is no way to close it from the client — nothing in the
+ * contract reads a single alias by key. The docs say so rather than promise.
  */
 const repoint = Effect.fn(function* (client: Client.Client, from: Hash, to: Hash) {
   const naming = yield* client.aliases.list({}).pipe(
@@ -112,9 +119,13 @@ const repoint = Effect.fn(function* (client: Client.Client, from: Hash, to: Hash
     )
   )
   yield* Effect.forEach(naming, (alias) =>
-    Effect.andThen(
-      client.aliases.set({ params: { name: alias.name }, payload: { hash: to } }),
-      Output.note(`Re-pointed ${alias.name} at ${to}.`)
+    client.aliases.set({ params: { name: alias.name }, payload: { hash: to } }).pipe(
+      // The listing answered a moment ago, so a 404 here is not the
+      // aliases-are-off 404 the shared sentence explains. Name what failed.
+      Effect.catchTag("NotFound", () =>
+        Effect.fail(new Output.CannotRepoint({ name: alias.name }))
+      ),
+      Effect.andThen(Output.note(`Re-pointed ${alias.name} at ${to}.`))
     )
   )
   return naming.map((alias) => alias.name)
@@ -122,9 +133,10 @@ const repoint = Effect.fn(function* (client: Client.Client, from: Hash, to: Hash
 
 /**
  * `update <target> <file>`: the revision rotation in one command. The order is
- * the point — publish, then re-point, then remove — so a reader following an
- * alias never meets the gap where the new page is not up yet or the old one is
- * already gone.
+ * the point — publish, then re-point, then remove — so a reader following a name
+ * the listing reports never meets the gap where the new page is not up yet or
+ * the old one is already gone. See {@link repoint} for the name it may not
+ * report.
  */
 const update = Command.make(
   "update",
@@ -152,11 +164,16 @@ const update = Command.make(
       // Same bytes, same hash: the aliases already point at the page, and
       // removing the old hash would unpublish what was just uploaded.
       const rotated = document.hash !== old
-      const aliases = rotated ? yield* repoint(client, old, document.hash) : []
-      if (rotated) {
+      // The page is permanent the moment the publish returns, so nothing below
+      // may swallow the URL the user came for: a rotation that fails half way
+      // still has to say where the new page is.
+      const aliases = yield* Effect.gen(function* () {
+        if (!rotated) return []
+        const moved = yield* repoint(client, old, document.hash)
         yield* client.pages.remove({ params: { hash: old } })
         yield* Output.note(`Removed ${old}.`)
-      }
+        return moved
+      }).pipe(Effect.tapError(() => Output.note(`The new page is published at ${published.url}.`)))
       yield* json
         ? Output.json({ ...published, removed: rotated, aliases })
         : Output.line(published.url)

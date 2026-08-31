@@ -68,7 +68,7 @@ The page is served from `https://<hash>.<zone>` — its own origin — with `tex
 
 Optionally, a **living name**: `handbill alias plan <hash>` makes `plan.<zone>` serve that page (cached for a minute, not a year) until you point the name elsewhere, while every hash link ever handed out keeps working. Names are guessable by construction, so the feature is off until you bind a KV namespace — [`docs/SELF-HOSTING.md`](docs/SELF-HOSTING.md#living-names-optional) has the trade-off and the setup.
 
-Revising a page is `handbill update <old> new.html`: it publishes the new file, re-points every name that pointed at the old page, and only then unpublishes the old hash — that order is why a reader following a name never lands on a 404. Same bytes, same hash, nothing to do.
+Revising a page is `handbill update <old> new.html`: it publishes the new file, re-points every name that pointed at the old page, and only then unpublishes the old hash — that order is why a reader following a name is not left on a 404. Same bytes, same hash, nothing to do. One caveat, inherited from the KV listing: `update` moves the names that `alias list` reports, and that listing lags a _freshly set_ name by up to a minute, so give a new name a minute before updating the page under it.
 
 One self-contained HTML file per link, 5 MB by default. No multi-file sites, no assets, no transforms on the server — a `.md` file is rendered to a page by the CLI, with a built-in light/dark stylesheet, before anything is uploaded.
 
