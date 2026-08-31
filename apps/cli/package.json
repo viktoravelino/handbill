@@ -1,6 +1,6 @@
 {
   "name": "handbill",
-  "version": "0.2.0-dev",
+  "version": "0.2.0",
   "description": "Hand someone a page: publish one self-contained HTML file, or a markdown file rendered to one, at an unguessable, immutable URL.",
   "keywords": [
     "cli",
