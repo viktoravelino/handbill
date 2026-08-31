@@ -211,7 +211,7 @@
 
 <section id="product">
   <h2>Product</h2>
-  <p><strong>Problem.</strong> Coding agents finish work by producing documents &mdash; plans, reviews, reports &mdash; as HTML files on disk. Sharing one means attaching a file. The existing hosted option (<a href="https://github.com/plannotator/tot">tot</a>) puts the page on someone else&rsquo;s domain, lets anyone with the link edit or delete it, and cannot be self-hosted.</p>
+  <p><strong>Problem.</strong> Coding agents finish work by producing documents &mdash; plans, reviews, reports &mdash; as HTML files on disk. Sharing one means attaching a file. The hosted services that take a page instead put it on someone else&rsquo;s domain, hand edit and delete rights to anyone holding the link, and cannot be run on an account you own.</p>
   <p><strong>Product.</strong> <code>handbill plan.html</code> prints <code>https://a3f9c1d4e2b8.yourdomain.dev</code>. The URL is the content hash, so it never changes under a reader; a new version is a new link. Publishing needs a token; reading needs only the link. The whole stack &mdash; Worker, CLI, agent skill, docs &mdash; is MIT and deploys to your own Cloudflare account in minutes. Later, the same Worker runs in <em>accounts</em> mode on <code>handbill.dev</code> for people without a domain.</p>
 
   <h3>Goals</h3>
@@ -231,7 +231,6 @@
   <h3>Success measures</h3>
   <ul>
     <li>The maintainer&rsquo;s daily flow runs on <code>handbill</code> and the old <code>publish-plan</code> deployment is retired (v0.1).</li>
-    <li>At least three self-hosters other than the maintainer confirm the README works (v0.1 &rarr; v0.2).</li>
     <li>Zero security reports rated high or above; every page served with <code>noindex</code> and immutable caching.</li>
   </ul>
 </section>
@@ -254,8 +253,8 @@
       <caption>Roadmap</caption>
       <thead><tr><th scope="col">Version</th><th scope="col">Theme</th><th scope="col">Ships</th><th scope="col">Exit criterion</th></tr></thead>
       <tbody>
-        <tr><td><strong>0.1</strong></td><td>Print &middot; <em>shipped 2026-08-28</em></td><td>Worker (secret auth), CLI <code>publish</code>/<code>list</code>/<code>remove</code>/<code>doctor</code>, stdin, <code>--json</code>, skill, self-host docs, Deploy button, CI, npm</td><td>The maintainer&rsquo;s flow migrated; one outside self-hoster succeeds from the README alone</td></tr>
-        <tr><td><strong>0.2</strong></td><td>Words and names &middot; <em>in progress</em></td><td>Markdown &rarr; self-contained HTML in the CLI; aliases (living names) in KV; OpenAPI + docs endpoint; <code>--open</code> and <code>alias</code> commands in the CLI (all four on <code>main</code>); landing + docs site on <code>handbill.dev</code>. Shell completions shipped early, in 0.1</td><td>Three outside self-hosters; <code>handbill notes.md</code> works; aliases documented as opt-in and guessable</td></tr>
+        <tr><td><strong>0.1</strong></td><td>Print &middot; <em>shipped 2026-08-28</em></td><td>Worker (secret auth), CLI <code>publish</code>/<code>list</code>/<code>remove</code>/<code>doctor</code>, stdin, <code>--json</code>, skill, self-host docs, Deploy button, CI, npm</td><td>The maintainer&rsquo;s flow migrated and <code>publish-plan</code> retired</td></tr>
+        <tr><td><strong>0.2</strong></td><td>Words and names &middot; <em>shipped 2026-08-31</em></td><td>Markdown &rarr; self-contained HTML in the CLI; aliases (living names) in KV; OpenAPI + docs endpoint; <code>--open</code> and <code>alias</code> commands in the CLI; landing + docs site on <code>handbill.dev</code>. Shell completions shipped early, in 0.1</td><td><code>handbill notes.md</code> works; aliases documented as opt-in and guessable; the site is live on <code>handbill.dev</code></td></tr>
         <tr><td><strong>0.3</strong></td><td>Hosted</td><td>Accounts auth layer (KV), <code>handbill login</code>, per-owner index, quotas, rate limits, operator takedown, ToS/abuse page, default endpoint flips to <code>api.handbill.dev</code></td><td>A stranger publishes with no config in under two minutes; abuse controls exercised in a drill</td></tr>
         <tr><td><strong>0.4</strong></td><td>Sheets and time</td><td>Inline local assets into the HTML at publish time; <code>--ttl</code> with a sweeping cron</td><td>A page with local images publishes as one object</td></tr>
         <tr><td><strong>1.0</strong></td><td>Stable</td><td>Contract frozen, Effect on stable v4, <code>@handbill/contract</code> published, Public Suffix List entry for <code>handbill.dev</code>, encrypted pages behind an experimental flag</td><td>No breaking change for two minor versions</td></tr>
@@ -514,10 +513,10 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
       <div class="step__head"><p class="step__n">M6 &middot; 2h</p><h3>Docs and release</h3></div>
       <div class="field"><h4>Tasks</h4><ul>
         <li><code>docs/SELF-HOSTING.md</code>: account, DNS (<code>*</code> and <code>api</code>, proxied), Universal SSL note, secret, deploy, the curl that proves it, free-tier limits.</li>
-        <li>README: pitch, recording, Deploy button (<code>deploy.workers.cloudflare.com/?url=&hellip;</code>), five steps, comparison with tot, security note.</li>
+        <li>README: pitch, recording, Deploy button (<code>deploy.workers.cloudflare.com/?url=&hellip;</code>), five steps, what makes it different, security note.</li>
         <li><code>SECURITY.md</code>; release workflow on tag with <code>npm publish --provenance</code>; publish <code>0.1.0</code>.</li>
       </ul></div>
-      <div class="verify"><h4>Done when</h4><p><code>npx handbill --help</code> works for a stranger; one outside self-hoster confirms the README end to end.</p></div>
+      <div class="verify"><h4>Done when</h4><p><code>npx handbill --help</code> works for a stranger; the README&rsquo;s five steps reach a published link.</p></div>
     </li>
   </ol>
 </section>
@@ -532,7 +531,7 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
         <tr><td>0.2</td><td>Markdown renderer + built-in stylesheet in the CLI; <code>Aliases</code> service on KV, alias endpoints, alias hostname branch; <code>--open</code>; completions; OpenAPI + Scalar routes; <code>apps/web</code> Astro + Starlight deployed to <code>handbill.dev</code></td><td>First and only CLI dependency beyond <code>effect</code> is the markdown parser. Aliases require a KV binding and are absent from the API when missing.</td></tr>
         <tr><td>0.3</td><td><code>AuthAccounts</code> + <code>IndexKV</code> layers; <code>MODE=accounts</code>; key minting page (GitHub OAuth) on <code>handbill.dev</code>; <code>login</code>, <code>me</code>; quotas in KV; WAF rate rules; <code>admin takedown</code>; ToS + abuse page; default endpoint flip; hash-salting decision</td><td>Separate Cloudflare account, Workers Paid. A drill: publish abusive content on a test key, take it down, confirm cache purge.</td></tr>
         <tr><td>0.4</td><td>Asset inlining in the CLI (img/link/script &rarr; data URIs and inline blocks, with a size warning); <code>--ttl</code> writes <code>expiresAt</code>; cron trigger sweeps</td><td>Server stays single-object. TTL is metadata + cron, not lifecycle rules.</td></tr>
-        <tr><td>1.0</td><td>Move to Effect 4 stable; freeze <code>/v1</code>; publish <code>@handbill/contract</code>; PSL submission for <code>handbill.dev</code>; encrypted pages (<code>--private</code>, key in URL fragment) behind an experimental flag</td><td>Encrypted pages are the one feature tot explicitly lacks; ship only if asked for.</td></tr>
+        <tr><td>1.0</td><td>Move to Effect 4 stable; freeze <code>/v1</code>; publish <code>@handbill/contract</code>; PSL submission for <code>handbill.dev</code>; encrypted pages (<code>--private</code>, key in URL fragment) behind an experimental flag</td><td>Encrypted pages are the one thing no hosted alternative offers; ship only if asked for.</td></tr>
       </tbody>
     </table>
   </div>
@@ -540,19 +539,22 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
 
 <section id="status">
   <h2>Status &middot; what shipped, what changed</h2>
-  <p>As of 2026-08-29. Where the build departed from the plan above, the departure and its reason are here so the plan stays readable as a plan.</p>
+  <p>As of 2026-08-31. Where the build departed from the plan above, the departure and its reason are here so the plan stays readable as a plan.</p>
   <ul>
-    <li><strong>0.1 shipped 2026-08-28</strong> as <code>handbill@0.1.0</code> and <code>0.1.1</code>; the maintainer&rsquo;s flow is migrated and <code>publish-plan</code> retired. The &ldquo;one outside self-hoster&rdquo; exit criterion is not yet confirmed.</li>
+    <li><strong>0.1 shipped 2026-08-28</strong> as <code>handbill@0.1.0</code> and <code>0.1.1</code>; the maintainer&rsquo;s flow is migrated and <code>publish-plan</code> retired.</li>
     <li><strong>Publishing is npm trusted publishing (OIDC) from <code>release.yml</code></strong>, with provenance; no npm token anywhere. <code>scripts/release.sh bump | tag</code> is the two-move release, and it has a real dry run.</li>
     <li><strong>Nightlies, not in the plan.</strong> Every night at 05:00 UTC, and on demand, <code>main</code> is published under the <code>nightly</code> dist-tag as <code>&lt;release&gt;-nightly.&lt;UTC date-time&gt;.g&lt;sha&gt;</code>, skipped when <code>main</code> has not moved; <code>latest</code> and <code>next</code> are never touched. <code>&lt;release&gt;</code> is the version <code>main</code> is heading toward: a <code>-dev</code> version in <code>apps/cli/package.json</code> (<code>0.2.0-dev</code> &rarr; <code>0.2.0-nightly&hellip;</code>) names it, and a plain release version means the next patch. A <code>-dev</code> version can never be tagged. A merged feature is installable the next morning instead of at the next release.</li>
     <li><strong>Worker budget is 750 source lines</strong>, not the &ldquo;~400&rdquo; first written here: tests excluded, enforced by the CI <code>size</code> job, and <code>services.ts</code> split into <code>config</code> / <code>storage</code> / <code>auth</code> / <code>aliases</code>. 738 of 750 used after aliases.</li>
     <li><strong>Shell completions shipped in 0.1</strong> (M4), a version early. The descriptor is written by hand because the framework keeps its conversion internal; a test pins it to the real command tree.</li>
-    <li><strong>Markdown (0.2, on <code>main</code>).</strong> Parser is <code>marked</code>, chosen on bundle size (57&nbsp;KB, no transitive dependencies, versus 195&nbsp;KB / 209&nbsp;KB for the alternatives) and kept as a real dependency rather than inlined. Title from the first H1 with inline markup resolved, else the filename; <code>--markdown</code> is how stdin opts in. Raw HTML in the source passes through unchanged &mdash; right for a self-hoster publishing to their own zone, to be revisited when hosted mode serves strangers (recorded on the 0.3 milestone).</li>
-    <li><strong>OpenAPI + <code>/docs</code> (0.2, on <code>main</code>).</strong> The spec comes from <code>HttpApiBuilder.layer(&hellip;, { openapiPath })</code>, token-free and cached five minutes. The docs page is nine lines of hand-written HTML loading a pinned Scalar from a CDN &mdash; <code>HttpApiScalar</code> would have inlined Scalar&rsquo;s 3&nbsp;MB browser build and blown the 1&nbsp;MiB gzip gate.</li>
-    <li><strong>Aliases (0.2, on <code>main</code>).</strong> <code>AliasesKV</code> when the <code>ALIASES</code> binding exists, <code>AliasesDisabled</code> when it does not, chosen in <code>index.ts</code>; the handlers never ask. Names are one DNS label that is not a hash and not <code>api</code>; the page is served at the name, never redirected, with <code>max-age=60</code>. Without the binding the routes answer 404 and the docs say why the feature is off by default: names are guessable.</li>
+    <li><strong>Markdown (0.2).</strong> Parser is <code>marked</code>, chosen on bundle size (57&nbsp;KB, no transitive dependencies, versus 195&nbsp;KB / 209&nbsp;KB for the alternatives) and kept as a real dependency rather than inlined. Title from the first H1 with inline markup resolved, else the filename; <code>--markdown</code> is how stdin opts in. Raw HTML in the source passes through unchanged &mdash; right for a self-hoster publishing to their own zone, to be revisited when hosted mode serves strangers (recorded on the 0.3 milestone).</li>
+    <li><strong>OpenAPI + <code>/docs</code> (0.2).</strong> The spec comes from <code>HttpApiBuilder.layer(&hellip;, { openapiPath })</code>, token-free and cached five minutes. The docs page is nine lines of hand-written HTML loading a pinned Scalar from a CDN &mdash; <code>HttpApiScalar</code> would have inlined Scalar&rsquo;s 3&nbsp;MB browser build and blown the 1&nbsp;MiB gzip gate.</li>
+    <li><strong>Aliases (0.2).</strong> <code>AliasesKV</code> when the <code>ALIASES</code> binding exists, <code>AliasesDisabled</code> when it does not, chosen in <code>index.ts</code>; the handlers never ask. Names are one DNS label that is not a hash and not <code>api</code>; the page is served at the name, never redirected, with <code>max-age=60</code>. Without the binding the routes answer 404 and the docs say why the feature is off by default: names are guessable.</li>
     <li><strong>Deferred from 0.1 to 0.3</strong>, recorded on the milestone: no separate <code>Index</code> service yet (<code>list</code> walks the bucket inside <code>StorageR2</code>), <code>remove</code> does not check <code>owner</code> (one owner in secret mode), request logging left to Cloudflare.</li>
-    <li><strong>Alias commands and <code>--open</code> (0.2, on <code>main</code>).</strong> <code>handbill alias &lt;name&gt; &lt;url|hash&gt;</code>, <code>alias list</code>, <code>alias remove</code>; a deployment without the binding gets one sentence naming it. <code>--open</code> goes through a <code>Browser</code> service the tests replace, so stdout stays one line and no test opens a window. <code>list</code> and <code>remove</code> are subcommands, so a page cannot carry those two names.</li>
-    <li><strong>Still to ship in 0.2:</strong> <code>apps/web</code> on <code>handbill.dev</code>, the 0.2.0 release with three outside self-hosters confirmed.</li>
+    <li><strong>Alias commands and <code>--open</code> (0.2).</strong> <code>handbill alias &lt;name&gt; &lt;url|hash&gt;</code>, <code>alias list</code>, <code>alias remove</code>; a deployment without the binding gets one sentence naming it. <code>--open</code> goes through a <code>Browser</code> service the tests replace, so stdout stays one line and no test opens a window. <code>list</code> and <code>remove</code> are subcommands, so a page cannot carry those two names.</li>
+    <li><strong>The site (0.2, live).</strong> <code>apps/web</code> is Astro + Starlight on <code>handbill.dev</code>, deployed from <code>main</code> as a second, assets-only Worker on the apex route. It has no content of its own: the landing page <em>is</em> <code>README.md</code>, the docs section is the repository&rsquo;s own markdown files, and the CLI reference is generated from <code>handbill --help</code> before every build &mdash; so the site cannot drift from the code.</li>
+    <li><strong>0.2 shipped 2026-08-31</strong> as <code>handbill@0.2.0</code>.</li>
+    <li><strong>The three-self-hoster exit criterion is dropped</strong>, from 0.1&rsquo;s and 0.2&rsquo;s exit criteria and from the success measures. It measured adoption, not the product: nothing the project can do makes three strangers deploy on a schedule, so it could only ever hold a release hostage to luck. What it was really asking &mdash; that the README works end to end &mdash; is covered by the criteria that remain.</li>
+    <li><strong><code>@handbill/contract</code> stays unpublished until 1.0.</strong> Decided 2026-08-31, as the PRD leaned. Every deployment already serves <code>/v1/openapi.json</code> generated from that same contract, so anyone wanting a client can generate one against the instance they are actually talking to. Publishing now would put an Effect 4 release candidate in a package&rsquo;s public types and make its churn a breaking change for other people; the 1.0 freeze is the honest moment.</li>
   </ul>
 </section>
 
@@ -572,7 +574,7 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
   <h2>Open questions</h2>
   <ul>
     <li>Hosted identical-bytes rule: first-owner-wins or owner-salted hash? (Decide at 0.3.)</li>
-    <li>Should <code>@handbill/contract</code> be public from 0.2 so people can write clients, or wait for the 1.0 freeze? Leaning 1.0; a self-hoster can already generate a client from <code>/v1/openapi.json</code>, which weakens the case for 0.2.</li>
+    <li><s>Should <code>@handbill/contract</code> be public from 0.2 so people can write clients, or wait for the 1.0 freeze?</s> Decided 2026-08-31: wait for 1.0 &mdash; see Status.</li>
     <li><s>Markdown parser choice at 0.2 (size vs CommonMark fidelity).</s> Decided 2026-08-29: <code>marked</code>, on size &mdash; see Status.</li>
     <li>Raw HTML inside markdown: passed through today. Sanitize, keep, or only document it once hosted mode serves other people&rsquo;s pages? (Decide at 0.3.)</li>
     <li>Does the hosted key-minting page justify a real app framework, or is one Astro island enough? Decide when building 0.3, not before.</li>
@@ -581,7 +583,7 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
 </section>
 
 <footer>
-  <p>PRD &middot; 2026-08-28 &middot; <code>~/projects/handbill/docs/2026-08-28-prd.html</code>. Effect versions verified against npm the same day (<code>effect@rc</code> = 4.0.0-rc.112; v3 feature-frozen). Updated 2026-08-29 with the Status section, the decisions taken, and the repository as built.</p>
+  <p>PRD &middot; 2026-08-28 &middot; <code>~/projects/handbill/docs/2026-08-28-prd.html</code>. Effect versions verified against npm the same day (<code>effect@rc</code> = 4.0.0-rc.112; v3 feature-frozen). Updated 2026-08-31 for the 0.2.0 release: the Status section, the decisions taken, and the repository as built.</p>
 </footer>
 
 </div>

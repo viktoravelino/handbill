@@ -27,7 +27,7 @@ Node ≥ 22. Two dependencies: `effect` and `marked`. Every night `main` is publ
 { "endpoint": "https://api.yourdomain.dev", "token": "…" }
 ```
 
-or `HANDBILL_ENDPOINT` and `HANDBILL_TOKEN` in the environment.
+or `HANDBILL_ENDPOINT` and `HANDBILL_TOKEN` in the environment, which win over the file. `--endpoint <url>` on any command beats both.
 
 ## Self-host in five steps
 
@@ -98,7 +98,7 @@ Effect 4 end to end, pinned to an exact release candidate. Conventions and invar
 ## Roadmap
 
 - **0.1** — self-host kit: Worker, CLI, skill (released)
-- **0.2** — markdown input rendered in the CLI, living names on KV with `alias` commands, `--open`, OpenAPI + `/docs`, the site at [handbill.dev](https://handbill.dev) (all on `main`); 0.2.0 still to release
+- **0.2** — markdown input rendered in the CLI, living names on KV with `alias` commands, `--open`, OpenAPI + `/docs`, the site at [handbill.dev](https://handbill.dev) (released)
 - **0.3** — hosted mode: the same Worker with accounts instead of a single token
 - later — inline local assets at publish time, expiring pages, encrypted pages
 
