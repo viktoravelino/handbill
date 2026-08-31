@@ -9,6 +9,8 @@ https://a3f9c1d4e2b8.yourdomain.dev
 
 The URL is the content hash: the same bytes always give the same link, a changed file is a new link, and a published link never changes under its reader. Pages are served with `noindex` and long-lived immutable caching from your own Cloudflare Worker and R2 bucket — your account, your domain, your token.
 
+Docs: [handbill.dev/docs](https://handbill.dev/docs).
+
 ## Install
 
 ```sh
