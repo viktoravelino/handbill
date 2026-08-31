@@ -9,8 +9,8 @@
     "publish",
     "sharing"
   ],
-  "license": "MIT",
   "homepage": "https://handbill.dev",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/viktoravelino/handbill.git",
