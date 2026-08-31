@@ -9,6 +9,7 @@
     "publish",
     "sharing"
   ],
+  "homepage": "https://handbill.dev",
   "license": "MIT",
   "repository": {
     "type": "git",
