@@ -23,6 +23,18 @@ export default defineConfig({
         { icon: "npm", label: "npm", href: "https://www.npmjs.com/package/handbill" }
       ],
       customCss: ["./src/styles.css"],
+      // Cloudflare Web Analytics, on this site only — never on published pages.
+      // The token is the zone's public beacon token, not a secret.
+      head: [
+        {
+          tag: "script",
+          attrs: {
+            type: "module",
+            src: "https://static.cloudflareinsights.com/beacon.min.js",
+            "data-cf-beacon": '{"token": "807ccc184fed485aad2f4bda825554ea"}'
+          }
+        }
+      ],
       // The sidebar comes from src/docs.ts on each docs page; there is no docs
       // collection to generate one from.
       pagination: false

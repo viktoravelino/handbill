@@ -12,3 +12,6 @@ apps/web/src/generated/
 
 # Agent worktrees created inside the repo (Claude Code isolation)
 .claude/worktrees/
+
+# Added by ggshield
+.cache_ggshield
