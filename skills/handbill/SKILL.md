@@ -1,6 +1,6 @@
 ---
 name: handbill
-description: Publish a self-contained HTML or markdown document (plan, report, review) to an unguessable, immutable URL with the handbill CLI. Use when the user asks to publish, share, deploy, or "give me a link" for an HTML or markdown file. Also lists what is published, names a page with an alias, and unpublishes.
+description: Publish a self-contained HTML or markdown document (plan, report, review) to an unguessable, immutable URL with the handbill CLI. Use when the user asks to publish, share, deploy, or "give me a link" for an HTML or markdown file. Also revises a published page in place, lists what is published, names a page with an alias, and unpublishes.
 ---
 
 # handbill
@@ -33,6 +33,19 @@ handbill list --json
 
 Titles come from the document's `<title>` — for markdown, from the first H1, or the filename when there is none — so give every page a meaningful one. Use this when the user asks what has been published or has lost a link.
 
+## Revise a published page
+
+```bash
+handbill update <old-url-or-hash> plan.html   # → the new URL
+handbill update <old-url-or-hash> notes.md --json
+```
+
+Use this, not a second `handbill <file>`, whenever the user asks to fix, revise or re-publish something already published. It does the whole rotation in one command and in the order that matters: publish the new file, re-point every alias that named the old page, then unpublish the old hash — so a reader following an alias is not left on a 404. stdout is still exactly the new URL; the names it moved and the hash it removed are reported on stderr, and `--json` adds them as `{ "hash", "url", "created", "removed", "aliases" }`.
+
+Three things to expect: the old link stops working, so hand the user the new URL and say the old one is gone; updating to bytes that are already published is a no-op that prints the same URL, which is the right answer, not a failure; and on a deployment with aliases switched off, `update` prints the one-sentence notice on stderr and finishes anyway.
+
+**Do not `update` a page within a minute of setting an alias on it.** `update` moves the names that `alias list` reports, and that listing lags a freshly set name by up to a minute (same lag as under "Name a page"). A name the listing has not caught up with is not moved, and `update` still unpublishes the old hash — leaving that name serving a 404. If you have just run `alias`, publish the revision with `handbill <file>` and re-point the name yourself with `alias`, or wait a minute.
+
 ## Unpublish
 
 ```bash
@@ -49,11 +62,11 @@ handbill alias list                 # one line per alias: url, hash
 handbill alias remove plan          # the name stops answering; the page stays published
 ```
 
-An alias is a living name: point `plan` at the new hash after each revision and the reader's link keeps showing the latest version, while every hash link stays exactly what it was. Only use one when the user asks for a stable or readable link, and say two things when you do: **names are guessable** (a hash is unguessable; `plan` is a word anyone who knows the zone can try), and **the feature is opt-in** — a deployment without its KV binding answers every `alias` command with one sentence saying how to enable it. Report that sentence to the user; do not work around it. One more thing to expect: the name works the moment `alias` prints its URL, but `alias list` can take up to a minute to show a fresh name (the deployment's key listing is eventually consistent). "No aliases set." right after a successful `alias` is that lag — trust the printed URL, do not set the name again.
+An alias is a living name: the reader's link keeps showing the latest version while every hash link stays exactly what it was, and `handbill update` re-points it at each revision for you. Only use one when the user asks for a stable or readable link, and say two things when you do: **names are guessable** (a hash is unguessable; `plan` is a word anyone who knows the zone can try), and **the feature is opt-in** — a deployment without its KV binding answers every `alias` command with one sentence saying how to enable it. Report that sentence to the user; do not work around it. One more thing to expect: the name works the moment `alias` prints its URL, but `alias list` can take up to a minute to show a fresh name (the deployment's key listing is eventually consistent). "No aliases set." right after a successful `alias` is that lag — trust the printed URL, do not set the name again.
 
 ## Showing the page
 
-`--open` on `handbill <file>` and `handbill alias` opens the printed URL in the user's default browser after printing it. stdout is still exactly one line. Use it only when the user asked to see the page, not by default.
+`--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the printed URL in the user's default browser after printing it. stdout is still exactly one line. Use it only when the user asked to see the page, not by default.
 
 ## When something fails
 

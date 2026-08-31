@@ -33,26 +33,37 @@ Don't have a deployment yet? It is one Worker, one bucket and two DNS records �
 
 ## Use
 
-| Command                             | What it does                                                                              |
-| ----------------------------------- | ----------------------------------------------------------------------------------------- |
-| `handbill plan.html`                | Publish. Prints exactly one line: the URL.                                                |
-| `handbill notes.md`                 | Render markdown to a self-contained page, publish that.                                   |
-| `handbill - < plan.html`            | Publish from stdin. Add `--markdown` to render it.                                        |
-| `handbill plan.html --json`         | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                     |
-| `handbill list`                     | What you have published, newest first: date, URL, title.                                  |
-| `handbill remove <url-or-hash>`     | Unpublish. Idempotent.                                                                    |
-| `handbill alias plan <url-or-hash>` | Point a name at a page: `https://plan.yourdomain.dev` serves it. Opt-in, see below.       |
-| `handbill alias list`               | Your aliases: URL, then the hash each points at. `handbill alias remove plan` drops one.  |
-| `handbill doctor`                   | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix. |
-| `handbill completions zsh`          | Shell completions (bash, zsh, fish).                                                      |
+| Command                                   | What it does                                                                              |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `handbill plan.html`                      | Publish. Prints exactly one line: the URL.                                                |
+| `handbill notes.md`                       | Render markdown to a self-contained page, publish that.                                   |
+| `handbill - < plan.html`                  | Publish from stdin. Add `--markdown` to render it.                                        |
+| `handbill plan.html --json`               | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                     |
+| `handbill list`                           | What you have published, newest first: date, URL, title.                                  |
+| `handbill remove <url-or-hash>`           | Unpublish. Idempotent.                                                                    |
+| `handbill update <url-or-hash> plan.html` | Republish: the new page up, its names moved, the old hash gone.                           |
+| `handbill alias plan <url-or-hash>`       | Point a name at a page: `https://plan.yourdomain.dev` serves it. Opt-in, see below.       |
+| `handbill alias list`                     | Your aliases: URL, then the hash each points at. `handbill alias remove plan` drops one.  |
+| `handbill doctor`                         | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix. |
+| `handbill completions zsh`                | Shell completions (bash, zsh, fish).                                                      |
 
-Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents. `--open` on `handbill <file>` and `handbill alias` opens the URL in your browser after printing it; stdout is still that one line.
+Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents. `--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the URL in your browser after printing it; stdout is still that one line.
 
 ## Names
 
 A hash link is the bytes, forever. An alias is a name you can point somewhere else: `plan.yourdomain.dev` serves whatever `plan` currently points at, and re-pointing it is visible within a minute, while every hash link ever handed out keeps working. The name answers as soon as `alias` prints its URL; `alias list` can lag a fresh name by up to a minute (KV lists are eventually consistent), so "No aliases set." straight after setting one is the lag, not a failure. Names are one DNS label — lowercase letters, digits and inner hyphens — and neither `api`, a hash, `list` nor `remove`.
 
 **Names are guessable by construction.** A hash is 48 random bits; `plan` is a word anyone who knows your zone can try. Put behind a name only what you would not mind a stranger reading. That is why the feature is off until you switch it on: it needs a KV namespace bound to the Worker (`ALIASES`, in the [self-hosting guide](https://github.com/viktoravelino/handbill/blob/main/docs/SELF-HOSTING.md#living-names-optional)), and until then every `alias` command says so.
+
+## Revise
+
+```sh
+handbill update https://a3f9c1d4e2b8.yourdomain.dev plan.html
+```
+
+One command for the whole rotation: publish the new file, re-point every name that pointed at the old page, then unpublish the old hash — in that order, so a reader following a name is not left on a 404. It prints the new URL and nothing else; `--json` adds what it did (`{ "hash", "url", "created", "removed", "aliases" }`), and the names it moved are reported on stderr. Update a page to bytes it already has and nothing happens.
+
+The names it moves are the ones `alias list` reports, so the lag above applies here too: a name set in the last minute may not be listed yet, and `update` would then unpublish the page it still points at. Give a fresh name a minute before updating the page under it. Nothing else in the rotation is at risk — if any step fails, the new URL is still printed on stderr and the old page is left alone.
 
 ## Markdown
 

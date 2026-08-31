@@ -45,19 +45,20 @@ The full walkthrough — token scopes, verification curls, limits, troubleshooti
 
 ## Use
 
-| Command                           | What it does                                                                                   |
-| --------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `handbill plan.html`              | Publish. Prints exactly one line: the URL.                                                     |
-| `handbill notes.md`               | Render markdown to a self-contained page, publish that.                                        |
-| `cat plan.html \| handbill -`     | Publish from stdin. Add `--markdown` to render it.                                             |
-| `handbill plan.html --json`       | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                          |
-| `handbill list`                   | What you have published, newest first: date, URL, title.                                       |
-| `handbill remove <url\|hash>`     | Unpublish. Idempotent.                                                                         |
-| `handbill alias plan <url\|hash>` | Point a name at a page: `plan.yourdomain.dev` serves it. Opt-in; `alias list`, `alias remove`. |
-| `handbill doctor`                 | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix.      |
-| `handbill completions zsh`        | Shell completions (bash, zsh, fish).                                                           |
+| Command                                 | What it does                                                                                   |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `handbill plan.html`                    | Publish. Prints exactly one line: the URL.                                                     |
+| `handbill notes.md`                     | Render markdown to a self-contained page, publish that.                                        |
+| `cat plan.html \| handbill -`           | Publish from stdin. Add `--markdown` to render it.                                             |
+| `handbill plan.html --json`             | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                          |
+| `handbill list`                         | What you have published, newest first: date, URL, title.                                       |
+| `handbill remove <url\|hash>`           | Unpublish. Idempotent.                                                                         |
+| `handbill update <url\|hash> plan.html` | Republish: the new page up, its names moved, the old hash gone.                                |
+| `handbill alias plan <url\|hash>`       | Point a name at a page: `plan.yourdomain.dev` serves it. Opt-in; `alias list`, `alias remove`. |
+| `handbill doctor`                       | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix.      |
+| `handbill completions zsh`              | Shell completions (bash, zsh, fish).                                                           |
 
-Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result. `--open` on `handbill <file>` and `handbill alias` opens the URL in your browser after printing it.
+Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result. `--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the URL in your browser after printing it.
 
 ## How it works
 
@@ -66,6 +67,8 @@ Errors are one sentence on stderr and a non-zero exit; stdout is only ever the r
 The page is served from `https://<hash>.<zone>` — its own origin — with `text/html; charset=utf-8`, `X-Robots-Tag: noindex, nofollow`, and `Cache-Control: public, max-age=31536000, immutable`. Every path on that hostname serves the same document. The API lives at `api.<zone>` under `/v1` and needs the bearer token for everything except `/v1/health`, the generated spec at `/v1/openapi.json`, and the reference that renders it at `/docs`.
 
 Optionally, a **living name**: `handbill alias plan <hash>` makes `plan.<zone>` serve that page (cached for a minute, not a year) until you point the name elsewhere, while every hash link ever handed out keeps working. Names are guessable by construction, so the feature is off until you bind a KV namespace — [`docs/SELF-HOSTING.md`](docs/SELF-HOSTING.md#living-names-optional) has the trade-off and the setup.
+
+Revising a page is `handbill update <old> new.html`: it publishes the new file, re-points every name that pointed at the old page, and only then unpublishes the old hash — that order is why a reader following a name is not left on a 404. Same bytes, same hash, nothing to do. One caveat, inherited from the KV listing: `update` moves the names that `alias list` reports, and that listing lags a _freshly set_ name by up to a minute, so give a new name a minute before updating the page under it.
 
 One self-contained HTML file per link, 5 MB by default. No multi-file sites, no assets, no transforms on the server — a `.md` file is rendered to a page by the CLI, with a built-in light/dark stylesheet, before anything is uploaded.
 

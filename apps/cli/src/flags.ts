@@ -15,8 +15,14 @@ export const jsonFlag = Flag.boolean("json").pipe(
   Flag.withDefault(false)
 )
 
-/** On the two commands whose result is a page worth looking at: publish and alias. */
+/** On the commands whose result is a page worth looking at: publish, update and alias. */
 export const openFlag = Flag.boolean("open").pipe(
   Flag.withDescription("Open the printed URL in the default browser"),
+  Flag.withDefault(false)
+)
+
+/** On the two commands that take a document: publish and update. */
+export const markdownFlag = Flag.boolean("markdown").pipe(
+  Flag.withDescription("Render the input as markdown, whatever it is named — needed for stdin"),
   Flag.withDefault(false)
 )
