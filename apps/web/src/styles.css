@@ -7,3 +7,33 @@
   display: inline;
   vertical-align: middle;
 }
+
+/*
+ * The badge row, held at its final height from the first paint. Shields serves
+ * SVGs with no intrinsic size, so the row is empty until they arrive and then
+ * — on a phone, where four badges do not fit across — wraps to a second line,
+ * dropping the whole landing page 26px under the reader. That shift is the
+ * page's one Core Web Vitals failure. A 20px flex row (a shields badge's
+ * height) that scrolls rather than wraps is the row GitHub shows, at the same
+ * height whether or not the images have loaded.
+ */
+.sl-markdown-content p:has(> a > img[src*="//img.shields.io/"]) {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/*
+ * Each badge is the whole of its box: a block image, so the anchor is exactly
+ * 20px rather than a 28px line box the row above would clip.
+ */
+.sl-markdown-content p:has(> a > img[src*="//img.shields.io/"]) > a {
+  flex: none;
+}
+
+.sl-markdown-content p:has(> a > img[src*="//img.shields.io/"]) > a > img {
+  display: block;
+}
