@@ -301,6 +301,96 @@ describe("alias", () => {
   })
 })
 
+describe("update", () => {
+  const planUrl = `https://plan.${ZONE}`
+
+  // The whole rotation, and the order it happens in: the new page is up before
+  // any name moves, and the old hash goes last, so a reader following `plan`
+  // never meets a 404 in between.
+  test("publishes, re-points the names and removes the old hash, in that order", async () => {
+    await cli([plan.path])
+    await cli(["alias", "plan", hash])
+
+    const from = server.requests().length
+    const outcome = await cli(["update", url, retro.path])
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stdout).toEqual([retro.url])
+    expect(server.requests().slice(from)).toEqual([
+      `PUT /v1/pages/${retro.hash}`,
+      "GET /v1/aliases",
+      "PUT /v1/aliases/plan",
+      `DELETE /v1/pages/${hash}`
+    ])
+
+    expect(server.hashes()).toEqual([retro.hash])
+    expect(await (await server.fetch(`${planUrl}/`)).text()).toBe(retro.html)
+    expect((await server.fetch(`${url}/`)).status).toBe(404)
+  })
+
+  // Only the aliases that named the old page move; the rest stay where they are.
+  test("reports what it moved with --json, and leaves other aliases alone", async () => {
+    await cli([plan.path])
+    await cli([kickoff.path])
+    await cli(["alias", "plan", hash])
+    await cli(["alias", "kickoff", kickoff.hash])
+
+    const outcome = await cli(["update", hash, retro.path, "--json"])
+    expect(JSON.parse(outcome.stdout[0] ?? "")).toEqual({
+      hash: retro.hash,
+      url: retro.url,
+      created: true,
+      removed: true,
+      aliases: ["plan"]
+    })
+    expect(outcome.stderr).toEqual([`Re-pointed plan at ${retro.hash}.`, `Removed ${hash}.`])
+    expect(await (await server.fetch(`https://kickoff.${ZONE}/`)).text()).toBe(kickoff.html)
+  })
+
+  // Updating a page to the bytes it already has is a no-op, not a way to
+  // unpublish it: the hash is the same, so removing it would delete the page.
+  test("does nothing when the bytes are unchanged", async () => {
+    await cli([plan.path])
+    await cli(["alias", "plan", hash])
+
+    const from = server.requests().length
+    const outcome = await cli(["update", url, plan.path, "--json"])
+    expect(outcome.ok).toBe(true)
+    expect(JSON.parse(outcome.stdout[0] ?? "")).toEqual({
+      hash,
+      url,
+      created: false,
+      removed: false,
+      aliases: []
+    })
+    expect(server.requests().slice(from)).toEqual([`PUT /v1/pages/${hash}`])
+    expect(server.hashes()).toEqual([hash])
+    expect(await (await server.fetch(`${planUrl}/`)).text()).toBe(plan.html)
+  })
+
+  // Aliases off is not a failed update: there is nothing to re-point, so the
+  // notice goes to stderr and the rotation finishes.
+  test("says aliases are off and finishes the rotation anyway", async () => {
+    const off = makeServer({ aliases: false })
+    try {
+      await cli([plan.path], { http: off.layer })
+      const outcome = await cli(["update", url, retro.path], { http: off.layer })
+      expect(outcome.ok).toBe(true)
+      expect(outcome.stdout).toEqual([retro.url])
+      expect(outcome.stderr.join("\n")).toContain("ALIASES")
+      expect(off.hashes()).toEqual([retro.hash])
+    } finally {
+      await off.dispose()
+    }
+  })
+
+  test("refuses a target that is not a hash or a URL", async () => {
+    const outcome = await cli(["update", "plan.html", retro.path])
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stdout).toEqual([])
+    expect(outcome.stderr.join("\n")).toContain("not a handbill URL")
+  })
+})
+
 describe("--open", () => {
   // S2.4: the browser is a second reader of the URL; stdout is still one line.
   test("opens the printed URL, after printing it", async () => {

@@ -1,13 +1,13 @@
 import { DateTime, Effect, Option, Schema } from "effect"
-import { Argument, Command, Flag } from "effect/unstable/cli"
-import { AliasName, Hash, PageList } from "@handbill/contract"
+import { Argument, Command } from "effect/unstable/cli"
+import { type Alias, AliasName, Hash, PageList } from "@handbill/contract"
 import { Browser } from "./browser"
 import * as Client from "./client"
 import { completions } from "./completions"
 import * as Config from "./config"
 import * as Doctor from "./doctor"
 import * as Document from "./document"
-import { endpointFlag, jsonFlag, openFlag } from "./flags"
+import { endpointFlag, jsonFlag, markdownFlag, openFlag } from "./flags"
 import * as Output from "./output"
 
 /**
@@ -20,12 +20,6 @@ const handler =
   ) =>
   (input: I) =>
     body(input).pipe(Output.reporting({ json: input.json }))
-
-/** Only `publish` renders, so its flag lives with it rather than in `flags.ts`. */
-const markdownFlag = Flag.boolean("markdown").pipe(
-  Flag.withDescription("Render the input as markdown, whatever it is named — needed for stdin"),
-  Flag.withDefault(false)
-)
 
 /** The configuration and the client that every API-calling command starts from. */
 const connect = Effect.fn(function* (endpoint: Option.Option<string>) {
@@ -98,6 +92,90 @@ const publish = Command.make(
       description: "Publish, then open the URL in the browser"
     },
     { command: "handbill plan.html --json", description: "Print { hash, url, created } instead" }
+  ])
+)
+
+/**
+ * Points every alias that currently names `from` at `to`, and returns the names
+ * it moved. A deployment with aliases switched off answers 404 on the listing:
+ * there is nothing to re-point, so `update` says so once on stderr and finishes
+ * the rotation anyway.
+ */
+const repoint = Effect.fn(function* (client: Client.Client, from: Hash, to: Hash) {
+  const naming = yield* client.aliases.list({}).pipe(
+    Effect.map(({ aliases }) => aliases.filter((alias) => alias.hash === from)),
+    Effect.catchTag("NotFound", (failure) =>
+      Effect.andThen(
+        Output.note(Output.describe(failure).message),
+        Effect.succeed<ReadonlyArray<Alias>>([])
+      )
+    )
+  )
+  yield* Effect.forEach(naming, (alias) =>
+    Effect.andThen(
+      client.aliases.set({ params: { name: alias.name }, payload: { hash: to } }),
+      Output.note(`Re-pointed ${alias.name} at ${to}.`)
+    )
+  )
+  return naming.map((alias) => alias.name)
+})
+
+/**
+ * `update <target> <file>`: the revision rotation in one command. The order is
+ * the point — publish, then re-point, then remove — so a reader following an
+ * alias never meets the gap where the new page is not up yet or the old one is
+ * already gone.
+ */
+const update = Command.make(
+  "update",
+  {
+    target: Argument.string("target").pipe(
+      Argument.withDescription("The URL of the page being replaced, or its 12-character hash")
+    ),
+    file: Argument.string("file").pipe(
+      Argument.withDescription("HTML or markdown file to publish in its place, or - to read stdin")
+    ),
+    endpoint: endpointFlag,
+    json: jsonFlag,
+    markdown: markdownFlag,
+    open: openFlag
+  },
+  handler(({ endpoint, file, json, markdown, open, target }) =>
+    Effect.gen(function* () {
+      const old = yield* required(targetHash(target), () => new Output.BadTarget({ target }))
+      const client = yield* connect(endpoint)
+      const document = yield* Document.load({ file, markdown })
+      const published = yield* client.pages.publish({
+        params: { hash: document.hash },
+        payload: document.bytes
+      })
+      // Same bytes, same hash: the aliases already point at the page, and
+      // removing the old hash would unpublish what was just uploaded.
+      const rotated = document.hash !== old
+      const aliases = rotated ? yield* repoint(client, old, document.hash) : []
+      if (rotated) {
+        yield* client.pages.remove({ params: { hash: old } })
+        yield* Output.note(`Removed ${old}.`)
+      }
+      yield* json
+        ? Output.json({ ...published, removed: rotated, aliases })
+        : Output.line(published.url)
+      yield* openIf(open, published.url)
+    })
+  )
+).pipe(
+  Command.withDescription(
+    "Replace a published page: publish the new file, re-point every alias that named the old one, and unpublish it. Same bytes, same hash: nothing happens."
+  ),
+  Command.withExamples([
+    {
+      command: "handbill update https://a3f9c1d4e2b8.example.dev plan.html",
+      description: "Publish the revision, move the names, drop the old page"
+    },
+    {
+      command: "handbill update a3f9c1d4e2b8 notes.md --json",
+      description: "The same by hash: { hash, url, created, removed, aliases }"
+    }
   ])
 )
 
@@ -255,5 +333,5 @@ const doctor = Command.make(
 
 /** The whole CLI: publish by default, everything else as a subcommand. */
 export const handbill = publish.pipe(
-  Command.withSubcommands([list, remove, alias, doctor, completions])
+  Command.withSubcommands([update, list, remove, alias, doctor, completions])
 )

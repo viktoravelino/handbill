@@ -69,13 +69,20 @@ export const makeServer = (options: { readonly aliases?: boolean } = {}) => {
     )
   )
 
+  // Every API call the CLI made, as `PUT /v1/pages/<hash>`, in order. A command
+  // that rotates several calls is only correct if they happen in the right
+  // order, and that is not visible in the final state.
+  const requests: Array<string> = []
+
   // `preconnect` is part of the runtime's `fetch` type and the client never
   // calls it; the rest is the Worker standing in for the network.
   const fetch: typeof globalThis.fetch = Object.assign(
-    (input: string | URL | Request, init?: RequestInit) =>
-      app.fetch(
+    (input: string | URL | Request, init?: RequestInit) => {
+      const request =
         input instanceof Request ? new Request(input, init) : new Request(String(input), init)
-      ),
+      requests.push(`${request.method} ${new URL(request.url).pathname}`)
+      return app.fetch(request)
+    },
     { preconnect: () => Promise.resolve() }
   )
 
@@ -87,6 +94,8 @@ export const makeServer = (options: { readonly aliases?: boolean } = {}) => {
     dispose: () => app.dispose(),
     /** Move the Worker's clock, so pages published after it are demonstrably newer. */
     advance: time.advance,
+    /** The API calls made so far, method and path, in order. */
+    requests: (): ReadonlyArray<string> => [...requests],
     /** What the store holds, for assertions that do not go through the API. */
     hashes: (): ReadonlyArray<Hash> => Effect.runSync(storage.list(SELF)).map((meta) => meta.hash)
   }
