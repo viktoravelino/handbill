@@ -47,7 +47,7 @@ Don't have a deployment yet? It is one Worker, one bucket and two DNS records �
 | `handbill doctor`                         | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix. |
 | `handbill completions zsh`                | Shell completions (bash, zsh, fish).                                                      |
 
-Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents. `--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the URL in your browser after printing it; stdout is still that one line.
+Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents. `--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the URL in your browser after printing it; stdout is still that one line. `--qr` on `handbill <file>` and `handbill alias` prints a scannable QR code for the URL to stderr — and skips it silently when stderr is not a terminal, so pipes never see it.
 
 ## Names
 

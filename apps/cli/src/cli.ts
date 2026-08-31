@@ -5,6 +5,7 @@ import { FetchHttpClient } from "effect/unstable/http"
 import pkg from "../package.json" with { type: "json" }
 import { BrowserLive } from "./browser"
 import { handbill } from "./commands"
+import { QrLive } from "./qr"
 
 /** `bun build` inlines the JSON, so `--version` is whatever package.json said at build time. */
 const version = pkg.version
@@ -15,7 +16,7 @@ const version = pkg.version
  * whatever the platform opens URLs with.
  */
 const program = Command.run(handbill, { version }).pipe(
-  Effect.provide(Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer, BrowserLive))
+  Effect.provide(Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer, BrowserLive, QrLive))
 )
 
 // Commands write their own failures to stderr, so the runtime only has to set

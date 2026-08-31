@@ -58,7 +58,7 @@ The full walkthrough — token scopes, verification curls, limits, troubleshooti
 | `handbill doctor`                       | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix.      |
 | `handbill completions zsh`              | Shell completions (bash, zsh, fish).                                                           |
 
-Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result. `--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the URL in your browser after printing it.
+Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result. `--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the URL in your browser after printing it. `--qr` on `handbill <file>` and `handbill alias` prints a scannable QR code for the URL to stderr — hand someone the page across a table — and skips it silently when stderr is not a terminal, so pipes never see it.
 
 ## How it works
 

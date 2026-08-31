@@ -6,6 +6,7 @@ import { Layer } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 import { hashDocument } from "../src/hash"
 import { render } from "../src/markdown"
+import { render as renderQr } from "../src/qr"
 import { configHome, run, type RunOptions } from "./harness"
 import { makeServer, PUBLISHED_AT, TOKEN, ZONE } from "./server"
 
@@ -104,6 +105,27 @@ describe("publish", () => {
     expect(outcome.ok).toBe(true)
     expect(outcome.stdout).toEqual([url])
     expect(outcome.stderr).toEqual([])
+  })
+
+  // #92: the code is a second copy of the URL on stderr, never part of the
+  // result — stdout must be byte-identical to a run without the flag.
+  test("--qr draws the printed URL's code on stderr and leaves stdout identical", async () => {
+    const plain = await cli([plan.path])
+    const outcome = await cli([plan.path, "--qr"])
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stdout).toEqual(plain.stdout)
+    expect(outcome.stderr).toEqual([renderQr(url)])
+  })
+
+  // #92: the URL on stdout is the product. stderr that is not a terminal gets
+  // no code, and a --json consumer reads the same object either way.
+  test("--qr is silent into a pipe and invisible to --json", async () => {
+    const piped = await cli([plan.path, "--qr"], { tty: false })
+    expect(piped.stdout).toEqual([url])
+    expect(piped.stderr).toEqual([])
+    const asJson = await cli([plan.path, "--json", "--qr"])
+    expect(asJson.stdout.length).toBe(1)
+    expect(JSON.parse(asJson.stdout[0] ?? "")).toMatchObject({ hash, url })
   })
 
   // S1.1: same bytes, same URL, and the second publish is not a create.

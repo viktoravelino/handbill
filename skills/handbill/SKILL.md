@@ -68,6 +68,8 @@ An alias is a living name: the reader's link keeps showing the latest version wh
 
 `--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the printed URL in the user's default browser after printing it. stdout is still exactly one line. Use it only when the user asked to see the page, not by default.
 
+`--qr` on `handbill <file>` and `handbill alias` also prints a scannable QR code for the URL — to stderr, so stdout is still exactly one line — for handing the page to someone physically present. When stderr is not a terminal the code is silently skipped, so the flag never breaks a pipe. Use it only when the user asks for a QR code or to share with a phone.
+
 ## When something fails
 
 - Every failure is one sentence on stderr and a non-zero exit (`{ "error", "message" }` on stderr with `--json`). Report it; do not retry in a loop.

@@ -21,6 +21,14 @@ export const openFlag = Flag.boolean("open").pipe(
   Flag.withDefault(false)
 )
 
+/** On publish and alias, the commands whose result is a URL worth handing across a table. */
+export const qrFlag = Flag.boolean("qr").pipe(
+  Flag.withDescription(
+    "Also print a scannable QR code for the URL to stderr; skipped when stderr is not a terminal"
+  ),
+  Flag.withDefault(false)
+)
+
 /** On the two commands that take a document: publish and update. */
 export const markdownFlag = Flag.boolean("markdown").pipe(
   Flag.withDescription("Render the input as markdown, whatever it is named — needed for stdin"),
