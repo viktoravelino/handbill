@@ -18,13 +18,13 @@ The URL is the content hash of the file, so a link is immutable and unguessable,
 
 ## Docs
 
-- [handbill](${url("/")}): the README — what it is, how to install it, and the five commands, with a self-hosting walkthrough behind it.
+- [handbill](${url("/")}): The README — what it is, how to install it, and every command in one table, with a self-hosting walkthrough behind it.
 ${docs.map((doc) => `- [${doc.title}](${url(`/docs/${doc.slug}/`)}): ${doc.description}`).join("\n")}
 
 ## Optional
 
-- [Source on GitHub](https://github.com/viktoravelino/handbill): the Worker, the CLI, and the docs these pages are rendered from.
-- [handbill on npm](https://www.npmjs.com/package/handbill): the published CLI.
+- [Source on GitHub](https://github.com/viktoravelino/handbill): The Worker, the CLI, and the markdown these pages are rendered from.
+- [handbill on npm](https://www.npmjs.com/package/handbill): The published CLI.
 `
 
   return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
