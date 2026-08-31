@@ -23,6 +23,10 @@ if (source === undefined) throw new Error(`${doc.path}: no such file to serve at
 const { Content, getHeadings } = source
 ---
 
-<StarlightPage frontmatter={{ title: doc.title }} headings={getHeadings()} sidebar={sidebar}>
+<StarlightPage
+  frontmatter={{ title: doc.title, description: doc.description }}
+  headings={getHeadings()}
+  sidebar={sidebar}
+>
   <Content />
 </StarlightPage>

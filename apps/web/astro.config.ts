@@ -24,7 +24,8 @@ export default defineConfig({
       ],
       customCss: ["./src/styles.css"],
       // Cloudflare Web Analytics, on this site only — never on published pages.
-      // The token is the zone's public beacon token, not a secret.
+      // The token is the zone's public beacon token, not a secret. The og:image
+      // is public/og.png, rendered once by hand; scrapers need an absolute URL.
       head: [
         {
           tag: "script",
@@ -33,6 +34,23 @@ export default defineConfig({
             src: "https://static.cloudflareinsights.com/beacon.min.js",
             "data-cf-beacon": '{"token": "807ccc184fed485aad2f4bda825554ea"}'
           }
+        },
+        {
+          tag: "meta",
+          attrs: { property: "og:image", content: "https://handbill.dev/og.png" }
+        },
+        { tag: "meta", attrs: { property: "og:image:width", content: "1200" } },
+        { tag: "meta", attrs: { property: "og:image:height", content: "630" } },
+        {
+          tag: "meta",
+          attrs: {
+            property: "og:image:alt",
+            content: "handbill — Hand someone a page."
+          }
+        },
+        {
+          tag: "meta",
+          attrs: { name: "twitter:image", content: "https://handbill.dev/og.png" }
         }
       ],
       // The sidebar comes from src/docs.ts on each docs page; there is no docs

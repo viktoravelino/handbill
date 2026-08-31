@@ -7,6 +7,15 @@ import { Content } from "../../../../README.md"
 <StarlightPage
   frontmatter={{
     title: "handbill",
+    // The hero h1 stays "handbill"; the tab title and search snippet headline
+    // say what it is, and the front page is a website, not an article.
+    head: [
+      {
+        tag: "title",
+        content: "handbill — publish one HTML file at an unguessable URL on your domain"
+      },
+      { tag: "meta", attrs: { property: "og:type", content: "website" } }
+    ],
     template: "splash",
     hero: {
       tagline: "Hand someone a page.",
