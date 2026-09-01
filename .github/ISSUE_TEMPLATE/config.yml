@@ -1,0 +1,9 @@
+# Route the two reports that must not be public issues.
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/viktoravelino/handbill/security/advisories/new
+    about: A flaw in handbill itself goes through private vulnerability reporting, not a public issue.
+  - name: Report a page on handbill.dev
+    url: https://handbill.dev/docs/abuse/
+    about: Phishing, malware, spam, doxxing — mail abuse@handbill.dev. This page says what to include.
