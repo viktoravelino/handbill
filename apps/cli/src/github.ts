@@ -13,16 +13,12 @@ import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstab
  */
 
 /**
- * The OAuth app `handbill login` authenticates against. A device-flow client id
- * is public and there is no client secret at all, so this is a constant rather
- * than configuration.
- *
- * TODO(#84): a release blocker for 0.3. The maintainer has to create the GitHub
- * OAuth app with device flow enabled and put its client id here; until then
- * GitHub refuses the first call with `unauthorized_client`, which `login`
- * reports as GitHub's own sentence rather than as a shape it did not expect.
+ * The GitHub App ("handbill CLI", on the maintainer's account) that
+ * `handbill login` authenticates against, with device flow enabled and no
+ * permissions. A device-flow client id is public and there is no client secret
+ * at all, so this is a constant rather than configuration.
  */
-export const CLIENT_ID = "REPLACE_WITH_THE_HANDBILL_OAUTH_APP_CLIENT_ID"
+export const CLIENT_ID = "Iv23liFjZJvlOxJpFIQ0"
 
 /** Signing in failed for a reason the user can act on: GitHub said no, or the endpoint did. */
 export class LoginFailed extends Data.TaggedError("LoginFailed")<{
