@@ -27,6 +27,8 @@ handbill login
 
 Opens `github.com/login/device` on a short code, mints an API key for your GitHub account, and writes it to `~/.config/handbill/config.json`. Nothing else to configure: the endpoint defaults to the hosted deployment. `handbill logout` revokes that key and removes it again.
 
+The hosted deployment is free — 25 pages a day, 250 MB stored — and what handbill learns about you is your numeric GitHub id: [handbill.dev/docs/hosted](https://handbill.dev/docs/hosted/), and the [terms](https://handbill.dev/docs/terms/) you accept by publishing there.
+
 Self-hosting instead? Put your deployment in the same file:
 
 ```json

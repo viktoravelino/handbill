@@ -1,0 +1,48 @@
+---
+import StarlightFooter from "@astrojs/starlight/components/Footer.astro"
+
+/**
+ * Starlight's footer with one row added under it, on every page including the
+ * splash landing page: the words that make hosting strangers legitimate have to
+ * be reachable from wherever someone lands, not only from the docs sidebar.
+ */
+const links = [
+  { label: "Terms and acceptable use", href: "/docs/terms/" },
+  { label: "Report abuse", href: "/docs/abuse/" },
+  { label: "Security", href: "/docs/security/" },
+  { label: "MIT licensed", href: "https://github.com/viktoravelino/handbill/blob/main/LICENSE" }
+]
+---
+
+<StarlightFooter />
+
+<div class="site-footer">
+  <nav aria-label="Site">
+    {links.map(({ label, href }) => <a href={href}>{label}</a>)}
+  </nav>
+  <p>Hosted on handbill.dev by one person. <a href="mailto:abuse@handbill.dev">abuse@handbill.dev</a></p>
+</div>
+
+<style>
+  .site-footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--sl-color-hairline);
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  .site-footer nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+  }
+  .site-footer p {
+    margin-top: 0.75rem;
+  }
+  .site-footer a {
+    color: inherit;
+  }
+  .site-footer a:hover {
+    color: var(--sl-color-white);
+  }
+</style>

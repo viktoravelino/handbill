@@ -21,7 +21,7 @@ Docs: [handbill.dev/docs](https://handbill.dev/docs).
 npm i -g handbill
 ```
 
-Node ≥ 22. Two dependencies: `effect` and `marked`. Every night `main` is published as `handbill@nightly` if you want what has merged but not shipped. Then `handbill login` signs you in with GitHub and writes the key it mints to `~/.config/handbill/config.json`; the endpoint defaults to `https://api.handbill.dev`.
+Node ≥ 22. Two dependencies: `effect` and `marked`. Every night `main` is published as `handbill@nightly` if you want what has merged but not shipped. Then `handbill login` signs you in with GitHub and writes the key it mints to `~/.config/handbill/config.json`; the endpoint defaults to `https://api.handbill.dev`, which is free, quota-limited, and governed by the [terms](https://handbill.dev/docs/terms/) — [handbill.dev/docs/hosted](https://handbill.dev/docs/hosted/) is what that gets you.
 
 Point it at your own deployment (below) with the same file:
 
