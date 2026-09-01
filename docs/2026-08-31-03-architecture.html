@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>handbill — 0.3 hosted architecture</title>
+<style>
+  :root {
+    --ground:#F0F2F1; --surface:#FAFBFA; --sunken:#E6EAE8;
+    --ink:#15191A; --ink-2:#535D5B;
+    --rule:#D2D9D6; --rule-strong:#B4BFBB;
+    --accent:#1D5F53; --accent-wash:#E2ECE8;
+    --flag:#7C4E0E; --flag-wash:#F1E9DA;
+    --font-display:"Iowan Old Style","Charter","Palatino Linotype",Palatino,Georgia,serif;
+    --font-body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --measure:74ch;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0F1413; --surface:#161C1B; --sunken:#1C2422;
+      --ink:#E6EBE9; --ink-2:#98A5A1;
+      --rule:#2A3432; --rule-strong:#3D4A47;
+      --accent:#7FC9B5; --accent-wash:#152E29;
+      --flag:#D6A566; --flag-wash:#2E2311;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0F1413; --surface:#161C1B; --sunken:#1C2422;
+    --ink:#E6EBE9; --ink-2:#98A5A1;
+    --rule:#2A3432; --rule-strong:#3D4A47;
+    --accent:#7FC9B5; --accent-wash:#152E29;
+    --flag:#D6A566; --flag-wash:#2E2311;
+  }
+  *,*::before,*::after { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+    font:1.0625rem/1.65 var(--font-body);
+    padding:clamp(1.25rem,4vw,3.5rem) clamp(1rem,5vw,2rem) 5rem; }
+  .doc { max-width:var(--measure); margin:0 auto; }
+  p,li { text-wrap:pretty; }
+  .doc > section > p { max-width:66ch; }
+  h1,h2,h3 { font-family:var(--font-display); font-weight:600; text-wrap:balance; line-height:1.2; margin:0; }
+  h1 { font-size:clamp(1.9rem,5vw,2.55rem); letter-spacing:-0.01em; }
+  h2 { font-size:1.45rem; }
+  h3 { font-size:1.1rem; }
+  a { color:var(--accent); text-underline-offset:2px; }
+  code { font-family:var(--font-mono); font-size:0.9em; }
+  p code, li code, td code, dd code {
+    background:var(--sunken); border:1px solid var(--rule);
+    padding:0.05em 0.3em; border-radius:2px; overflow-wrap:break-word; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  ::selection { background:var(--accent-wash); }
+  .masthead { display:grid; gap:1rem; padding-bottom:1.5rem; border-bottom:2px solid var(--ink); margin-bottom:2rem; }
+  .masthead__top { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+  .eyebrow { font:500 0.6875rem/1 var(--font-mono); letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); margin:0 0 0.6rem; }
+  .lede { font-size:1.15rem; color:var(--ink-2); max-width:60ch; margin:0; }
+  .meta { display:flex; flex-wrap:wrap; gap:0.35rem 1.25rem; margin:0; padding:0; list-style:none;
+          font:0.75rem/1.5 var(--font-mono); color:var(--ink-2); }
+  .meta strong { color:var(--ink); font-weight:500; }
+  .toggle { flex:none; font:0.75rem/1 var(--font-mono); color:var(--ink-2); background:transparent;
+            border:1px solid var(--rule-strong); padding:0.45rem 0.6rem; cursor:pointer; border-radius:2px; }
+  .toggle:hover { color:var(--ink); border-color:var(--ink-2); }
+  .toc { margin:0 0 3rem; padding:1rem 1.15rem; background:var(--surface); border:1px solid var(--rule); }
+  .toc h2 { font:500 0.6875rem/1 var(--font-mono); letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-2); margin-bottom:0.85rem; }
+  .toc ol { margin:0; padding:0; list-style:none; display:grid; gap:0.4rem 1.5rem; grid-template-columns:repeat(auto-fill,minmax(15rem,1fr)); font-size:0.9rem; }
+  .toc a { color:var(--ink); text-decoration-color:var(--rule-strong); }
+  .toc a:hover { color:var(--accent); }
+  .toc .num { font:0.75rem var(--font-mono); color:var(--ink-2); margin-right:0.5rem; }
+  section { margin-bottom:3.25rem; }
+  section > * + * { margin-top:1rem; }
+  h2 + p { margin-top:0.75rem; }
+  ul,ol { padding-left:1.25rem; }
+  li + li { margin-top:0.4rem; }
+  .decisions { list-style:none; padding:0; counter-reset:d; display:grid; gap:0.9rem; }
+  .decisions li { counter-increment:d; padding-left:2.4rem; position:relative; max-width:66ch; }
+  .decisions li::before { content:counter(d,decimal-leading-zero); position:absolute; left:0; top:0.15em;
+    font:500 0.75rem/1 var(--font-mono); color:var(--accent); letter-spacing:0.04em; }
+  .decisions b { font-weight:600; }
+  figure.code { margin:0; border:1px solid var(--rule); background:var(--sunken); }
+  .code pre { margin:0; padding:0.85rem 0.9rem; overflow-x:auto; font:0.8125rem/1.65 var(--font-mono); color:var(--ink); }
+  .scroll { overflow-x:auto; border:1px solid var(--rule); background:var(--surface); }
+  table { border-collapse:collapse; width:100%; min-width:32rem; font-size:0.875rem; font-variant-numeric:tabular-nums; }
+  caption { text-align:left; font:500 0.6875rem/1.4 var(--font-mono); letter-spacing:0.09em;
+            text-transform:uppercase; color:var(--ink-2); padding:0.6rem 0.7rem; border-bottom:1px solid var(--rule); }
+  th,td { text-align:left; vertical-align:top; padding:0.55rem 0.7rem; border-bottom:1px solid var(--rule); }
+  thead th { font:600 0.6875rem/1.4 var(--font-mono); letter-spacing:0.07em; text-transform:uppercase;
+             color:var(--ink-2); border-bottom:2px solid var(--rule-strong); white-space:nowrap; }
+  tbody tr:last-child td { border-bottom:0; }
+  td code { white-space:nowrap; }
+  .tag { display:inline-block; font:600 0.625rem/1.6 var(--font-mono); letter-spacing:0.1em; text-transform:uppercase;
+         color:var(--flag); background:var(--flag-wash); border:1px solid var(--rule); padding:0.05rem 0.4rem;
+         border-radius:2px; margin-right:0.5rem; vertical-align:0.08em; }
+  .tag--ok { color:var(--accent); background:var(--accent-wash); }
+  .note { border-left:3px solid var(--rule-strong); padding-left:0.9rem; color:var(--ink-2); font-size:0.95rem; max-width:64ch; }
+  footer { border-top:1px solid var(--rule); padding-top:1rem; color:var(--ink-2); font-size:0.85rem; }
+  @media (max-width:34rem) { body { font-size:1rem; } .code pre { font-size:0.75rem; } }
+  @media print { body { background:#fff; color:#000; padding:0; } .toggle,.toc { display:none; } }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<header class="masthead">
+  <div class="masthead__top">
+    <div>
+      <p class="eyebrow">Architecture &middot; v0.3 hosted &middot; 2026-08-31</p>
+      <h1>Hosting strangers</h1>
+    </div>
+    <button class="toggle" type="button" id="theme" aria-live="polite">Theme: auto</button>
+  </div>
+  <p class="lede">0.3 turns the maintainer's deployment into a public service: accounts, <code>handbill login</code>, per-owner lists, quotas, takedown. This is the design M13 builds against — the eleven decisions in §10 were reviewed one by one and accepted on 2026-09-01, and §11's questions are answered in place. It refines the <a href="https://handbill.dev/">PRD</a>'s v0.3 row; where they disagree, this document is newer and the PRD gets amended.</p>
+  <ul class="meta">
+    <li><strong>Status</strong> adopted 2026-09-01 — #82 (M13) unblocked</li>
+    <li><strong>Stories</strong> S3.1 · S3.2 · S3.3</li>
+    <li><strong>Milestones</strong> M13–M18, after #88 and #89</li>
+    <li><strong>Exit</strong> stranger publishes in &lt;2 min; abuse drill run</li>
+  </ul>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#invariants"><span class="num">01</span>What does not change</a></li>
+    <li><a href="#shape"><span class="num">02</span>Shape: services and layers</a></li>
+    <li><a href="#identity"><span class="num">03</span>Identity: login and keys</a></li>
+    <li><a href="#data"><span class="num">04</span>Data model</a></li>
+    <li><a href="#quotas"><span class="num">05</span>Quotas and rate limits</a></li>
+    <li><a href="#serving"><span class="num">06</span>Serving strangers' HTML</a></li>
+    <li><a href="#abuse"><span class="num">07</span>Abuse operations</a></li>
+    <li><a href="#rollout"><span class="num">08</span>Rollout and backout</a></li>
+    <li><a href="#cost"><span class="num">09</span>Cost envelope</a></li>
+    <li><a href="#decisions"><span class="num">10</span>Decisions adopted here</a></li>
+    <li><a href="#open"><span class="num">11</span>Questions, answered</a></li>
+    <li><a href="#map"><span class="num">12</span>Milestone map</a></li>
+  </ol>
+</nav>
+
+<section id="invariants">
+  <h2>01 · What does not change</h2>
+  <p>Hosted mode is additive. These invariants hold before, during, and after 0.3, and any design below that would bend one is wrong:</p>
+  <ul>
+    <li><b>Published links never change.</b> A hash URL handed out under 0.2 serves the same bytes under 0.3, and a hosted user's links keep serving even if their key is revoked or the hosted tier is switched off. Takedown of a <em>page</em> is the only thing that kills a link, and that is deliberate, logged, and operator-only.</li>
+    <li><b>Self-hosters notice nothing.</b> Secret mode (<code>PUBLISH_TOKEN</code>) is untouched; no new binding is required; <code>wrangler.jsonc</code> gains commented, opt-in blocks at most. The 0.1 five-step deploy still works verbatim.</li>
+    <li><b>The handlers never ask which mode is on.</b> Per AGENTS.md: a binding that may be missing picks its layer in <code>index.ts</code>. Accounts is a layer choice (<code>AuthSecret</code> / <code>AuthAccounts</code>), not an <code>if</code>.</li>
+    <li><b>Serving is dumb.</b> Pages are bytes from R2 with fixed headers (<code>immutable</code>, <code>noindex</code>, per-page origin). No per-request auth, no cookies, no personalization on the read path — the read path stays cacheable and boring.</li>
+    <li><b>The Worker budget stays a real number</b> — #88 settled it at 1125 lines, raised once from 750 because hosted mode earns it. Everything below is designed to fit inside that, not to argue with it.</li>
+    <li><b>Tests run on memory layers.</b> Accounts, index, and quotas each get a memory implementation; no Miniflare, no network.</li>
+  </ul>
+</section>
+
+<section id="shape">
+  <h2>02 · Shape: services and layers</h2>
+  <p>Three new services, each with the same two-layer pattern the storage and aliases services already use. <code>index.ts</code> picks by binding presence:</p>
+  <div class="scroll"><table>
+    <caption>Services and their layers</caption>
+    <thead><tr><th>Service</th><th>Hosted layer (binding)</th><th>Self-host layer (no binding)</th></tr></thead>
+    <tbody>
+      <tr><td><code>Auth</code></td><td><code>AuthAccounts</code> (<code>ACCOUNTS</code> KV)</td><td><code>AuthSecret</code> — today's token equality</td></tr>
+      <tr><td><code>Index</code></td><td><code>IndexKV</code> (<code>ACCOUNTS</code> KV, shared)</td><td><code>IndexBucket</code> — today's bucket listing</td></tr>
+      <tr><td><code>Quota</code></td><td><code>QuotaKV</code> (<code>ACCOUNTS</code> KV, shared)</td><td><code>QuotaUnlimited</code> — no-op</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>One KV namespace, not three.</b> Accounts, index entries, and quota counters are key-prefixed records in a single <code>ACCOUNTS</code> namespace (§04). One binding keeps <code>wrangler.jsonc</code>'s opt-in story simple — uncomment one block to become a host — and keeps us inside Workers' binding and namespace hygiene. <code>ALIASES</code> stays separate: it exists independently of hosting.</p>
+  <p><code>Auth</code>'s interface changes from "is this token valid?" to "who is this?": it resolves a bearer token to an <code>owner</code> string. <code>AuthSecret</code> answers the operator constant; <code>AuthAccounts</code> answers <code>gh:&lt;id&gt;</code> (§03). <code>owner</code> then flows where it always flowed — into <code>customMetadata</code> — except now it means something. This is why the PRD stored <code>owner</code> from day one.</p>
+</section>
+
+<section id="identity">
+  <h2>03 · Identity: login and keys</h2>
+  <p><b>GitHub device flow</b> (decision 01, accepted). <code>handbill login</code> prints a code and opens <code>github.com/login/device</code>; the user types the code; the CLI polls GitHub, receives a GitHub access token, and exchanges it once at <code>POST /v1/keys</code>. The Worker verifies the token against <code>api.github.com/user</code> (its only outbound call, on this route only), mints a handbill key, and returns it. The CLI stores the key in <code>~/.config/handbill/config.json</code> and discards the GitHub token.</p>
+  <p>Why device flow over the alternatives considered:</p>
+  <ul>
+    <li><b>No OAuth callback route</b> in the Worker — the redirect dance is GitHub's problem, not ours. The Worker gains one route, not three, which matters when every route is charged against the line budget.</li>
+    <li><b>No session cookies on handbill.dev, ever.</b> A web-based login would put an auth cookie on the same registrable domain that serves strangers' HTML — §06 explains why that is the one thing we must not do before a PSL entry exists.</li>
+    <li><b>No secrets in the CLI.</b> A device-flow client id is public by design.</li>
+    <li><b>Spam friction for free.</b> A GitHub account is the cheapest identity that still costs an abuser something, and <code>owner = gh:&lt;numeric id&gt;</code> survives username changes.</li>
+    <li><b>Rejected:</b> email magic links (needs an email sender, invites throwaways), password accounts (never), Cloudflare Access (operator-only, wrong for the public).</li>
+  </ul>
+  <p><b>Keys.</b> <code>hb_</code> + 32 random bytes, base64url — the prefix makes leaked keys greppable (and registrable with scanners later). The Worker stores only <code>SHA-256(key)</code>; a stolen KV dump mints nothing. Shown once at login; <code>handbill logout</code> deletes locally and revokes server-side (<code>DELETE /v1/keys/current</code>). Keys do not expire in 0.3 — revocation exists, expiry is 0.4-if-ever.</p>
+  <div class="scroll"><table>
+    <caption>New contract surface (all under /v1, bearer-authed unless noted)</caption>
+    <thead><tr><th>Route</th><th>Auth</th><th>Does</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /v1/keys</code></td><td>GitHub token in body</td><td>verifies with GitHub, mints a key, returns it once</td></tr>
+      <tr><td><code>DELETE /v1/keys/current</code></td><td>the key itself</td><td>revokes the presenting key; 204, idempotent</td></tr>
+      <tr><td><code>DELETE /v1/admin/pages/:hash</code></td><td>operator token</td><td>takedown: removes object + index entry (§07)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Failure honesty: <code>POST /v1/keys</code> with a bad GitHub token is a plain 401; GitHub being down makes login fail loudly and publish keep working — the two paths share nothing.</p>
+</section>
+
+<section id="data">
+  <h2>04 · Data model</h2>
+  <p>Everything hosted lives in the <code>ACCOUNTS</code> namespace under three prefixes. R2 stays the source of truth for pages; KV is derived state that can always be rebuilt from bucket metadata.</p>
+  <figure class="code"><pre>k:&lt;sha256(key)&gt;      → { owner, created, revoked? }     the key record
+i:&lt;owner&gt;:&lt;hash&gt;     → { title, publishedAt, bytes }     one index entry per page
+q:&lt;owner&gt;:d:&lt;yyyymmdd&gt; → count        (TTL 48h)          pages published today
+q:&lt;owner&gt;:bytes        → total stored bytes              maintained on publish/remove</pre></figure>
+  <ul>
+    <li><b>List</b> is <code>prefix = i:&lt;owner&gt;:</code>, sorted client-side by <code>publishedAt</code> — an owner's page count is quota-bounded (§05), so one KV list call suffices; no cursor gymnastics.</li>
+    <li><b>Remove</b> reads the object's <code>customMetadata.owner</code> from R2 — not the index — and compares to the caller. Someone else's hash answers <b>404, not 403</b>: existence is never disclosed to non-owners. Then delete object, delete index entry, decrement bytes.</li>
+    <li><b>Consistency rule: the bucket wins.</b> KV is eventually consistent and a publish can crash between writes. Write order on publish: R2 object first, then index, then counters. A page in R2 without an index entry is invisible in <code>list</code> but served and removable — annoying, harmless. An index entry without an object serves 404 like any unknown hash. A reconcile pass is deliberately <em>not built</em> in 0.3; the rule is documented in the code instead.</li>
+    <li><b>Same bytes, two owners</b> — the hash collides by design. Confirmed in review: the second publisher gets the same URL (it is content-addressed; the URL was already public knowledge), but no second index entry and no ownership change — first writer keeps <code>owner</code>. The second publisher's <code>remove</code> therefore 404s. Simple, immutable, slightly surprising; the alternative (per-owner copies) was rejected because it breaks the one-hash-one-object model. M14 builds exactly this.</li>
+  </ul>
+</section>
+
+<section id="quotas">
+  <h2>05 · Quotas and rate limits</h2>
+  <p>Two enforcement layers with different jobs: <b>quotas</b> (in the Worker, per key, about fairness and storage) and <b>rate limits</b> (in the WAF, per IP, about floods — they run before the Worker and cost nothing at 738 lines).</p>
+  <div class="scroll"><table>
+    <caption>Confirmed numbers — vars with defaults, stated on the hosted page</caption>
+    <thead><tr><th>Limit</th><th>Value</th><th>Where</th><th>On breach</th></tr></thead>
+    <tbody>
+      <tr><td>Page size</td><td>5 MB (existing)</td><td>Worker</td><td><code>TooLarge</code> 413</td></tr>
+      <tr><td>Pages per key per day</td><td>25</td><td>Worker, <code>q:*:d:*</code></td><td><code>QuotaExceeded</code> 429</td></tr>
+      <tr><td>Stored bytes per owner</td><td>250 MB</td><td>Worker, <code>q:*:bytes</code></td><td><code>QuotaExceeded</code> 429</td></tr>
+      <tr><td>Publish + key-mint, per IP</td><td>10 / min</td><td>WAF rate rule</td><td>429 at the edge</td></tr>
+      <tr><td>Reads, per IP</td><td>high (≈300 / min)</td><td>WAF rate rule</td><td>429 at the edge; legit readers never see it</td></tr>
+    </tbody>
+  </tbody></table></div>
+  <p><code>QuotaExceeded</code> is the fifth contract error, a <code>Schema.TaggedError</code> with a 429 annotation like its four siblings, carrying which limit and when it resets. Counters are best-effort — KV races can let publish <i>n+1</i> through occasionally; quotas are a cost ceiling, not a billing system, and the WAF catches actual floods. The daily counter's 48h TTL makes stale counters self-cleaning.</p>
+  <p class="note">The WAF rules are configuration, not code: the runbook in <code>docs/</code> (M16) records rule expressions and thresholds so they can be re-created on any zone. Free plan allows the rate-limiting rule this needs.</p>
+</section>
+
+<section id="serving">
+  <h2>06 · Serving strangers' HTML</h2>
+  <p>The product is "we serve arbitrary HTML from strangers on our domain." That sentence should scare us into exactly the right amount of architecture:</p>
+  <ul>
+    <li><span class="tag">risk</span><b>Cookie scoping is the sharp edge.</b> Every page gets its own origin (<code>&lt;hash&gt;.handbill.dev</code>), which isolates storage, scripts, and cookies between pages and from the API — <em>except</em> that any page can set a cookie with <code>Domain=.handbill.dev</code>, readable by the site and every other page. Until <code>handbill.dev</code> is on the Public Suffix List — no longer held to 1.0, but not ours to schedule either (§11) — the mitigation is architectural: <b>nothing on the domain uses cookies</b>. The site is static, analytics is cookieless, auth is bearer-only, login is device flow (§03). A poisoned domain cookie has nothing to poison. The rule outlives the listing: decision 07 keeps it standing either way.</li>
+    <li><span class="tag">risk</span><b>Phishing is the expected abuse</b>, not an edge case: unguessable URL + free HTTPS + a plausible domain is exactly what a phisher wants. <code>noindex</code> keeps pages out of search; quotas cap volume; the real answer is operational — fast takedown, key revocation, and the drill (§07). The hosted page and ToS state plainly that pages are the publisher's, and the abuse contact is findable from any page's URL structure (documented on the site, since the pages themselves are untouchable bytes).</li>
+    <li><span class="tag">risk</span><b>Hosted aliases would hand phishers <code>login.handbill.dev</code>.</b> Accepted (decision 08): <b>aliases stay operator-only in 0.3.</b> Hosted users get hash URLs, full stop. Names for the public — reserved-word lists, squatting, transfer — is its own project and not this release.</li>
+    <li><span class="tag tag--ok">held</span><b>Enumeration and collisions.</b> 48 bits of content hash: guessing a live link is ~2⁴⁷ tries against a WAF; fine for "unguessable, not secret" (SECURITY.md's words). Deliberate collision against a <em>specific</em> page is birthday-hard at this size but not absurd forever; the server recomputing the hash means an attacker can only collide, never overwrite (first write wins, §04). Revisit width at 1.0, not now.</li>
+    <li><span class="tag tag--ok">held</span><b>The read path changes in no way.</b> Same headers, same immutability, same 404 shape for unknown hosts. Hosted pages are indistinguishable from self-hosted ones by design — there is nothing extra to leak.</li>
+  </ul>
+</section>
+
+<section id="abuse">
+  <h2>07 · Abuse operations</h2>
+  <p>S3.3's machinery, kept small enough to actually be used at 2am:</p>
+  <ul>
+    <li><b>Takedown</b> — <code>handbill admin takedown &lt;hash|url&gt;</code> → <code>DELETE /v1/admin/pages/:hash</code> with the operator token (a separate secret, <code>ADMIN_TOKEN</code>, never a user key). Deletes object + index entry; the URL 404s within seconds (nothing caches past the edge cache, which the delete purges). Idempotent 204. The operator then decides separately whether the <em>key</em> dies too — takedown and revocation are two acts, because mistaken publishes deserve a lighter touch than phishing.</li>
+    <li><b>Revocation</b> — flipping <code>revoked</code> on the key record. The user's pages keep serving (invariant §01); they just can't publish more. Revoking + taking down everything an owner published is the drill's worst case: <code>list</code> by owner prefix, takedown each.</li>
+    <li><b>What the operator can see, said plainly</b> (this goes in the ToS, M17): every page's content and metadata, owner identity as a GitHub id, quota counters, and Workers logs. What is deliberately not kept: no per-reader logs beyond Cloudflare's standard analytics, no IP retention in our storage, no content scanning in 0.3 — review is reactive, on report.</li>
+    <li><b>Reports</b> — one abuse address on the site and in the ToS, answered by a human, with the takedown SLA in plain words. Legal exposure (DMCA agent registration, jurisdiction) is a checklist item for M17, not an engineering artifact.</li>
+    <li><b>The drill (M18)</b> proves the loop on production: publish as a hosted user → report it → takedown → revoke → confirm the 404 and the dead key → write the timings down. Abuse tooling that has never been exercised is decoration.</li>
+  </ul>
+</section>
+
+<section id="rollout">
+  <h2>08 · Rollout and backout</h2>
+  <ul>
+    <li><b>Order matters:</b> ToS + abuse page live (M17) <em>before</em> the CLI that defaults strangers onto the service ships (M15's release in 0.3.0). The Worker can run accounts mode quietly for weeks first — binding present, nobody defaulted to it — which is exactly how M13/M14 get verified on production without a launch.</li>
+    <li><b>The flip is client-side only.</b> "Default endpoint becomes <code>api.handbill.dev</code>" is a CLI fallback when no endpoint is configured (S3.1); no server behavior changes on release day. Self-hosters have an endpoint configured, so the flip does not touch them.</li>
+    <li><b>Kill switch:</b> remove the <code>ACCOUNTS</code> binding and deploy — the Worker reverts to secret mode, hosted publishing 401s, and <em>every already-published page keeps serving</em>, because serving never consulted accounts. Worst-case backout is one config line, and it strands no reader.</li>
+    <li><b>Blast radius note:</b> hosted mode runs on the maintainer's existing zone and bucket. If drills reveal that mixing operator pages and stranger pages in one bucket is uncomfortable, a second bucket is a binding away — but that is a 0.4 refactor, not a 0.3 requirement.</li>
+  </ul>
+</section>
+
+<section id="cost">
+  <h2>09 · Cost envelope</h2>
+  <p>Sanity check that abuse is bounded by money as well as rules, on Workers' paid plan ($5/mo, which the account is on for R2 anyway):</p>
+  <ul>
+    <li>KV: a publish costs ~4 writes (object aside): index, two counters, occasionally a key read refresh. 1k writes/day is deep inside free allowances; KV reads on publish are negligible next to the free 10M/day.</li>
+    <li>R2: 250 MB × even 1,000 abusive accounts is 250 GB ≈ $3.75/mo storage worst case, and quotas cap the write rate at 25 × 5 MB/day/key. Egress is free — the scary cloud bill (bandwidth amplification) structurally does not exist on R2.</li>
+    <li>The WAF read limit caps request floods before they bill as Worker invocations.</li>
+  </ul>
+  <p class="note">Conclusion: the service cannot be made expensive quickly by one actor; it can be made <em>annoying</em>, which is what §07 is for.</p>
+</section>
+
+<section id="decisions">
+  <h2>10 · Decisions adopted here</h2>
+  <p>Reviewed one by one and <b>all accepted as written on 2026-09-01</b>; decision 11 is carried in from the 0.4 paid tier document (<code>docs/2026-08-31-04-paid.html</code>), accepted with them. These are settled — reopening one means a new issue naming its replacement, not a re-read of this list:</p>
+  <ol class="decisions">
+    <li><b>GitHub device flow</b> is the login; owner is <code>gh:&lt;numeric id&gt;</code>; the Worker's only outbound call is verifying mints. <i>(M13)</i></li>
+    <li><b>Keys are <code>hb_</code>-prefixed, stored only as SHA-256</b>, shown once, revocable, non-expiring. <i>(M13)</i></li>
+    <li><b>One <code>ACCOUNTS</code> KV namespace</b> holds keys, index, and counters under prefixes; <code>ALIASES</code> stays separate. <i>(M13/M14)</i></li>
+    <li><b>The bucket wins</b> over the index; write order R2 → index → counters; no reconcile job in 0.3. <i>(M14)</i></li>
+    <li><b>Cross-owner remove is 404</b>, and on hash collision the first writer keeps ownership. <i>(M14)</i></li>
+    <li><b>Quota numbers:</b> 25 pages/day, 250 MB/owner, WAF at 10/min publish and ≈300/min read per IP; <code>QuotaExceeded</code> 429 joins the contract. <i>(M16)</i></li>
+    <li><b>No cookies anywhere on handbill.dev</b> until the PSL entry lands — this constrains every future site feature and is the price of hosted mode before 1.0. <i>(standing)</i></li>
+    <li><b>Aliases remain operator-only in 0.3.</b> <i>(scope)</i></li>
+    <li><b>Takedown and revocation are separate acts</b>; operator token is its own secret. <i>(M16)</i></li>
+    <li><b>M17 ships before the 0.3.0 release flips the default endpoint</b>; backout is unbinding <code>ACCOUNTS</code>. <i>(M18)</i></li>
+    <li><b>The <code>tier</code> field ships in 0.3, payments in 0.4.</b> The key record is <code>{ owner, created, revoked?, tier: "free" }</code> and the quota service reads its limits from a per-tier table from day one; Polar, checkout and the billing webhook are 0.4's. <b>The read path never checks payment state</b> — §01's promise extended to money, permanently. <i>(M13/M16)</i></li>
+  </ol>
+</section>
+
+<section id="open">
+  <h2>11 · Questions, answered</h2>
+  <p>Answered in the same review, 2026-09-01. Each was a real fork; none is open any longer.</p>
+  <ul>
+    <li><b>PSL now instead of 1.0? — now, as far as it is ours to decide.</b> Decided <b>2026-09-01</b>: stop holding the submission back to 1.0, because the listing is free and takes weeks-to-months to propagate, and it closes §06's cookie edge. Submission <b>prepared 2026-09-01, not filed</b> — the list asks for a project serving thousands of distinct users, and 0.3 has not shipped, so filing today invites a decline on the merits. It goes in when hosted mode can answer that question with a number. Meanwhile nothing depends on it: the listing would change cookie behaviour for the <em>site</em> too (no cross-subdomain anything, ever), which decision 07 commits to regardless. The 1.0 row of the roadmap is the checkpoint, not the deadline.</li>
+    <li><b>Quota numbers — confirmed.</b> 25 pages/day per key and 250 MB per owner ship as written; the paid multiples in 0.4 (250/day, 5 GB) stay placeholders until that version opens.</li>
+    <li><b>GitHub-only login — accepted.</b> It makes GitHub a hard dependency of onboarding, never of publishing or reading: an outage blocks new keys and nothing else. Right for this audience; a second provider is a later version's problem, not a gap in this one.</li>
+    <li><b>Takedown transparency — a plain 404, no tombstone.</b> A taken-down page is indistinguishable from a hash that never existed. Tombstones leak that something was there and invite argument on a page we no longer control.</li>
+    <li><b>Raw HTML inside markdown — kept, and documented.</b> 0.2 deferred the sanitize-or-keep question to hosted mode; hosted mode answers it by making it moot, since a hosted user can publish arbitrary HTML directly and the markdown path is only a convenience on top. So passthrough stays, and it becomes a line in M17's words: what we render, we render as given.</li>
+    <li><b>Where does the mint page live</b> if device flow ever feels clunky — a static page on the site could guide the flow without cookies, but adds words to maintain. Still not needed for v1 of login; the only item here left deliberately unanswered.</li>
+  </ul>
+</section>
+
+<section id="map">
+  <h2>12 · Milestone map</h2>
+  <div class="scroll"><table>
+    <caption>Sections → issues</caption>
+    <thead><tr><th>Issue</th><th>Takes from this doc</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://github.com/viktoravelino/handbill/issues/88">#88</a> budget</td><td>closed — 1125 lines, the headroom §02's three services are built inside</td></tr>
+      <tr><td><a href="https://github.com/viktoravelino/handbill/issues/89">#89</a> CLI split</td><td>clears the files M15 lands in</td></tr>
+      <tr><td><a href="https://github.com/viktoravelino/handbill/issues/82">#82 M13</a></td><td>§03 identity + keys, §02 <code>Auth</code> layers, decisions 01–03 and the <code>tier</code> field of 11</td></tr>
+      <tr><td><a href="https://github.com/viktoravelino/handbill/issues/83">#83 M14</a></td><td>§04 data model, decisions 04–05</td></tr>
+      <tr><td><a href="https://github.com/viktoravelino/handbill/issues/84">#84 M15</a></td><td>§03 client side, §08 endpoint flip</td></tr>
+      <tr><td><a href="https://github.com/viktoravelino/handbill/issues/85">#85 M16</a></td><td>§05 quotas + WAF runbook, §07 takedown, decisions 06, 09, and 11's per-tier table</td></tr>
+      <tr><td><a href="https://github.com/viktoravelino/handbill/issues/86">#86 M17</a></td><td>§07 the words: ToS, abuse contact, operator-visibility statement, the raw-HTML passthrough line (§11)</td></tr>
+      <tr><td><a href="https://github.com/viktoravelino/handbill/issues/87">#87 M18</a></td><td>§07 the drill, §08 rollout order, both exit criteria</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  <p>handbill · 0.3 hosted architecture · written 2026-08-31 · adopted 2026-09-01 · lives at <code>docs/2026-08-31-03-architecture.html</code> in the repository; this published copy is the one people are handed.</p>
+</footer>
+
+</div>
+<script>
+  const btn = document.getElementById("theme");
+  const modes = ["auto","light","dark"];
+  let mode = localStorage.getItem("hb-theme") || "auto";
+  const apply = () => {
+    if (mode === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", mode);
+    btn.textContent = "Theme: " + mode;
+  };
+  btn.addEventListener("click", () => {
+    mode = modes[(modes.indexOf(mode) + 1) % modes.length];
+    localStorage.setItem("hb-theme", mode); apply();
+  });
+  apply();
+</script>
+</body>
+</html>

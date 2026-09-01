@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>handbill — 0.4 paid tier on Polar, and the roadmap after it</title>
+<style>
+  :root {
+    --ground:#F0F2F1; --surface:#FAFBFA; --sunken:#E6EAE8;
+    --ink:#15191A; --ink-2:#535D5B;
+    --rule:#D2D9D6; --rule-strong:#B4BFBB;
+    --accent:#1D5F53; --accent-wash:#E2ECE8;
+    --flag:#7C4E0E; --flag-wash:#F1E9DA;
+    --font-display:"Iowan Old Style","Charter","Palatino Linotype",Palatino,Georgia,serif;
+    --font-body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --measure:74ch;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0F1413; --surface:#161C1B; --sunken:#1C2422;
+      --ink:#E6EBE9; --ink-2:#98A5A1;
+      --rule:#2A3432; --rule-strong:#3D4A47;
+      --accent:#7FC9B5; --accent-wash:#152E29;
+      --flag:#D6A566; --flag-wash:#2E2311;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0F1413; --surface:#161C1B; --sunken:#1C2422;
+    --ink:#E6EBE9; --ink-2:#98A5A1;
+    --rule:#2A3432; --rule-strong:#3D4A47;
+    --accent:#7FC9B5; --accent-wash:#152E29;
+    --flag:#D6A566; --flag-wash:#2E2311;
+  }
+  *,*::before,*::after { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+    font:1.0625rem/1.65 var(--font-body);
+    padding:clamp(1.25rem,4vw,3.5rem) clamp(1rem,5vw,2rem) 5rem; }
+  .doc { max-width:var(--measure); margin:0 auto; }
+  p,li { text-wrap:pretty; }
+  .doc > section > p { max-width:66ch; }
+  h1,h2,h3 { font-family:var(--font-display); font-weight:600; text-wrap:balance; line-height:1.2; margin:0; }
+  h1 { font-size:clamp(1.9rem,5vw,2.55rem); letter-spacing:-0.01em; }
+  h2 { font-size:1.45rem; }
+  h3 { font-size:1.1rem; }
+  a { color:var(--accent); text-underline-offset:2px; }
+  code { font-family:var(--font-mono); font-size:0.9em; }
+  p code, li code, td code, dd code {
+    background:var(--sunken); border:1px solid var(--rule);
+    padding:0.05em 0.3em; border-radius:2px; overflow-wrap:break-word; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  ::selection { background:var(--accent-wash); }
+  .masthead { display:grid; gap:1rem; padding-bottom:1.5rem; border-bottom:2px solid var(--ink); margin-bottom:2rem; }
+  .masthead__top { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+  .eyebrow { font:500 0.6875rem/1 var(--font-mono); letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); margin:0 0 0.6rem; }
+  .lede { font-size:1.15rem; color:var(--ink-2); max-width:60ch; margin:0; }
+  .meta { display:flex; flex-wrap:wrap; gap:0.35rem 1.25rem; margin:0; padding:0; list-style:none;
+          font:0.75rem/1.5 var(--font-mono); color:var(--ink-2); }
+  .meta strong { color:var(--ink); font-weight:500; }
+  .toggle { flex:none; font:0.75rem/1 var(--font-mono); color:var(--ink-2); background:transparent;
+            border:1px solid var(--rule-strong); padding:0.45rem 0.6rem; cursor:pointer; border-radius:2px; }
+  .toggle:hover { color:var(--ink); border-color:var(--ink-2); }
+  section { margin-bottom:3.25rem; }
+  section > * + * { margin-top:1rem; }
+  h2 + p { margin-top:0.75rem; }
+  ul,ol { padding-left:1.25rem; }
+  li + li { margin-top:0.4rem; }
+  .decisions { list-style:none; padding:0; counter-reset:d; display:grid; gap:0.9rem; }
+  .decisions li { counter-increment:d; padding-left:2.4rem; position:relative; max-width:66ch; }
+  .decisions li::before { content:counter(d,decimal-leading-zero); position:absolute; left:0; top:0.15em;
+    font:500 0.75rem/1 var(--font-mono); color:var(--accent); letter-spacing:0.04em; }
+  .decisions b { font-weight:600; }
+  figure.code { margin:0; border:1px solid var(--rule); background:var(--sunken); }
+  .code pre { margin:0; padding:0.85rem 0.9rem; overflow-x:auto; font:0.8125rem/1.65 var(--font-mono); color:var(--ink); }
+  .scroll { overflow-x:auto; border:1px solid var(--rule); background:var(--surface); }
+  table { border-collapse:collapse; width:100%; min-width:32rem; font-size:0.875rem; font-variant-numeric:tabular-nums; }
+  caption { text-align:left; font:500 0.6875rem/1.4 var(--font-mono); letter-spacing:0.09em;
+            text-transform:uppercase; color:var(--ink-2); padding:0.6rem 0.7rem; border-bottom:1px solid var(--rule); }
+  th,td { text-align:left; vertical-align:top; padding:0.55rem 0.7rem; border-bottom:1px solid var(--rule); }
+  thead th { font:600 0.6875rem/1.4 var(--font-mono); letter-spacing:0.07em; text-transform:uppercase;
+             color:var(--ink-2); border-bottom:2px solid var(--rule-strong); white-space:nowrap; }
+  tbody tr:last-child td { border-bottom:0; }
+  td code { white-space:nowrap; }
+  .tag { display:inline-block; font:600 0.625rem/1.6 var(--font-mono); letter-spacing:0.1em; text-transform:uppercase;
+         color:var(--flag); background:var(--flag-wash); border:1px solid var(--rule); padding:0.05rem 0.4rem;
+         border-radius:2px; margin-right:0.5rem; vertical-align:0.08em; }
+  .note { border-left:3px solid var(--rule-strong); padding-left:0.9rem; color:var(--ink-2); font-size:0.95rem; max-width:64ch; }
+  footer { border-top:1px solid var(--rule); padding-top:1rem; color:var(--ink-2); font-size:0.85rem; }
+  @media (max-width:34rem) { body { font-size:1rem; } .code pre { font-size:0.75rem; } }
+  @media print { body { background:#fff; color:#000; padding:0; } .toggle { display:none; } }
+</style>
+</head>
+<body>
+<div class="doc">
+
+<header class="masthead">
+  <div class="masthead__top">
+    <div>
+      <p class="eyebrow">Direction &middot; v0.4 paid &middot; 2026-08-31</p>
+      <h1>The paid tier</h1>
+    </div>
+    <button class="toggle" type="button" id="theme" aria-live="polite">Theme: auto</button>
+  </div>
+  <p class="lede">Payments land in 0.4, on Polar; 0.3 only makes room for them. This document fixes the shape — what "paid" means, what gets built, what has to exist outside the repo — and re-cuts the roadmap so "Sheets and time" moves to 0.5. It amends the <a href="https://25e4f4d7789f.handbill.dev">0.3 architecture</a> (one new decision) and, once committed, the PRD's versions table.</p>
+  <ul class="meta">
+    <li><strong>Status</strong> §01 confirmed 2026-09-01; the rest is direction until 0.4 opens</li>
+    <li><strong>Provider</strong> Polar (merchant of record)</li>
+    <li><strong>Depends on</strong> 0.3 shipped and quiet for a few weeks</li>
+    <li><strong>Exit</strong> upgrade raises a quota with no human in the loop; lapse lowers it without breaking a link</li>
+  </ul>
+</header>
+
+<section id="carried">
+  <h2>01 · Decisions carried in</h2>
+  <p>All four were reviewed with the 0.3 architecture and <b>confirmed on 2026-09-01</b>; the second of them is now decision 11 of that document. What follows them in this file is still direction, not a settled design.</p>
+  <ol class="decisions">
+    <li><b>Payments are 0.4, not 0.3.</b> The hosted front door stays free-with-quotas so the two-minute stranger test survives; money is asked for only when the free tier binds.</li>
+    <li><b>The tier field ships in 0.3</b> — accepted into the 0.3 architecture as its decision 11: the key record becomes <code>{ owner, created, revoked?, tier: "free" }</code> and the quota service reads limits from a per-tier table from day one. Cost now: a handful of lines in M13/M16. Cost of retrofitting later: a KV migration.</li>
+    <li><b>Polar is the provider</b> — merchant of record, so VAT/GST/sales tax is their problem; checkout on their domain, which keeps the no-cookies-on-handbill.dev rule (0.3 decision 07) untouched; subscription webhooks and a TypeScript SDK. Revisited only if their terms or pricing change materially before 0.4 opens.</li>
+    <li><b>Payment state affects write quotas only.</b> The read path never consults tier, payment, or subscription status. A lapsed card can never break a published link. This is 0.3's invariant §01 extended to money, and it is permanent.</li>
+  </ol>
+</section>
+
+<section id="model">
+  <h2>02 · The model</h2>
+  <p>Two tiers, one product. No metering, no seats, no add-ons — a flat subscription that buys bigger numbers:</p>
+  <div class="scroll"><table>
+    <caption>Tiers (free column confirmed with 0.3; paid column placeholders until 0.4 opens)</caption>
+    <thead><tr><th>Limit</th><th>free</th><th>paid</th></tr></thead>
+    <tbody>
+      <tr><td>Pages per day</td><td>25</td><td>250</td></tr>
+      <tr><td>Stored bytes</td><td>250 MB</td><td>5 GB</td></tr>
+      <tr><td>Page size</td><td>5 MB</td><td>5 MB — unchanged; it is a format constraint, not a paywall</td></tr>
+      <tr><td>Price</td><td>—</td><td>single monthly price, annual discount; picked at 0.4 launch</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><b>What paid deliberately does not buy in 0.4:</b> aliases (operator-only per 0.3 decision 08 — selling guessable names to strangers is a phishing product), custom domains, longer hashes, priority anything. Quota is the whole product until demand says otherwise.</li>
+    <li><b>Lapse semantics:</b> subscription ends → tier returns to <code>free</code> at period end. If stored bytes then exceed the free quota, <em>publishing</em> is blocked until the owner deletes below it — nothing is auto-deleted, no link breaks, ever. The 429 says exactly this.</li>
+    <li><b>Refund/abuse interplay:</b> takedown and revocation (0.3 §07) are independent of payment state; a paying abuser is still revoked, and Polar's refund is a dashboard action, not code.</li>
+  </ul>
+</section>
+
+<section id="structure">
+  <h2>03 · Structure</h2>
+  <p>Five pieces, three of them outside the Worker:</p>
+  <div class="scroll"><table>
+    <caption>Components</caption>
+    <thead><tr><th>Piece</th><th>Where</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>Product + price</td><td>Polar dashboard</td><td>one subscription product; checkout link generated from it</td></tr>
+      <tr><td>Pricing page</td><td>apps/web</td><td>static; states both tiers' numbers and links out to Polar checkout — no cookies, no scripts</td></tr>
+      <tr><td>Checkout + portal</td><td>Polar's domain</td><td>payment, invoices, cancel/renew — none of it ours</td></tr>
+      <tr><td><code>POST /v1/billing/webhook</code></td><td>apps/worker</td><td>verifies Polar's signature; flips <code>tier</code> on the owner's key records</td></tr>
+      <tr><td><code>handbill account</code></td><td>apps/cli</td><td>prints owner, tier, quota usage — the "did my upgrade land?" command</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>The joining key.</b> Checkout must tell us <em>which owner</em> paid. The pricing page links to checkout with the owner's id (<code>gh:&lt;id&gt;</code>) attached as checkout metadata — Polar echoes metadata back in webhook events, so the webhook handler maps event → owner → tier flip without storing any Polar state beyond the subscription id on the owner record (for support lookups). The CLI can print the personalized checkout URL (<code>handbill account --upgrade</code>) so the flow works without ever visiting the site.</p>
+  <p><b>Flows, in prose.</b> <i>Upgrade:</i> checkout completes → webhook (subscription became active) → <code>tier: "paid"</code> → next publish sees the bigger table. <i>Lapse:</i> webhook (subscription ended/revoked) → <code>tier: "free"</code> → write path shrinks, read path never knew. <i>Webhook downtime:</i> events are retried by Polar; until one lands, the user has paid but sits on free quota — <code>handbill account</code> shows the mismatch, and a manual <code>handbill admin tier &lt;owner&gt; paid</code> is the operator's override (also the support tool). Reconciliation stays human-scale on purpose.</p>
+  <p class="note">Worker budget estimate: webhook route with signature verification ~50–70 lines, tier table ~10, admin tier override ~10. The #88 headroom decision should assume roughly +90 for 0.4 on top of 0.3's needs.</p>
+</section>
+
+<section id="needed">
+  <h2>04 · What is needed</h2>
+  <div class="scroll"><table>
+    <caption>Checklist by lane</caption>
+    <thead><tr><th>Lane</th><th>Items</th></tr></thead>
+    <tbody>
+      <tr><td>Now, inside 0.3</td><td><code>tier</code> on the key record and the per-tier quota table (M13/M16); nothing else — no Polar account needed yet</td></tr>
+      <tr><td>Business, before 0.4 code</td><td>Polar org + payout details + their KYC; the product and price; webhook endpoint + secret; a look at their sandbox for the integration tests; ToS gains a payments section (renewal, refund policy, what lapse means — §02's words)</td></tr>
+      <tr><td>Contract + Worker</td><td><code>POST /v1/billing/webhook</code> (signature-verified, no bearer auth); <code>handbill admin tier</code> route; <code>GET /v1/account</code> returning owner, tier, usage</td></tr>
+      <tr><td>CLI</td><td><code>handbill account</code> (+ <code>--upgrade</code> printing the checkout URL); no other command changes</td></tr>
+      <tr><td>Web</td><td>the pricing page; hosted page updated to mention the paid tier exists</td></tr>
+      <tr><td>Ops</td><td>webhook delivery monitoring (Polar's dashboard + a weekly <code>account</code> spot-check); the drill gains a step: upgrade, verify, cancel, verify lapse</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>Open until 0.4:</b> the price; annual-only vs monthly+annual; whether webhook event names are consumed via Polar's SDK or verified raw (decide against the SDK if it drags dependencies into the Worker — the signature check is small); whether <code>handbill account</code> belongs in 0.3's M15 already (leaning no — YAGNI until there is a tier to report).</p>
+</section>
+
+<section id="roadmap">
+  <h2>05 · The roadmap, re-cut</h2>
+  <p>One insertion, everything after shifts by one. Themes, exit criteria, and the shipped rows are otherwise the PRD's; the PRD table gets amended to match when this commits.</p>
+  <div class="scroll"><table>
+    <caption>Versions</caption>
+    <thead><tr><th>Version</th><th>Theme</th><th>Ships</th><th>Exit criterion</th></tr></thead>
+    <tbody>
+      <tr><td>0.1</td><td>Print · shipped 2026-08-28</td><td>Worker (secret auth), CLI, skill, self-host docs, CI, npm</td><td>maintainer's flow migrated ✓</td></tr>
+      <tr><td>0.2</td><td>Words and names · shipped 2026-08-31</td><td>markdown, aliases, OpenAPI, the site</td><td>live on handbill.dev ✓</td></tr>
+      <tr><td>0.3</td><td>Hosted</td><td>accounts (KV), login, per-owner index, quotas <em>with the tier field</em>, takedown, ToS, endpoint flip</td><td>a stranger publishes with no config in under two minutes; abuse drill run</td></tr>
+      <tr><td><b>0.4</b></td><td><b>Paid</b></td><td>Polar checkout + webhook, tier flips, pricing page, <code>handbill account</code>, admin tier override</td><td>an upgrade raises a quota with no human in the loop; a lapse lowers it without breaking a single link</td></tr>
+      <tr><td>0.5</td><td>Sheets and time <span class="tag">was 0.4</span></td><td>inline local assets at publish time; <code>--ttl</code> with a sweeping cron</td><td>a page with local images publishes as one object</td></tr>
+      <tr><td>1.0</td><td>Stable</td><td>contract frozen, Effect stable v4, <code>@handbill/contract</code> published, PSL entry <em>(prepared 2026-09-01; filed once hosted scale meets the list's bar)</em>, encrypted pages experimental</td><td>no breaking change for two minor versions</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Why Paid before Sheets and time: hosting strangers (0.3) creates recurring cost and abuse work immediately; the version after it should pay for it. Inline assets and TTL serve self-hosters, who are patient and already served well.</p>
+</section>
+
+<section id="amends">
+  <h2>06 · What this document amends</h2>
+  <ul>
+    <li><b>0.3 architecture</b> (<a href="https://25e4f4d7789f.handbill.dev">25e4f4d7789f</a>): gains decision 11 — <i>tier on the key record and a per-tier quota table now; payments deferred to 0.4 on Polar; the read path never checks payment state.</i> Folded in and accepted 2026-09-01; #82 and #85 build the field from there.</li>
+    <li><b>PRD versions table:</b> the 0.4/0.5 re-cut above, amended in <code>docs/2026-08-28-prd.html</code> and in the README's roadmap when both docs landed.</li>
+    <li><b>Board:</b> no 0.4 issues yet — milestones get cut when 0.4 opens; only the 0.4 milestone object exists, carrying this link.</li>
+  </ul>
+</section>
+
+<footer>
+  <p>handbill · 0.4 paid tier and roadmap · written 2026-08-31 · §01 confirmed 2026-09-01 · lives at <code>docs/2026-08-31-04-paid.html</code> in the repository; this published copy is the one people are handed.</p>
+</footer>
+
+</div>
+<script>
+  const btn = document.getElementById("theme");
+  const modes = ["auto","light","dark"];
+  let mode = localStorage.getItem("hb-theme") || "auto";
+  const apply = () => {
+    if (mode === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", mode);
+    btn.textContent = "Theme: " + mode;
+  };
+  btn.addEventListener("click", () => {
+    mode = modes[(modes.indexOf(mode) + 1) % modes.length];
+    localStorage.setItem("hb-theme", mode); apply();
+  });
+  apply();
+</script>
+</body>
+</html>
