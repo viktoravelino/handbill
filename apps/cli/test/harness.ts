@@ -2,11 +2,12 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { NodeServices } from "@effect/platform-node"
-import { Console, ConfigProvider, Effect, Exit, Layer, Stdio, Stream } from "effect"
+import { Console, ConfigProvider, Effect, Exit, Layer, Redacted, Stdio, Stream } from "effect"
 import { CliOutput, Command } from "effect/unstable/cli"
 import type { HttpClient } from "effect/unstable/http"
 import { Browser } from "../src/browser"
 import { handbill } from "../src/commands"
+import { GitHubDevice, LoginFailed } from "../src/github"
 import { layer as qrLayer } from "../src/qr"
 
 export interface Outcome {
@@ -19,6 +20,10 @@ export interface Outcome {
   readonly ok: boolean
 }
 
+/** The code the stub device flow tells the user to type; `login` prints it to stderr. */
+export const USER_CODE = "WDJB-MJHT"
+export const VERIFICATION_URI = "https://github.com/login/device"
+
 export interface RunOptions {
   /** The transport the CLI talks to; always the in-process server in tests. */
   readonly http: Layer.Layer<HttpClient.HttpClient>
@@ -26,17 +31,25 @@ export interface RunOptions {
   readonly stdin?: string
   /** Whether stderr looks like a terminal to `--qr`; a pipe when false. Defaults to a terminal. */
   readonly tty?: boolean
+  /**
+   * What GitHub's device flow hands back, standing in for a user who approved
+   * the code. `undefined` refuses, the way an expired code does. Everything
+   * after this point — the exchange at `POST /v1/keys`, the config file, the
+   * output — is the real thing.
+   */
+  readonly githubToken?: string | undefined
 }
 
 const runCommand = Command.runWith(handbill, { version: "0.1.0-test" })
 
 /**
  * Runs the real command tree with captured output. Everything a command touches
- * — arguments, environment, standard input, HTTP, the browser, the help
- * formatter — comes from a layer, so a test never mutates the process and never
- * depends on it: without the formatter the framework colours `--help` whenever
- * stdout is a TTY, and the tests that read help text pass in CI but fail in a
- * terminal; without the browser, `--open` would open one.
+ * — arguments, environment, standard input, HTTP, the browser, GitHub's device
+ * flow, the help formatter — comes from a layer, so a test never mutates the
+ * process and never depends on it: without the formatter the framework colours
+ * `--help` whenever stdout is a TTY, and the tests that read help text pass in
+ * CI but fail in a terminal; without the browser, `--open` would open one; and
+ * without the device flow, `login` would wait on github.com.
  */
 export const run = async (args: ReadonlyArray<string>, options: RunOptions): Promise<Outcome> => {
   const stdout: Array<string> = []
@@ -58,11 +71,22 @@ export const run = async (args: ReadonlyArray<string>, options: RunOptions): Pro
     open: (url) => Effect.sync(() => void opened.push(url))
   })
 
+  const device = Layer.succeed(GitHubDevice, {
+    authorize: (announce) =>
+      Effect.andThen(
+        announce({ userCode: USER_CODE, verificationUri: VERIFICATION_URI }),
+        options.githubToken === undefined
+          ? Effect.fail(new LoginFailed({ reason: "the code expired before it was entered" }))
+          : Effect.succeed(Redacted.make(options.githubToken))
+      )
+  })
+
   const exit = await Effect.runPromiseExit(
     runCommand(args).pipe(
       Effect.provideService(Console.Console, capture),
       Effect.provide(options.http),
       Effect.provide(browser),
+      Effect.provide(device),
       // stderr is a terminal unless the test says otherwise, so `--qr` renders
       // and the capture above sees the block a user would.
       Effect.provide(qrLayer({ tty: options.tty ?? true })),

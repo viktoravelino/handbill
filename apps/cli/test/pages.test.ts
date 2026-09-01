@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { hashDocument } from "../src/hash"
 import { kickoff, notes, plan, retro, session } from "./fixtures"
 import { configHome, run } from "./harness"
-import { PUBLISHED_AT, ZONE } from "./server"
+import { PUBLISHED_AT, TOKEN, ZONE } from "./server"
 
 /** The round-trips for the three commands in `src/pages.ts`: publish, list, remove. */
 
@@ -84,13 +84,28 @@ describe("publish errors", () => {
     expect(JSON.parse(outcome.stderr[0] ?? "")).toMatchObject({ error: "Unauthorized" })
   })
 
-  test("says what to configure when there is no endpoint", async () => {
+  // There is always an endpoint — the hosted one is the default — so the only
+  // thing an unconfigured machine is missing is the key, and the first thing it
+  // is told is how to get one.
+  test("says what to configure when nothing is", async () => {
     const outcome = await run([plan.path], {
       http: server().layer,
       env: { XDG_CONFIG_HOME: configHome() }
     })
     expect(outcome.ok).toBe(false)
-    expect(outcome.stderr.join("\n")).toContain("No endpoint configured")
+    expect(outcome.stderr.join("\n")).toContain("handbill login")
+  })
+
+  // A token exported without its endpoint would otherwise go quietly to a host
+  // the user never named.
+  test("says when it is falling back to the hosted endpoint", async () => {
+    const outcome = await run([plan.path], {
+      http: server().layer,
+      env: { XDG_CONFIG_HOME: configHome(), HANDBILL_TOKEN: TOKEN }
+    })
+    expect(outcome.stderr.join("\n")).toContain(
+      "No endpoint configured; using https://api.handbill.dev."
+    )
   })
 })
 

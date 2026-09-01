@@ -6,7 +6,7 @@ import { configHome, run } from "./harness"
 
 /** The round-trips for `src/doctor.ts`: what the five checks report, and when they are skipped. */
 
-const { cli, server } = session()
+const { cli } = session()
 
 /** A transport where every request fails, standing in for an endpoint that is down. */
 const unreachableFetch: typeof globalThis.fetch = Object.assign(
@@ -33,14 +33,17 @@ describe("doctor", () => {
     expect(checks.every((check: { status: string }) => check.status === "ok")).toBe(true)
   })
 
-  test("fails, and skips what it cannot reach, with no configuration", async () => {
+  // With no configuration there is still an endpoint — the hosted default — so
+  // `config` reports it and the key is the only thing missing.
+  test("blames the missing key, not the endpoint, with no configuration", async () => {
     const outcome = await run(["doctor"], {
-      http: server().layer,
+      http: unreachable,
       env: { XDG_CONFIG_HOME: configHome() }
     })
     expect(outcome.ok).toBe(false)
-    expect(outcome.stdout.join("\n")).toContain("FAIL  config")
-    expect(outcome.stdout.join("\n")).toContain("skip  health")
+    expect(outcome.stdout.join("\n")).toContain("ok    config  Endpoint https://api.handbill.dev")
+    expect(outcome.stdout.join("\n")).toContain("FAIL  token")
+    expect(outcome.stdout.join("\n")).toContain("handbill login")
     expect(outcome.stderr.join("\n")).toContain("check(s) failed")
   })
 

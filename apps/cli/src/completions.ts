@@ -158,6 +158,20 @@ export const descriptor: Completions.CommandDescriptor = {
       ]
     },
     {
+      name: "login",
+      description: "Sign in with GitHub and store the key it mints",
+      flags: apiFlags,
+      arguments: [],
+      subcommands: []
+    },
+    {
+      name: "logout",
+      description: "Revoke this machine's key and remove it from the config file",
+      flags: apiFlags,
+      arguments: [],
+      subcommands: []
+    },
+    {
       name: "doctor",
       description: "Check the configuration and the endpoint",
       flags: apiFlags,

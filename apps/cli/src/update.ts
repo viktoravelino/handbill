@@ -102,7 +102,11 @@ export const update = Command.make(
       const aliases = yield* Effect.gen(function* () {
         if (!rotated) return []
         const moved = yield* repoint(client, old, document.hash)
-        yield* client.pages.remove({ params: { hash: old } })
+        // A 404 here is the old page belonging to another account, not the
+        // aliases-are-off 404: `remove` reads it the same way.
+        yield* client.pages
+          .remove({ params: { hash: old } })
+          .pipe(Effect.catchTag("NotFound", () => Effect.fail(new Output.NotYours({ hash: old }))))
         yield* Output.note(`Removed ${old}.`)
         return moved
       }).pipe(Effect.tapError(() => Output.note(`The new page is published at ${published.url}.`)))

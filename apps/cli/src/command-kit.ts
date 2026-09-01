@@ -27,7 +27,15 @@ export const handler =
 /** The configuration and the client that every API-calling command starts from. */
 export const connect = Effect.fn(function* (endpoint: Option.Option<string>) {
   const settings = yield* Config.resolve({ endpoint })
-  return yield* Client.make(yield* Config.credentials(settings))
+  const credentials = yield* Config.credentials(settings)
+  // Nothing named a deployment, so this is the hosted one. Said out loud
+  // because the key being sent may well belong to somewhere else: a token
+  // exported without its endpoint would otherwise go quietly to a host the
+  // user never chose, and come back 401 with no clue why.
+  if (settings.endpoint.source === "default") {
+    yield* Output.note(`No endpoint configured; using ${settings.endpoint.value}.`)
+  }
+  return yield* Client.make(credentials)
 })
 
 /** An `Option` a command cannot go on without: its value, or the failure that says why. */

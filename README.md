@@ -21,13 +21,15 @@ Docs: [handbill.dev/docs](https://handbill.dev/docs).
 npm i -g handbill
 ```
 
-Node ≥ 22. Two dependencies: `effect` and `marked`. Every night `main` is published as `handbill@nightly` if you want what has merged but not shipped. Then point it at a deployment — yours (below) — with `~/.config/handbill/config.json`:
+Node ≥ 22. Two dependencies: `effect` and `marked`. Every night `main` is published as `handbill@nightly` if you want what has merged but not shipped. Then `handbill login` signs you in with GitHub and writes the key it mints to `~/.config/handbill/config.json`; the endpoint defaults to `https://api.handbill.dev`.
+
+Point it at your own deployment (below) with the same file:
 
 ```json
 { "endpoint": "https://api.yourdomain.dev", "token": "…" }
 ```
 
-or `HANDBILL_ENDPOINT` and `HANDBILL_TOKEN` in the environment, which win over the file. `--endpoint <url>` on any command beats both.
+or `HANDBILL_ENDPOINT` and `HANDBILL_TOKEN` in the environment, which win over the file. `--endpoint <url>` on any command beats both, and all three beat the default.
 
 ## Self-host in five steps
 

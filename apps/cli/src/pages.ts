@@ -93,8 +93,12 @@ export const remove = Command.make(
     Effect.gen(function* () {
       const hash = yield* required(targetHash(target), () => new Output.BadTarget({ target }))
       const client = yield* connect(endpoint)
-      // The endpoint is idempotent, so unpublishing twice is not an error.
-      yield* client.pages.remove({ params: { hash } })
+      // The endpoint is idempotent, so unpublishing twice is not an error. The
+      // 404 it does answer is a page this account may not touch, which is not
+      // the aliases-are-off 404 the shared sentence explains.
+      yield* client.pages
+        .remove({ params: { hash } })
+        .pipe(Effect.catchTag("NotFound", () => Effect.fail(new Output.NotYours({ hash }))))
       yield* json ? Output.json({ hash, removed: true }) : Output.line(hash)
     })
   )
