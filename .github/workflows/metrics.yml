@@ -1,8 +1,9 @@
 # Daily metrics snapshot onto the orphan `metrics` branch — GitHub's traffic
 # API forgets after 14 days, so this is what makes the numbers history.
 # Secrets: METRICS_PAT (fine-grained, this repo, Administration: read — the
-# default token 403s on traffic endpoints), CLOUDFLARE_ANALYTICS_TOKEN
-# (Account Analytics: read). Missing secrets skip their section, not the run.
+# default token 403s on traffic endpoints), and the deploy token
+# CLOUDFLARE_API_TOKEN, which also carries Account Analytics: read.
+# Missing secrets skip their section, not the run.
 name: Metrics
 on:
   schedule:
@@ -31,7 +32,7 @@ jobs:
           METRICS_PAT: ${{ secrets.METRICS_PAT }}
           GITHUB_TOKEN: ${{ github.token }}
           NPM_PACKAGE: handbill
-          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_TAG: 3fff044e404555e02738d5815c24539e
           CF_SITE_TAG: 5747f4934a534c4aa86b678441cf5c77
         run: node .github/scripts/metrics.mjs
