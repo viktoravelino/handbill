@@ -70,11 +70,14 @@ export class PagesGroup extends HttpApiGroup.make("pages")
     HttpApiEndpoint.get("list", "/pages", {
       success: PageList
     }),
-    // Idempotent by design: 204 whether or not the page was there, so
-    // unpublishing a mistake is one command with no questions.
+    // Idempotent for a page that is not there — 204 whether or not it was, so
+    // unpublishing a mistake is one command with no questions — but a hash owned
+    // by another account is `404 NotFound`, never 403: the owner check deletes
+    // nothing and discloses nothing (the Worker reads ownership from R2).
     HttpApiEndpoint.delete("remove", "/pages/:hash", {
       params: { hash: Hash },
-      success: HttpApiSchema.NoContent
+      success: HttpApiSchema.NoContent,
+      error: NotFound
     })
   )
   .middleware(Authorization)

@@ -4,7 +4,7 @@ import { AliasesDisabled, AliasesKV } from "./aliases"
 import { makeApp } from "./app"
 import { AuthAccounts, AuthSecret, keyStore } from "./auth"
 import { DEFAULT_MAX_BYTES } from "./config"
-import { StorageR2 } from "./storage"
+import { IndexBucket, IndexKV, StorageR2 } from "./storage"
 
 /**
  * The bindings `wrangler.jsonc` declares. `ZONE` and the bucket are config,
@@ -40,17 +40,24 @@ export const maxBytesFrom = (value: string | undefined): number => {
  */
 let app: ReturnType<typeof makeApp> | undefined
 
-const appFor = (env: Env) =>
-  (app ??= makeApp(
+const appFor = (env: Env) => {
+  const storage = StorageR2(env.BUCKET)
+  return (app ??= makeApp(
     { zone: env.ZONE, maxBytes: maxBytesFrom(env.MAX_BYTES) },
     Layer.mergeAll(
-      StorageR2(env.BUCKET),
+      storage,
+      // `ACCOUNTS` binds the index the same way it binds auth: with it, `list`
+      // reads the KV index and `remove` deletes its entry; without it, the
+      // bucket walk is the index and those writes are no-ops (`IndexBucket`
+      // needs the shared `Storage`, so it is provided that one instance).
+      env.ACCOUNTS === undefined ? IndexBucket.pipe(Layer.provide(storage)) : IndexKV(env.ACCOUNTS),
       env.ACCOUNTS === undefined
         ? AuthSecret(env.PUBLISH_TOKEN ?? "")
         : AuthAccounts(keyStore(env.ACCOUNTS)),
       env.ALIASES === undefined ? AliasesDisabled : AliasesKV(env.ALIASES)
     )
   ))
+}
 
 export default {
   fetch: (request: Request, env: Env): Promise<Response> => appFor(env).fetch(request)
