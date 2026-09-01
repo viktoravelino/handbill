@@ -106,18 +106,23 @@ Find the owner of the page you took down (from the report, or from `i:` entries)
 
 ```sh
 NS=<the ACCOUNTS namespace id>
+# --remote on every kv command, always: wrangler defaults these to the local
+# simulated store, where a real namespace id reads as an empty namespace — a
+# list prints [] and a put revokes nothing, both with exit 0 and no warning.
 # → o:gh:4242:<digest>, one per key ever minted: revoke leaves the pointer in
 # place, so this over-counts live keys. The k: record is what says which are live.
-bunx wrangler kv key list --namespace-id "$NS" --prefix "o:gh:4242"
-bunx wrangler kv key get  --namespace-id "$NS" "k:<digest>"
+bunx wrangler kv key list --remote --namespace-id "$NS" --prefix "o:gh:4242"
+bunx wrangler kv key get  --remote --namespace-id "$NS" "k:<digest>"
 ```
 
 Revoking is a field on the record — the record stays, so the revocation is on the books and already-published pages keep serving:
 
 ```sh
-bunx wrangler kv key put --namespace-id "$NS" "k:<digest>" \
+bunx wrangler kv key put --remote --namespace-id "$NS" "k:<digest>" \
   '{"owner":"gh:4242","created":"<as it was>","tier":"free","revoked":"2026-09-01T12:00:00.000Z"}'
 ```
+
+Read it back with the `get` above before you believe it. A revocation that went to local storage looks identical from here and leaves the key publishing.
 
 That key stops authorizing immediately. It does not stop the account minting another one — `POST /v1/keys` is open to any GitHub account by design — so revocation buys time rather than closing a door. Repeat offenders are a policy problem — [terms and acceptable use](https://handbill.dev/docs/terms/) is what says the account ends — not a KV problem.
 
@@ -126,7 +131,7 @@ That key stops authorizing immediately. It does not stop the account minting ano
 `handbill admin takedown` one hash at a time is the whole tool. To find everything an owner published:
 
 ```sh
-bunx wrangler kv key list --namespace-id "$NS" --prefix "i:gh:4242:"   # → i:gh:4242:<hash>
+bunx wrangler kv key list --remote --namespace-id "$NS" --prefix "i:gh:4242:"   # → i:gh:4242:<hash>
 ```
 
 Take each hash down, then revoke the keys. An owner's page count is quota-bounded at 25 a day, so this list is never long.
@@ -136,12 +141,12 @@ Take each hash down, then revoke the keys. An owner's page count is quota-bounde
 `q:<owner>:bytes` is derived state that is never recomputed, and it can drift upward: a KV write that failed during a removal is not retried (the retry finds the object already gone and has nothing to release), so an owner can end up charged for storage they no longer have — and at 250 MB of phantom bytes they cannot publish at all. Nothing self-heals this. Delete the counter and it starts again from zero:
 
 ```sh
-bunx wrangler kv key delete --namespace-id "$NS" "q:gh:4242:bytes"
-bunx wrangler kv key list   --namespace-id "$NS" --prefix "i:gh:4242:"   # what they actually hold
+bunx wrangler kv key delete --remote --namespace-id "$NS" "q:gh:4242:bytes"
+bunx wrangler kv key list   --remote --namespace-id "$NS" --prefix "i:gh:4242:"   # what they actually hold
 ```
 
 Zeroing it under-counts rather than over-counts, which is the direction this codebase prefers everywhere else; if you want it exact, sum the `bytes` metadata on that owner's `i:` entries and `kv key put` that number instead. The daily counter (`q:<owner>:d:<yyyymmdd>`) needs no such tool: it expires itself in 48 hours.
 
 ### 5. Write it down
 
-Time from report to 404, and time from report to revoked key. [DRILL.md](DRILL.md) is where those two numbers live: it walks this runbook end to end on production, with the timings filled in from a real run rather than imagined. Abuse tooling that has never been exercised is decoration.
+Time from report to 404, and time from report to revoked key. [DRILL.md](DRILL.md) is where those two numbers go: it walks this runbook end to end on production with a blank slot at every step. Run 1 is pending — the numbers land there in a follow-up commit, and until they do this section is a plan rather than a record. Abuse tooling that has never been exercised is decoration.

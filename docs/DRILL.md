@@ -30,7 +30,9 @@ bunx wrangler kv namespace list    # note the ACCOUNTS id; every KV command belo
 
 You also need, in hand: the `ADMIN_TOKEN` value, the `PUBLISH_TOKEN` value, and **two GitHub accounts** — a *publisher* to be taken down and a *bystander* whose key must survive it. One account cannot prove tenant isolation.
 
-**Rate limits apply to you too.** WAF rule 1 blocks a client that exceeds 2 requests in 10 seconds against `PUT`/`POST` on `api.handbill.dev` — and `handbill login` (POST `/v1/keys`) and `handbill <file>` (PUT `/v1/pages/…`) are both in that count. Leave six seconds between writes. A blocked request is answered by Cloudflare's HTML error page rather than the Worker's JSON, so the CLI has nothing it recognises to report — on a publish it says *"The endpoint answered with something this CLI does not understand"*. Throughout the drill: an **HTML** 429 is the WAF, a **JSON** `QuotaExceeded` is the Worker.
+**`--remote` on every `kv key` command, without exception.** `wrangler kv key list|get|put|delete` default to the *local* simulated store, silently: a production namespace id reads there as an empty namespace, so a `list` prints `[]` and a `put` writes to `.wrangler/state`, both exit 0 with no warning. The trap is that `kv namespace list` above is remote-only, so you are handed a real id and then hand it to a local store. In B7 that failure is expensive — the key is never revoked, B8 finds it still publishing, and the drill records a working control as broken. Every `kv key` line below carries the flag; if you retype one from memory, retype the flag.
+
+**Rate limits apply to you too.** WAF rule 1 blocks a client that exceeds 2 requests in 10 seconds against `PUT`/`POST` on `api.handbill.dev` — and `handbill login` (POST `/v1/keys`) and `handbill <file>` (PUT `/v1/pages/…`) are both in that count. Leave six seconds between writes. A blocked request is answered by Cloudflare's HTML error page rather than the Worker's JSON, so the CLI has nothing it recognises to report — on a publish it says *"The endpoint answered with something this CLI does not understand"*. Throughout the drill: an **HTML** 429 is the WAF, a **JSON** `QuotaExceeded` is the Worker. The `sleep 6` in the loops below is exactly at the limit rather than under it, so a stray `curl` from a second terminal in the same window trips it — the drill often has two people on one zone, so keep the writes coming from one of them.
 
 ---
 
@@ -62,6 +64,8 @@ handbill hi.html
 **Expected.** `login` prints a short code and opens `github.com/login/device`; after approval it says nothing else on stdout. `handbill hi.html` prints exactly one line. Opening that URL serves the page.
 
 If they reach for `npx handbill` instead, let them — the roadmap's own wording is `npx` while the page teaches `npm i -g`. Which one a stranger picks unprompted is worth knowing; both are measured against the same two minutes.
+
+**A rate-limit trip is not a docs failure.** `login` and the publish are two writes, which is exactly what WAF rule 1 allows in ten seconds — and a stranger is precisely the person who mistypes a filename and runs the publish twice. The third request is blocked by the edge, so they get an HTML 429 and the CLI's *"answered with something this CLI does not understand"*, which under this scenario's own rules you may not explain to them. If that happens: note it, **discard the run**, wait a minute and start again — or raise rule 1's threshold for the duration of scenario A and put it back afterwards. Scoring a WAF block as the hosted page failing a stranger is the one way this scenario produces a wrong answer.
 
 **Record**
 
@@ -125,7 +129,7 @@ The clock for everything below starts here, at the moment the report is *seen* �
 
 ```sh
 NS=<the ACCOUNTS namespace id>
-bunx wrangler kv key list --namespace-id "$NS" --prefix "i:" | grep <hash>
+bunx wrangler kv key list --remote --namespace-id "$NS" --prefix "i:" | grep <hash>
 # → i:gh:4242:<hash>
 ```
 
@@ -176,11 +180,11 @@ A separate decision from the takedown, and a separate act — see WAF.md, *Decid
 ```sh
 NS=<the ACCOUNTS namespace id>
 OWNER=gh:<the publisher's numeric id>
-bunx wrangler kv key list --namespace-id "$NS" --prefix "o:$OWNER:"
+bunx wrangler kv key list --remote --namespace-id "$NS" --prefix "o:$OWNER:"
 # → o:gh:4242:<digest>, one per key ever minted; the k: record says which are live
-bunx wrangler kv key get --namespace-id "$NS" "k:<digest>"
+bunx wrangler kv key get --remote --namespace-id "$NS" "k:<digest>"
 # → {"owner":"gh:4242","created":"2026-09-01T…","tier":"free"}
-bunx wrangler kv key put --namespace-id "$NS" "k:<digest>" \
+bunx wrangler kv key put --remote --namespace-id "$NS" "k:<digest>" \
   '{"owner":"gh:4242","created":"<as it was>","tier":"free","revoked":"<now, ISO 8601>"}'
 ```
 
@@ -239,32 +243,32 @@ handbill login    # on the publisher's account, if you want to confirm it
 
 ## C · The daily quota refuses a publish
 
-The 429 the code promises, observed on production rather than in a test. The loop below was run against `handbill.dev` on 2026-09-01; what it printed goes in the slot at the end of this scenario, verbatim, and the loop is here so it can be re-run after any change to `quotas.ts`.
+The 429 the code promises, observed on production rather than in a test. The refusal was seen on `handbill.dev` on 2026-09-01; what it said goes in the slot at the end of this scenario, verbatim, and the loop is here so it can be re-run after any change to `quotas.ts`.
 
-**Pre-conditions.** An account you are willing to spend a day's quota on — the day's page count is not refunded by unpublishing, so this account cannot publish again until the next UTC midnight. `sleep 6` is what keeps the loop under WAF rule 1.
+**Pre-conditions.** An account you are willing to spend a day's quota on — the day's page count is not refunded by unpublishing, so this account cannot publish again until the next UTC midnight. `sleep 6` holds the loop at WAF rule 1's allowance rather than over it, so nothing else may write to the zone while it runs.
 
 ```sh
 export HANDBILL_ENDPOINT=https://api.handbill.dev
 export HANDBILL_TOKEN=<a key you can spend>
-for i in $(seq 1 26); do
+for i in $(seq 1 30); do
   printf '<!doctype html><title>q%s</title>' "$i" > "/tmp/q$i.html"
   handbill "/tmp/q$i.html" || break
   sleep 6
 done
 ```
 
-**Expected.** Around the 26th publish, a non-zero exit and one line on stderr:
+**Expected.** At the 26th publish or a little after it, a non-zero exit and one line on stderr:
 
 > You have published 25 pages today, which is this account's daily limit. It resets at `<the next UTC midnight, ISO>`.
 
-*Around* is the point. The counters are eventually consistent, so the loop may get one or two past 25 — never short of it. An **HTML** 429 instead is the WAF, not the quota; slow the loop down.
+*A little after* is the point, and it is why the loop runs to 30 rather than 26. The counters are eventually consistent, so the run may get one or two past 25 — never short of it — and a loop that stops at 26 can finish without ever seeing the refusal, which reads as "no 429" when it was only "no headroom". Four spare pages on an account already written off for the day buy the difference between an observation and an ambiguity. An **HTML** 429 instead is the WAF, not the quota; slow the loop down.
 
 The counter behind it:
 
 ```sh
 NS=<the ACCOUNTS namespace id>
-bunx wrangler kv key get --namespace-id "$NS" "q:<owner>:d:$(date -u +%Y%m%d)"
-bunx wrangler kv key get --namespace-id "$NS" "q:<owner>:bytes"
+bunx wrangler kv key get --remote --namespace-id "$NS" "q:<owner>:d:$(date -u +%Y%m%d)"
+bunx wrangler kv key get --remote --namespace-id "$NS" "q:<owner>:bytes"
 ```
 
 **Record.** The message verbatim, the number of publishes that actually went through, and the counter's value when it stopped.
@@ -298,7 +302,7 @@ cd apps/worker
 NS=<the ACCOUNTS namespace id>
 git diff wrangler.jsonc                         # the ACCOUNTS + ALIASES bindings, uncommitted
 curl -s https://api.handbill.dev/v1/health      # {"ok":true,"mode":"accounts",…}
-bunx wrangler kv key get --namespace-id "$NS" "q:<owner>:bytes"   # note the number
+bunx wrangler kv key get --remote --namespace-id "$NS" "q:<owner>:bytes"   # note the number
 ```
 
 Pick two page URLs that must keep serving: one published by a hosted account, one published before 0.3.
@@ -326,7 +330,12 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://<pre-0.3 hash>.handbill.dev/" 
 curl -si "https://<hosted hash>.handbill.dev/" | grep -i cache-control
 # cache-control: public, max-age=31536000, immutable
 
-curl -s -o /dev/null -w '%{http_code}\n' -X POST https://api.handbill.dev/v1/keys   # 404
+# The body is required: without one the payload fails to decode and the answer is
+# 400, from validation, never reaching the `AuthSecret.mint` that produces the 404.
+# The token is junk on purpose — in secret mode `mint` fails before anything is sent
+# to GitHub. Do not run this line in accounts mode, where the same curl forwards it.
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://api.handbill.dev/v1/keys \
+  -H 'content-type: application/json' -d '{"githubToken":"drill-not-a-real-token"}'   # 404
 
 # PUBLISH_TOKEN is not an `hb_` key, so the CLI refuses to send it anywhere the
 # caller did not name — the endpoint is not optional on these two lines.
@@ -353,7 +362,7 @@ Uncomment the `ACCOUNTS` binding with the id from D1, then:
 bunx wrangler deploy
 curl -s https://api.handbill.dev/v1/health                       # mode: accounts
 HANDBILL_TOKEN=<the same hosted key> handbill list               # works, same pages as D1
-bunx wrangler kv key get --namespace-id "$NS" "q:<owner>:bytes"  # the number from D1
+bunx wrangler kv key get --remote --namespace-id "$NS" "q:<owner>:bytes"  # the number from D1
 git diff wrangler.jsonc                                          # identical to D1
 ```
 
@@ -370,7 +379,7 @@ git diff wrangler.jsonc                                          # identical to 
 
 Watch these; none of them page you, so they only exist if someone looks.
 
-- **Quota counters.** `bunx wrangler kv key list --namespace-id "$NS" --prefix "q:"` — how many accounts are counting at all, and whether any `bytes` counter is near 250 MB. A `bytes` value with no matching `i:` entries is the drift WAF.md §4 resets.
+- **Quota counters.** `bunx wrangler kv key list --remote --namespace-id "$NS" --prefix "q:"` — how many accounts are counting at all, and whether any `bytes` counter is near 250 MB. A `bytes` value with no matching `i:` entries is the drift WAF.md §4 resets.
 - **KV writes against the plan's ceiling.** A hosted publish costs three writes, minting a key two. WAF.md's table has the arithmetic; the free plan's ~1,000 writes a day is ~330 publishes.
 - **Web Analytics** on `handbill.dev` — whether anyone read the hosted page before installing, and where they arrived from.
 - **npm downloads** via the metrics branch, for whether the release moved anything.

@@ -36,7 +36,13 @@ scripts/release.sh bump 0.1.2   # branch, set the version, run the checks, open 
 scripts/release.sh tag          # tag main as v0.1.2 and push it
 ```
 
-A minor release carries two hand edits on the `bump` branch, because nothing scripts them and they are the only two places the repository claims a version shipped: the README's roadmap row for that version (`(releasing)` → `(released)`) and the matching bullet in the PRD's *Status* section, with the date. Do them in the bump PR — after the tag they are the thing nobody remembers.
+A minor release carries three hand edits on the `bump` branch, because nothing scripts them and they are the only three places the repository claims a version shipped:
+
+1. `README.md`, the roadmap row for that version: `(releasing)` → `(released)`.
+2. `docs/2026-08-28-prd.html`, the roadmap table's second cell for that row: `<em>releasing</em>` → `<em>shipped &lt;date&gt;</em>`, matching the 0.1 and 0.2 rows above it.
+3. `docs/2026-08-28-prd.html`, the matching bullet in the *Status* section: **releasing** → **shipped &lt;date&gt;**.
+
+Do them in the bump PR. After the tag they are the thing nobody remembers, and the PRD's two are the ones furthest from the diff anyone is looking at.
 
 `bump` refuses a release version while `CLIENT_ID` in `apps/cli/src/github.ts` is still the placeholder — a `handbill login` against an app that does not exist cannot work, and a release is the point past which that is no longer fixable in a branch. On this repository the gate is dormant: the constant holds the client id of the "handbill CLI" GitHub App on the maintainer's account, registered with device flow enabled and no permissions. It still binds anyone standing the project up on their own account, who has to create the app first (GitHub → *Settings* → *Developer settings* → *GitHub Apps* or *OAuth Apps*, with **device flow enabled**) and set the constant; the client id is public and has no secret, so it belongs in the source. `-dev` versions are never published and are allowed to carry the placeholder.
 
