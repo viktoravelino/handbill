@@ -103,7 +103,7 @@
     </div>
     <button class="toggle" type="button" id="theme" aria-live="polite">Theme: auto</button>
   </div>
-  <p class="lede">Payments land in 0.4, on Polar; 0.3 only makes room for them. This document fixes the shape — what "paid" means, what gets built, what has to exist outside the repo — and re-cuts the roadmap so "Sheets and time" moves to 0.5. It amends the <a href="https://2cb259476f57.handbill.dev">0.3 architecture</a> (one new decision) and, once committed, the PRD's versions table.</p>
+  <p class="lede">Payments land in 0.4, on Polar; 0.3 only makes room for them. This document fixes the shape — what "paid" means, what gets built, what has to exist outside the repo — and re-cuts the roadmap so "Sheets and time" moves to 0.5. It amends the <a href="https://25e4f4d7789f.handbill.dev">0.3 architecture</a> (one new decision) and, once committed, the PRD's versions table.</p>
   <ul class="meta">
     <li><strong>Status</strong> §01 confirmed 2026-09-01; the rest is direction until 0.4 opens</li>
     <li><strong>Provider</strong> Polar (merchant of record)</li>
@@ -191,7 +191,7 @@
       <tr><td>0.3</td><td>Hosted</td><td>accounts (KV), login, per-owner index, quotas <em>with the tier field</em>, takedown, ToS, endpoint flip</td><td>a stranger publishes with no config in under two minutes; abuse drill run</td></tr>
       <tr><td><b>0.4</b></td><td><b>Paid</b></td><td>Polar checkout + webhook, tier flips, pricing page, <code>handbill account</code>, admin tier override</td><td>an upgrade raises a quota with no human in the loop; a lapse lowers it without breaking a single link</td></tr>
       <tr><td>0.5</td><td>Sheets and time <span class="tag">was 0.4</span></td><td>inline local assets at publish time; <code>--ttl</code> with a sweeping cron</td><td>a page with local images publishes as one object</td></tr>
-      <tr><td>1.0</td><td>Stable</td><td>contract frozen, Effect stable v4, <code>@handbill/contract</code> published, PSL entry <em>(filed from 2026-09-01; this row is the checkpoint)</em>, encrypted pages experimental</td><td>no breaking change for two minor versions</td></tr>
+      <tr><td>1.0</td><td>Stable</td><td>contract frozen, Effect stable v4, <code>@handbill/contract</code> published, PSL entry <em>(prepared 2026-09-01; filed once hosted scale meets the list's bar)</em>, encrypted pages experimental</td><td>no breaking change for two minor versions</td></tr>
     </tbody>
   </table></div>
   <p class="note">Why Paid before Sheets and time: hosting strangers (0.3) creates recurring cost and abuse work immediately; the version after it should pay for it. Inline assets and TTL serve self-hosters, who are patient and already served well.</p>
@@ -200,7 +200,7 @@
 <section id="amends">
   <h2>06 · What this document amends</h2>
   <ul>
-    <li><b>0.3 architecture</b> (<a href="https://2cb259476f57.handbill.dev">2cb259476f57</a>): gains decision 11 — <i>tier on the key record and a per-tier quota table now; payments deferred to 0.4 on Polar; the read path never checks payment state.</i> Folded in and accepted 2026-09-01; #82 and #85 build the field from there.</li>
+    <li><b>0.3 architecture</b> (<a href="https://25e4f4d7789f.handbill.dev">25e4f4d7789f</a>): gains decision 11 — <i>tier on the key record and a per-tier quota table now; payments deferred to 0.4 on Polar; the read path never checks payment state.</i> Folded in and accepted 2026-09-01; #82 and #85 build the field from there.</li>
     <li><b>PRD versions table:</b> the 0.4/0.5 re-cut above, amended in <code>docs/2026-08-28-prd.html</code> and in the README's roadmap when both docs landed.</li>
     <li><b>Board:</b> no 0.4 issues yet — milestones get cut when 0.4 opens; only the 0.4 milestone object exists, carrying this link.</li>
   </ul>
