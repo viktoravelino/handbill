@@ -43,6 +43,8 @@ const writeJson = (name, obj) =>
     JSON.stringify(Object.fromEntries(Object.entries(obj).toSorted()), null, 2) + "\n"
   )
 
+const cell = (v) => v ?? "–"
+
 const get = async (url, headers) => {
   const res = await fetch(url, { headers })
   if (!res.ok) throw new Error(`${res.status} ${url}`)
@@ -142,3 +144,38 @@ if (ok === 0) {
 console.error(
   `done: ${ok} section(s) ok${failures.length ? `, failed: ${failures.join(", ")}` : ""}`
 )
+
+// --- Actions job summary: the last few days at a glance --------------------
+if (process.env.GITHUB_STEP_SUMMARY) {
+  const [github, npm, web] = await Promise.all([
+    readJson("github.json"),
+    readJson("npm.json"),
+    readJson("web.json")
+  ])
+  const days = [...Array(4)].map((_, i) =>
+    new Date(Date.now() - i * 86400_000).toISOString().slice(0, 10)
+  )
+  const rows = days.map((d) => {
+    const v = github.views?.[d]
+    const c = github.clones?.[d]
+    const w = web[d]
+    return `| ${d} | ${cell(v && `${v.count} (${v.uniques})`)} | ${cell(
+      c && `${c.count} (${c.uniques})`
+    )} | ${cell(npm[d])} | ${cell(w && `${w.pageviews} (${w.visits})`)} |`
+  })
+  const repoNow = github.repo?.[today]
+  const summary = [
+    `## Metrics · ${today}`,
+    "",
+    "| date | gh views (uniq) | gh clones (uniq) | npm downloads | pageviews (visits) |",
+    "| --- | --- | --- | --- | --- |",
+    ...rows,
+    "",
+    repoNow
+      ? `⭐ ${repoNow.stars} stars · ${repoNow.forks} forks · ${repoNow.watchers} watchers`
+      : "",
+    failures.length ? `\n> ⚠️ failed sections: ${failures.join(", ")}` : ""
+  ].join("\n")
+  const { appendFile } = await import("node:fs/promises")
+  await appendFile(process.env.GITHUB_STEP_SUMMARY, summary + "\n")
+}
