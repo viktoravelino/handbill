@@ -4,6 +4,7 @@ import { AliasesDisabled, AliasesKV } from "./aliases"
 import { makeApp } from "./app"
 import { AuthAccounts, AuthSecret, keyStore } from "./auth"
 import { DEFAULT_MAX_BYTES } from "./config"
+import { QuotaKV, QuotaUnlimited } from "./quotas"
 import { IndexBucket, IndexKV, StorageR2 } from "./storage"
 
 /**
@@ -12,13 +13,17 @@ import { IndexBucket, IndexKV, StorageR2 } from "./storage"
  * `MAX_BYTES` is optional — it defaults to the CLI's 5 MB cap. `ALIASES` and
  * `ACCOUNTS` are the opt-in KV namespaces: without either one that feature is
  * absent rather than empty. Binding `ACCOUNTS` is what makes a deployment a
- * host — per-account keys instead of the one shared `PUBLISH_TOKEN` — and
- * unbinding it puts the Worker back on the token without touching a page.
+ * host — per-account keys, the per-owner index and quota counters instead of the
+ * one shared `PUBLISH_TOKEN` — and unbinding it puts the Worker back on the
+ * token without touching a page. `ADMIN_TOKEN` is an optional secret of its own
+ * (`wrangler secret put ADMIN_TOKEN`): the operator's takedown key, never a user
+ * key, and without it the takedown route is not there.
  */
 export interface Env {
   readonly ZONE: string
   readonly MAX_BYTES?: string
   readonly PUBLISH_TOKEN?: string
+  readonly ADMIN_TOKEN?: string
   readonly BUCKET: R2Bucket
   readonly ALIASES?: KVNamespace
   readonly ACCOUNTS?: KVNamespace
@@ -43,9 +48,12 @@ let app: ReturnType<typeof makeApp> | undefined
 const appFor = (env: Env) => {
   const storage = StorageR2(env.BUCKET)
   return (app ??= makeApp(
-    { zone: env.ZONE, maxBytes: maxBytesFrom(env.MAX_BYTES) },
+    { zone: env.ZONE, maxBytes: maxBytesFrom(env.MAX_BYTES), adminToken: env.ADMIN_TOKEN },
     Layer.mergeAll(
       storage,
+      // Quotas ride the same binding: hosting strangers is what makes a ceiling
+      // worth having, and an operator pays their own bill.
+      env.ACCOUNTS === undefined ? QuotaUnlimited : QuotaKV(env.ACCOUNTS),
       // `ACCOUNTS` binds the index the same way it binds auth: with it, `list`
       // reads the KV index and `remove` deletes its entry; without it, the
       // bucket walk is the index and those writes are no-ops (`IndexBucket`

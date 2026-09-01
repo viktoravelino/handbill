@@ -4,7 +4,8 @@ import { Effect, Layer, Schema } from "effect"
 import { AliasesMemory } from "./aliases"
 import { makeApp } from "./app"
 import { AuthAccounts, githubOwner, type Identify, type KeyStore } from "./auth"
-import { hashBytes } from "./hash"
+import { hashBytes, sha256Hex } from "./hash"
+import { QuotaMemory } from "./quotas"
 import { IndexMemory, StorageMemory } from "./storage"
 
 /**
@@ -21,13 +22,11 @@ const DOC = "<html><head><title>Plan</title></head><body>hi</body></html>"
 const bytes = (text: string) => new TextEncoder().encode(text)
 const hashOf = (text: string) => Effect.runPromise(hashBytes(bytes(text)))
 
-const memoryKeys = (): KeyStore => {
-  const records = new Map<string, string>()
-  return {
-    get: (key): Promise<unknown> => Promise.resolve(JSON.parse(records.get(key) ?? "null")),
-    put: (key, value): Promise<void> => Promise.resolve(void records.set(key, value))
-  }
-}
+/** The map is a parameter so one test can look at the keys mint actually wrote. */
+const memoryKeys = (records = new Map<string, string>()): KeyStore => ({
+  get: (key): Promise<unknown> => Promise.resolve(JSON.parse(records.get(key) ?? "null")),
+  put: (key, value): Promise<void> => Promise.resolve(void records.set(key, value))
+})
 
 /** Two GitHub tokens these tests know, each its own account; anything else is refused. */
 const GITHUB_TOKEN = "gho_from-the-device-flow"
@@ -46,7 +45,13 @@ const identify: Identify = (githubToken) =>
 const hosted = () =>
   makeApp(
     { zone: ZONE, maxBytes: MAX_BYTES },
-    Layer.mergeAll(StorageMemory, IndexMemory, AuthAccounts(memoryKeys(), identify), AliasesMemory)
+    Layer.mergeAll(
+      StorageMemory,
+      IndexMemory,
+      AuthAccounts(memoryKeys(), identify),
+      AliasesMemory,
+      QuotaMemory()
+    )
   )
 
 type App = ReturnType<typeof makeApp>
@@ -143,6 +148,31 @@ test("a minted key publishes as its GitHub owner, and health says accounts", asy
     new Request(`https://api.${ZONE}/v1/pages`, { headers: { authorization: `Bearer ${key}` } })
   )
   expect(await listed.json()).toMatchObject({ pages: [{ hash }] })
+})
+
+// #111's review, deferred to M16: a key record is filed under its own digest, so
+// without a second entry pointing the other way an owner's keys cannot be
+// enumerated at all — and enumerating them is exactly what an operator holding
+// `gh:<id>` from an abuse report has to do. Mint writes both.
+test("minting also files an owner→key back-reference", async () => {
+  const records = new Map<string, string>()
+  const app = makeApp(
+    { zone: ZONE, maxBytes: MAX_BYTES },
+    Layer.mergeAll(
+      StorageMemory,
+      IndexMemory,
+      AuthAccounts(memoryKeys(records), identify),
+      AliasesMemory,
+      QuotaMemory()
+    )
+  )
+  const { key } = await minted(await mint(app, GITHUB_TOKEN))
+  const digest = await Effect.runPromise(sha256Hex(bytes(key)))
+
+  expect([...records.keys()].toSorted()).toEqual([`k:${digest}`, `o:${OWNER}:${digest}`])
+  // The pointer is a pointer: the record itself stays the one place a key is
+  // described, so nothing has to be kept in step with anything.
+  expect(records.get(`o:${OWNER}:${digest}`)).toBe("")
 })
 
 test("a GitHub token GitHub refuses, and a key nobody minted, are both 401", async () => {
@@ -319,7 +349,13 @@ test("a second owner publishing the same bytes gets the URL but not ownership", 
 test("a title over the KV metadata budget still publishes and lists, clamped", async () => {
   const app = makeApp(
     { zone: ZONE, maxBytes: 4096 },
-    Layer.mergeAll(StorageMemory, IndexMemory, AuthAccounts(memoryKeys(), identify), AliasesMemory)
+    Layer.mergeAll(
+      StorageMemory,
+      IndexMemory,
+      AuthAccounts(memoryKeys(), identify),
+      AliasesMemory,
+      QuotaMemory()
+    )
   )
   const key = await keyFor(app, GITHUB_TOKEN)
   const doc = `<html><head><title>${"T".repeat(1000)}</title></head><body>hi</body></html>`

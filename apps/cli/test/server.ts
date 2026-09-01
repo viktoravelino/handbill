@@ -5,6 +5,7 @@ import { Owner, Unauthorized } from "@handbill/contract"
 import { AliasesDisabled, AliasesMemory } from "@handbill/worker/src/aliases"
 import { makeApp } from "@handbill/worker/src/app"
 import { AuthAccounts, AuthSecret, type Identify, type KeyStore } from "@handbill/worker/src/auth"
+import { QuotaMemory, QuotaUnlimited } from "@handbill/worker/src/quotas"
 import { IndexBucket, IndexMemory, Storage, StorageMemory } from "@handbill/worker/src/storage"
 
 export const TOKEN = "publish-me"
@@ -94,24 +95,31 @@ const recordingFetch = (
   )
 
 /**
- * The two layers accounts mode swaps: per-account keys instead of one shared
- * token, and its own index rather than the bucket a self-hosted Worker reads.
+ * The three layers accounts mode swaps: per-account keys instead of one shared
+ * token, its own index rather than the bucket a self-hosted Worker reads, and
+ * the quota counters that come with hosting strangers.
  */
-const authAndIndex = (accounts: boolean, storage: Layer.Layer<Storage>) =>
+const hostedLayers = (accounts: boolean, storage: Layer.Layer<Storage>) =>
   accounts
-    ? Layer.mergeAll(AuthAccounts(memoryKeys(), identify), IndexMemory)
-    : Layer.mergeAll(AuthSecret(TOKEN), IndexBucket.pipe(Layer.provide(storage)))
+    ? Layer.mergeAll(AuthAccounts(memoryKeys(), identify), IndexMemory, QuotaMemory())
+    : Layer.mergeAll(AuthSecret(TOKEN), IndexBucket.pipe(Layer.provide(storage)), QuotaUnlimited)
 
 /**
  * The real Worker on `StorageMemory`, handed to the CLI as its `fetch`. The
  * round-trip tests drive `makeApp` — the same function `wrangler` calls — so
  * they exercise the Worker's own layers, routing and headers with no network
  * and no account. `aliases: false` is a deployment with no KV binding, and
- * `accounts: true` is the hosted tier: keys instead of one shared token.
+ * `accounts: true` is the hosted tier: keys instead of one shared token, with
+ * the quota counters hosting brings; `admin` is the deployment's `ADMIN_TOKEN`,
+ * absent unless a test asks for the takedown route.
  */
-export const makeServer = (
-  options: { readonly aliases?: boolean; readonly accounts?: boolean } = {}
-) => {
+export interface ServerOptions {
+  readonly aliases?: boolean
+  readonly accounts?: boolean
+  readonly admin?: string
+}
+
+export const makeServer = (options: ServerOptions = {}) => {
   // Built here rather than inside `makeApp` so the test can read the store
   // without going through the API. `StorageMemory` has no finalizer, so
   // closing the scope leaves the instance alive.
@@ -120,10 +128,10 @@ export const makeServer = (
 
   const storageLayer = Layer.succeed(Storage, storage)
   const app = makeApp(
-    { zone: ZONE, maxBytes: MAX_BYTES },
+    { zone: ZONE, maxBytes: MAX_BYTES, adminToken: options.admin },
     Layer.mergeAll(
       storageLayer,
-      authAndIndex(options.accounts === true, storageLayer),
+      hostedLayers(options.accounts === true, storageLayer),
       options.aliases === false ? AliasesDisabled : AliasesMemory,
       // `Clock` is a reference, so this only replaces the default the Worker's
       // own runtime would have used; it adds nothing to `AppServices`.

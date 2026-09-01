@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { HandbillApi } from "./api"
-import { HashMismatch, NotFound, TooLarge, Unauthorized } from "./errors"
+import { HashMismatch, NotFound, QuotaExceeded, TooLarge, Unauthorized } from "./errors"
 import { AliasName, Hash, Page } from "./schemas"
 
 const spec = OpenApi.fromApi(HandbillApi)
@@ -75,14 +75,14 @@ describe("Page", () => {
 
 // `NotFound` is the one error no v0.1 endpoint can raise — the page-serving path
 // is a hostname branch, not an API route, and DELETE is idempotent. Generating a
-// spec from a probe API is how we prove all four carry the status they declare.
+// spec from a probe API is how we prove all five carry the status they declare.
 describe("errors", () => {
   test("every error maps to its HTTP status", () => {
     class Probe extends HttpApi.make("probe").add(
       HttpApiGroup.make("probe", { topLevel: true }).add(
         HttpApiEndpoint.get("probe", "/probe", {
           success: Schema.String,
-          error: [HashMismatch, Unauthorized, NotFound, TooLarge]
+          error: [HashMismatch, Unauthorized, NotFound, TooLarge, QuotaExceeded]
         })
       )
     ) {}
@@ -91,7 +91,8 @@ describe("errors", () => {
       "400",
       "401",
       "404",
-      "413"
+      "413",
+      "429"
     ])
   })
 })
@@ -106,7 +107,13 @@ describe("spec", () => {
   })
 
   test("documents the error responses each endpoint can return", () => {
-    expect(errorStatuses(spec.paths, "/v1/pages/{hash}", "put")).toEqual(["400", "401", "413"])
+    // 429 is the hosted quota; a self-hosted deployment counts nothing and never raises it.
+    expect(errorStatuses(spec.paths, "/v1/pages/{hash}", "put")).toEqual([
+      "400",
+      "401",
+      "413",
+      "429"
+    ])
     expect(errorStatuses(spec.paths, "/v1/pages", "get")).toEqual(["401"])
     // DELETE stays idempotent for an absent page, but a hash owned by another
     // account is a 404: cross-owner remove discloses nothing (decision 05).
@@ -127,6 +134,13 @@ describe("spec", () => {
     expect(errorStatuses(spec.paths, "/v1/health", "get")).toEqual([])
   })
 
+  // Takedown: 404 where the deployment sets no admin token — the operator
+  // surface is absent, not empty — and 401 where it does and this is not it. A
+  // hash that is not stored is a 204, so neither status is about the page.
+  test("the takedown route documents an absent operator surface and a wrong token", () => {
+    expect(errorStatuses(spec.paths, "/v1/admin/pages/{hash}", "delete")).toEqual(["401", "404"])
+  })
+
   test("both key routes are outside the bearer middleware", () => {
     expect(spec.paths["/v1/pages"]?.get?.security).toEqual([{ bearer: [] }])
     expect(spec.paths["/v1/aliases"]?.get?.security).toEqual([{ bearer: [] }])
@@ -137,6 +151,9 @@ describe("spec", () => {
     // it stay idempotent — a revoked key reaches the handler instead of 401ing.
     expect(spec.paths["/v1/keys"]?.post?.security).toEqual([])
     expect(spec.paths["/v1/keys/current"]?.delete?.security).toEqual([])
+    // Takedown is outside it too, and for a stronger reason: the credential is a
+    // different secret entirely, so no user key may resolve on this route.
+    expect(spec.paths["/v1/admin/pages/{hash}"]?.delete?.security).toEqual([])
   })
 
   // The whole spec, so M3 and M4 notice if the contract moves under them.

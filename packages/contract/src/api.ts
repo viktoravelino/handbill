@@ -8,7 +8,7 @@ import {
   HttpApiSecurity,
   OpenApi
 } from "effect/unstable/httpapi"
-import { HashMismatch, NotFound, TooLarge, Unauthorized } from "./errors"
+import { HashMismatch, NotFound, QuotaExceeded, TooLarge, Unauthorized } from "./errors"
 import {
   Alias,
   AliasList,
@@ -20,7 +20,8 @@ import {
   KeyRequest,
   Owner,
   PageList,
-  PublishResult
+  PublishResult,
+  Tier
 } from "./schemas"
 
 /**
@@ -33,6 +34,15 @@ export class CurrentOwner extends Context.Service<CurrentOwner, Owner>()(
 ) {}
 
 /**
+ * What the caller's key is allowed to spend, resolved alongside the owner and
+ * read by the quota check. Always `"free"` in 0.3; a self-hosted deployment
+ * reports it too and counts nothing (decision 11).
+ */
+export class CurrentTier extends Context.Service<CurrentTier, Tier>()(
+  "handbill/Authorization/CurrentTier"
+) {}
+
+/**
  * Bearer auth for the `pages` group. `requiredForClient` means a generated
  * client has to supply the token, so the CLI cannot forget it. The Worker swaps
  * the implementation (`AuthSecret` → `AuthAccounts`) without the contract moving.
@@ -40,7 +50,7 @@ export class CurrentOwner extends Context.Service<CurrentOwner, Owner>()(
 export class Authorization extends HttpApiMiddleware.Service<
   Authorization,
   {
-    provides: CurrentOwner
+    provides: CurrentOwner | CurrentTier
     requires: never
   }
 >()("handbill/Authorization", {
@@ -65,7 +75,7 @@ export class PagesGroup extends HttpApiGroup.make("pages")
       params: { hash: Hash },
       payload: HtmlDocument,
       success: PublishResult,
-      error: [HashMismatch, TooLarge]
+      error: [HashMismatch, TooLarge, QuotaExceeded]
     }),
     HttpApiEndpoint.get("list", "/pages", {
       success: PageList
@@ -163,6 +173,37 @@ export class KeysGroup extends HttpApiGroup.make("keys")
     })
   ) {}
 
+/**
+ * The operator's own surface: one route, and the only thing in the API that can
+ * kill a published link (§01). It is outside the bearer middleware for the same
+ * reason the key routes are — the credential is a different secret, the
+ * deployment's `ADMIN_TOKEN`, which the Worker reads from the header itself and
+ * compares against no user key. A deployment that sets no such secret has no
+ * operator surface and answers `404 NotFound`, the way an absent KV binding
+ * takes the alias routes away; a wrong token is `401 Unauthorized`.
+ *
+ * Takedown and revocation are two acts (§07): this removes the page, and
+ * whether the key that published it also dies is a separate decision the
+ * operator makes against KV.
+ */
+export class AdminGroup extends HttpApiGroup.make("admin")
+  .add(
+    // Idempotent like every other DELETE here: a hash that is not stored — never
+    // published, or taken down already — is a 204. A taken-down page then 404s
+    // like a hash that never existed; no tombstone (decision, §11).
+    HttpApiEndpoint.delete("takedown", "/admin/pages/:hash", {
+      params: { hash: Hash },
+      success: HttpApiSchema.NoContent,
+      error: [Unauthorized, NotFound]
+    })
+  )
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Admin",
+      description: "Operator takedown. Absent unless the deployment sets an admin token."
+    })
+  ) {}
+
 /** Unauthenticated endpoints. `health` is what `handbill doctor` probes. */
 export class MetaGroup extends HttpApiGroup.make("meta")
   .add(
@@ -186,6 +227,7 @@ export class HandbillApi extends HttpApi.make("handbill")
   .add(PagesGroup)
   .add(AliasesGroup)
   .add(KeysGroup)
+  .add(AdminGroup)
   .add(MetaGroup)
   .prefix("/v1")
   .annotateMerge(

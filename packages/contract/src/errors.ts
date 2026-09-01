@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import { Hash } from "./schemas"
+import { Hash, QuotaLimit } from "./schemas"
 
 /**
  * The request body does not hash to the hash in the URL. `expected` is what the
@@ -43,4 +43,22 @@ export class TooLarge extends Schema.TaggedError<TooLarge>()(
     maxBytes: Schema.Natural
   },
   { httpApiStatus: 413 }
+) {}
+
+/**
+ * A hosted account has spent one of its quotas. It says which limit tripped and
+ * what it allows, so a caller is told the rule rather than just refused.
+ * `resetsAt` is the moment the counter frees up on its own — the next UTC
+ * midnight for the daily page count — and is absent for the stored-bytes limit,
+ * which only unpublishing frees. A self-hosted deployment counts nothing and
+ * never raises this.
+ */
+export class QuotaExceeded extends Schema.TaggedError<QuotaExceeded>()(
+  "QuotaExceeded",
+  {
+    limit: QuotaLimit,
+    allowed: Schema.Natural,
+    resetsAt: Schema.optional(Schema.DateTimeUtcFromString)
+  },
+  { httpApiStatus: 429 }
 ) {}

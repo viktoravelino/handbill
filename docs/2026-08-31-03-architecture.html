@@ -192,11 +192,13 @@
 
 <section id="data">
   <h2>04 · Data model</h2>
-  <p>Everything hosted lives in the <code>ACCOUNTS</code> namespace under three prefixes. R2 stays the source of truth for pages; KV is derived state that can always be rebuilt from bucket metadata.</p>
-  <figure class="code"><pre>k:&lt;sha256(key)&gt;      → { owner, created, revoked? }     the key record
+  <p>Everything hosted lives in the <code>ACCOUNTS</code> namespace under four prefixes. R2 stays the source of truth for pages; KV is derived state that can always be rebuilt from bucket metadata.</p>
+  <figure class="code"><pre>k:&lt;sha256(key)&gt;      → { owner, created, revoked?, tier }  the key record
+o:&lt;owner&gt;:&lt;sha256(key)&gt; → ""                              owner → keys, written at mint
 i:&lt;owner&gt;:&lt;hash&gt;     → { title, publishedAt, bytes }     one index entry per page
 q:&lt;owner&gt;:d:&lt;yyyymmdd&gt; → count        (TTL 48h)          pages published today
 q:&lt;owner&gt;:bytes        → total stored bytes              maintained on publish/remove</pre></figure>
+  <p class="note"><b>Amended by M16 (#118).</b> The <code>o:</code> prefix is the owner→keys index #111's review asked for and #85 deferred here: a key record is filed under its own digest, so without it an operator holding <code>gh:&lt;id&gt;</code> from an abuse report has nothing to enumerate and nothing to revoke. It is a pointer, not a copy — the value is empty and the <code>k:</code> record stays the one description of a key — and <code>revoke</code> leaves it in place, so the prefix lists every key an owner has ever minted rather than only the live ones. The operator-facing commands are in <code>docs/WAF.md</code>.</p>
   <ul>
     <li><b>List</b> is <code>prefix = i:&lt;owner&gt;:</code>, sorted client-side by <code>publishedAt</code> — an owner's page count is quota-bounded (§05), so one KV list call suffices; no cursor gymnastics.</li>
     <li><b>Remove</b> reads the object's <code>customMetadata.owner</code> from R2 — not the index — and compares to the caller. Someone else's hash answers <b>404, not 403</b>: existence is never disclosed to non-owners. Then delete object, delete index entry, decrement bytes.</li>

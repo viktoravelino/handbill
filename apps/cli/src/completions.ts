@@ -179,6 +179,29 @@ export const descriptor: Completions.CommandDescriptor = {
       subcommands: []
     },
     {
+      name: "admin",
+      description: "Operator commands",
+      flags: [],
+      arguments: [],
+      subcommands: [
+        {
+          name: "takedown",
+          description: "Take a page down",
+          flags: apiFlags,
+          arguments: [
+            {
+              name: "target",
+              description: "URL or hash",
+              required: true,
+              variadic: false,
+              type: { _tag: "String" }
+            }
+          ],
+          subcommands: []
+        }
+      ]
+    },
+    {
       name: "completions",
       description: "Print a shell completion script",
       flags: [jsonDescriptor],

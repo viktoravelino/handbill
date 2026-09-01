@@ -1,6 +1,21 @@
-import { Console, Data, Effect, Match, type PlatformError, Runtime, type Schema } from "effect"
+import {
+  Console,
+  Data,
+  DateTime,
+  Effect,
+  Match,
+  type PlatformError,
+  Runtime,
+  type Schema
+} from "effect"
 import type { HttpClientError } from "effect/unstable/http"
-import type { HashMismatch, NotFound, TooLarge, Unauthorized } from "@handbill/contract"
+import type {
+  HashMismatch,
+  NotFound,
+  QuotaExceeded,
+  TooLarge,
+  Unauthorized
+} from "@handbill/contract"
 import type { CannotOpen } from "./browser"
 import type { BadConfigFile, MissingToken, UnnamedEndpoint } from "./config"
 import type { LoginFailed } from "./github"
@@ -68,6 +83,25 @@ export class NotYours extends Data.TaggedError("NotYours")<{
 }> {}
 
 /**
+ * `admin takedown` was run without the operator token. It is a different secret
+ * from the key that publishes, so having logged in does not supply it.
+ */
+export class MissingAdminToken extends Data.TaggedError("MissingAdminToken")<{
+  readonly endpoint: string
+}> {}
+
+/**
+ * `admin takedown` reached the endpoint and was turned away: either it runs no
+ * operator surface at all (no `ADMIN_TOKEN` set, a 404) or it does not accept
+ * the token this CLI sent (`rejected`, a 401). Neither says anything about the
+ * page, which is why the two API answers do not reach their usual sentences.
+ */
+export class TakedownRefused extends Data.TaggedError("TakedownRefused")<{
+  readonly endpoint: string
+  readonly rejected?: boolean
+}> {}
+
+/**
  * Every failure a command can end on. Keeping it a closed union is what makes
  * {@link describe} exhaustive, so a new error cannot ship without a sentence.
  */
@@ -81,12 +115,15 @@ export type Failure =
   | HashMismatch
   | HttpClientError.HttpClientError
   | LoginFailed
+  | MissingAdminToken
   | MissingToken
   | NoAccounts
   | NotFound
   | NotYours
   | PlatformError.PlatformError
+  | QuotaExceeded
   | Schema.SchemaError
+  | TakedownRefused
   | TooLarge
   | Unauthorized
   | UnnamedEndpoint
@@ -137,6 +174,10 @@ export const describe = Match.typeTags<Failure, Described>()({
     error: "LoginFailed",
     message: `Could not sign in: ${failure.reason}.`
   }),
+  MissingAdminToken: (failure) => ({
+    error: "MissingAdminToken",
+    message: `No admin token configured for ${failure.endpoint}. Takedown uses the deployment's ADMIN_TOKEN secret, not your key: set HANDBILL_ADMIN_TOKEN.`
+  }),
   MissingToken: (failure) => ({
     error: "MissingToken",
     message: `No key configured. Run \`handbill login\`, set HANDBILL_TOKEN, or put a token in ${failure.path}.`
@@ -163,9 +204,25 @@ export const describe = Match.typeTags<Failure, Described>()({
     error: "PlatformError",
     message: `Could not read the document: ${failure.message}`
   }),
+  // The two hosted limits read differently: the daily one frees itself, and the
+  // storage one only unpublishing frees, so the sentence says which it is.
+  QuotaExceeded: (failure) => ({
+    error: "QuotaExceeded",
+    message:
+      failure.limit === "pagesPerDay"
+        ? `You have published ${failure.allowed} pages today, which is this account's daily limit. It resets at ${failure.resetsAt === undefined ? "the next UTC midnight" : DateTime.formatIso(failure.resetsAt)}.`
+        : `This account is storing its full ${failure.allowed} bytes. Unpublish something with \`handbill remove\` to make room.`
+  }),
   SchemaError: (failure) => ({
     error: "SchemaError",
     message: `The endpoint answered with something this CLI does not understand: ${failure.message}`
+  }),
+  TakedownRefused: (failure) => ({
+    error: "TakedownRefused",
+    message:
+      failure.rejected === true
+        ? `${failure.endpoint} did not accept this admin token. HANDBILL_ADMIN_TOKEN has to match the deployment's ADMIN_TOKEN secret; a publishing key is not it.`
+        : `${failure.endpoint} has no takedown route: it sets no ADMIN_TOKEN secret. Set one (\`wrangler secret put ADMIN_TOKEN\`) and redeploy.`
   }),
   TooLarge: (failure) => ({
     error: "TooLarge",

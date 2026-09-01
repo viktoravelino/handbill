@@ -62,6 +62,7 @@ Don't have a deployment yet? It is one Worker, one bucket and two DNS records �
 | `handbill login`                          | Sign in with GitHub; prints the account the key belongs to. `handbill logout` revokes it. |
 | `handbill doctor`                         | Endpoint, mode, key, key accepted, wildcard certificate — each with a one-line fix.       |
 | `handbill completions zsh`                | Shell completions (bash, zsh, fish).                                                      |
+| `handbill admin takedown <url-or-hash>`   | For whoever runs the deployment: take a page down. Needs `HANDBILL_ADMIN_TOKEN`.          |
 
 Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents. `--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the URL in your browser after printing it; stdout is still that one line. `--qr` on `handbill <file>` and `handbill alias` prints a scannable QR code for the URL to stderr — and skips it silently when stderr is not a terminal, so pipes never see it.
 

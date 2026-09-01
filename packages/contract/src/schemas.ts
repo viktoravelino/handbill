@@ -27,6 +27,22 @@ export const Mode = Schema.Literals(["secret", "accounts"])
 export type Mode = typeof Mode.Type
 
 /**
+ * What an account is allowed to spend. It is on the key record from 0.3 and
+ * only `free` exists there; the quota service reads its limits from a per-tier
+ * table keyed by this, so 0.4's paid tier is a new row and a webhook that writes
+ * the field rather than a migration (architecture decision 11).
+ */
+export const Tier = Schema.Literals(["free"])
+export type Tier = typeof Tier.Type
+
+/**
+ * The two quotas a hosted account can spend: pages published today, and bytes
+ * kept stored. Named on the wire, so `QuotaExceeded` says which one tripped.
+ */
+export const QuotaLimit = Schema.Literals(["pagesPerDay", "storedBytes"])
+export type QuotaLimit = typeof QuotaLimit.Type
+
+/**
  * One published page as `GET /v1/pages` reports it. `title` is the document's
  * `<title>`, or `""` when it has none — callers render their own placeholder.
  */
