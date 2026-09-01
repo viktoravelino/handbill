@@ -42,7 +42,7 @@ docs/               PRD, SELF-HOSTING.md, RELEASING.md, WAF.md, DRILL.md, the or
 
 ## Working here
 
-- `main` is protected: no direct pushes, no force-push, PR required with green `typecheck`, `lint`, `test`, and `size` jobs, branch up to date, squash merge only. Branches are deleted on merge. **Never merge a PR yourself and never enable auto-merge** — open it, make sure the checks are green, and stop; the maintainer merges.
+- **Never push to `main` and never merge a pull request.** `main` takes only PRs with green `typecheck`, `lint`, `test`, and `size`, squash-merged from an up-to-date branch; branches are deleted on merge. A repository admin can bypass that, and the admin is the maintainer, not you. Open the PR, make sure the checks are green, and stop — never enable auto-merge; the maintainer merges. The only exception is the maintainer explicitly saying to push directly, for that change; a previous yes does not carry over to the next one.
 - One GitHub issue per milestone; work on a branch named after it (`m3-worker`), open a PR with `Closes #N`. The PR title becomes the squash commit subject and the body its message — write both as you would a commit.
 - The board is https://github.com/users/viktoravelino/projects/8. Use the `board` skill (`.claude/skills/board/`, also linked from `.agents/skills/`): `board.sh start <n>` when you begin, `board.sh add <n>` for every issue you create, `board.sh review <n>` right after opening the PR, `board.sh show` to see the state.
 - Tests are focused: hashing, host classification, headers, error mapping, one in-process round-trip per CLI command. No smoke-test sprawl.

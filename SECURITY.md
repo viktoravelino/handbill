@@ -18,6 +18,16 @@ A published page is public to anyone holding its link; the link is unguessable (
 - The operator can read every page in the bucket. On the hosted deployment that operator is the maintainer, and [the terms](https://handbill.dev/docs/terms/) enumerate what they can see and what is deliberately not kept.
 - A page's own JavaScript is the page author's responsibility. Origin isolation stops it reading other pages and the API; it does not stop it making cross-origin requests or phishing the reader.
 
+## How this repository is configured
+
+Relevant if you are reading the source to decide whether to trust the package or the hosted deployment:
+
+- Secret scanning and push protection are on, so a credential cannot be pushed here without being blocked at the point of push.
+- Dependabot alerts and security updates are on; version updates arrive monthly under `.github/dependabot.yml`.
+- `main` takes only pull requests, squash-merged from an up-to-date branch with CI green: typecheck, lint, test, and the Worker size budget.
+- `v*` tags cannot be deleted or moved once pushed. A published npm version can never be replaced, so the tag it was built from stays put too.
+- Releases publish through npm trusted publishing (OIDC), so no npm token exists in this repository to leak, and every release after 0.1.0 carries provenance.
+
 ## Reporting a vulnerability
 
 Use GitHub's private vulnerability reporting on this repository (_Security_ → _Report a vulnerability_). Please do not open a public issue for security problems. You will get an acknowledgement within a few days; fixes ship as a patch release of the affected package.
