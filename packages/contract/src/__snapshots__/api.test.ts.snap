@@ -98,6 +98,34 @@ exports[`spec matches the published spec 1`] = `
         ],
         "type": "object",
       },
+      "Key": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string",
+          },
+          "owner": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "key",
+          "owner",
+        ],
+        "type": "object",
+      },
+      "KeyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "githubToken": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "githubToken",
+        ],
+        "type": "object",
+      },
       "NotFoundEncoded": {
         "additionalProperties": false,
         "properties": {
@@ -323,6 +351,60 @@ exports[`spec matches the published spec 1`] = `
           "Aliases",
         ],
       },
+      "get": {
+        "operationId": "aliases.read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "pattern": "^(?!api$)(?![0-9a-f]{12}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alias",
+                },
+              },
+            },
+            "description": "Alias",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded",
+                },
+              },
+            },
+            "description": "Unauthorized",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundEncoded",
+                },
+              },
+            },
+            "description": "NotFound",
+          },
+        },
+        "security": [
+          {
+            "bearer": [],
+          },
+        ],
+        "tags": [
+          "Aliases",
+        ],
+      },
       "put": {
         "operationId": "aliases.set",
         "parameters": [
@@ -407,6 +489,97 @@ exports[`spec matches the published spec 1`] = `
         "security": [],
         "tags": [
           "Meta",
+        ],
+      },
+    },
+    "/v1/keys": {
+      "post": {
+        "operationId": "keys.mint",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyRequest",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Key",
+                },
+              },
+            },
+            "description": "Key",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded",
+                },
+              },
+            },
+            "description": "Unauthorized",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundEncoded",
+                },
+              },
+            },
+            "description": "NotFound",
+          },
+        },
+        "security": [],
+        "tags": [
+          "Keys",
+        ],
+      },
+    },
+    "/v1/keys/current": {
+      "delete": {
+        "operationId": "keys.revoke",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded",
+                },
+              },
+            },
+            "description": "Unauthorized",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundEncoded",
+                },
+              },
+            },
+            "description": "NotFound",
+          },
+        },
+        "security": [
+          {
+            "bearer": [],
+          },
+        ],
+        "tags": [
+          "Keys",
         ],
       },
     },
@@ -570,6 +743,10 @@ exports[`spec matches the published spec 1`] = `
     {
       "description": "Point a readable name at a hash. Absent unless the deployment enables it.",
       "name": "Aliases",
+    },
+    {
+      "description": "Mint and revoke API keys. Absent unless the deployment runs accounts.",
+      "name": "Keys",
     },
     {
       "description": "Endpoints that need no token.",

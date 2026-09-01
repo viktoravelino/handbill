@@ -20,15 +20,21 @@ import * as Output from "./output"
  * the rotation anyway. A 404 on a *set* is a different animal — the listing had
  * just answered, so the feature is plainly on — and fails the command by name.
  *
- * The listing is the deployment's KV `list`, which lags a freshly set name by up
- * to a minute: a name set seconds ago can be invisible here, and `update` would
- * then remove the hash it still points at. That is the one hole in the ordering
- * below, and there is no way to close it from the client — nothing in the
- * contract reads a single alias by key. The docs say so rather than promise.
+ * The listing is the deployment's KV `list`, and it is used for discovery only:
+ * nothing in the contract answers "which names point at this hash", so there is
+ * no other way to learn the names. What each of them points at is then read back
+ * by key (`GET /v1/aliases/:name`), because the listing is an eventually
+ * consistent index of both the names and their hashes — a name it reports
+ * against a stale hash would otherwise be left behind and have its page removed
+ * under it, or dragged back from a re-point made since.
+ *
+ * What is left is a name the listing does not report at all, set within the last
+ * minute: `update` cannot see it, and still removes the old hash. That residual
+ * gap is #95, and the READMEs and the skill say so rather than promise.
  */
 const repoint = Effect.fn(function* (client: Client.Client, from: Hash, to: Hash) {
-  const naming = yield* client.aliases.list({}).pipe(
-    Effect.map(({ aliases }) => aliases.filter((alias) => alias.hash === from)),
+  const listed = yield* client.aliases.list({}).pipe(
+    Effect.map(({ aliases }) => aliases),
     Effect.catchTag("NotFound", (failure) =>
       Effect.andThen(
         Output.note(Output.describe(failure).message),
@@ -36,6 +42,14 @@ const repoint = Effect.fn(function* (client: Client.Client, from: Hash, to: Hash
       )
     )
   )
+  // One read per listed name. A name removed between the listing and here
+  // answers 404, which is not a failure: it is a name that is no longer set.
+  const current = yield* Effect.forEach(listed, (alias) =>
+    client.aliases
+      .read({ params: { name: alias.name } })
+      .pipe(Effect.catchTag("NotFound", () => Effect.succeed(null)))
+  )
+  const naming = current.filter((alias): alias is Alias => alias?.hash === from)
   yield* Effect.forEach(naming, (alias) =>
     client.aliases.set({ params: { name: alias.name }, payload: { hash: to } }).pipe(
       // The listing answered a moment ago, so a 404 here is not the

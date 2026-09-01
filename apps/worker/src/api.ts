@@ -3,9 +3,11 @@ import {
   CurrentOwner,
   HandbillApi,
   HashMismatch,
+  NotFound,
   TooLarge
 } from "@handbill/contract"
-import { DateTime, Effect, Layer, Option } from "effect"
+import { DateTime, Effect, Layer, Option, Redacted } from "effect"
+import { Headers, HttpServerRequest } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { extractTitle, hashBytes } from "./hash"
 import { Aliases } from "./aliases"
@@ -118,8 +120,47 @@ export const AliasesLive = HttpApiBuilder.group(HandbillApi, "aliases", (handler
         }
       })
     )
+    .handle("read", ({ params }) =>
+      Effect.gen(function* () {
+        const { zone } = yield* Config
+        const aliases = yield* Aliases
+        // `resolve` is the page path's own lookup — one read by key, so this
+        // answers what the name points at now rather than what the listing has
+        // caught up with. Unset and no-KV-binding are the same 404.
+        const hash = yield* aliases.resolve(params.name)
+        if (Option.isNone(hash)) return yield* Effect.fail(new NotFound())
+        return { name: params.name, hash: hash.value, url: pageUrl(zone, params.name) }
+      })
+    )
     .handle("remove", ({ params }) =>
       Effect.flatMap(Aliases, (aliases) => aliases.remove(params.name))
+    )
+)
+
+/**
+ * The bearer token exactly as presented. `revoke` acts on the key itself, not on
+ * the owner behind it, so it reads back the header the middleware has already
+ * accepted rather than carrying a second identity through the contract.
+ */
+const presentedKey = (headers: Headers.Headers): Redacted.Redacted =>
+  Redacted.make(
+    Option.getOrElse(Headers.get(headers, "authorization"), () => "").replace(/^bearer\s+/iu, "")
+  )
+
+/**
+ * Keys. Nothing here asks whether accounts are on either: `AuthSecret` fails
+ * both with `NotFound`, so a deployment on one shared token 404s these two the
+ * way it 404s the alias routes when there is no KV binding.
+ */
+export const KeysLive = HttpApiBuilder.group(HandbillApi, "keys", (handlers) =>
+  handlers
+    .handle("mint", ({ payload }) => Effect.flatMap(Auth, (auth) => auth.mint(payload.githubToken)))
+    .handle("revoke", () =>
+      Effect.gen(function* () {
+        const auth = yield* Auth
+        const request = yield* HttpServerRequest.HttpServerRequest
+        yield* auth.revoke(presentedKey(request.headers))
+      })
     )
 )
 

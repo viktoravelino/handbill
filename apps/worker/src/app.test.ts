@@ -218,6 +218,19 @@ test.each(["api", "a3f9c1d4e2b8", "-plan", "plan.v2"])(
   }
 )
 
+// The route #95 asked for: what a name points at, read by key rather than out
+// of the listing, which is an index and lags.
+test("an alias can be read by name, and an unset name is a 404", async () => {
+  const hash = await hashOf(DOC)
+  await publish(hash, DOC)
+  await setAlias("plan", hash)
+
+  const read = await api("/v1/aliases/plan")
+  expect(read.status).toBe(200)
+  expect(await read.json()).toEqual({ name: "plan", hash, url: `https://plan.${ZONE}` })
+  expect((await api("/v1/aliases/notes")).status).toBe(404)
+})
+
 test("without a KV binding the whole alias feature is absent", async () => {
   const off = makeApp(
     { zone: ZONE, maxBytes: MAX_BYTES },
@@ -233,6 +246,7 @@ test("without a KV binding the whole alias feature is absent", async () => {
 
   for (const response of [
     await request("/v1/aliases"),
+    await request("/v1/aliases/plan"),
     await request("/v1/aliases/plan", { method: "DELETE" }),
     await request("/v1/aliases/plan", {
       method: "PUT",
@@ -245,6 +259,19 @@ test("without a KV binding the whole alias feature is absent", async () => {
   }
 
   expect((await off.fetch(new Request(`https://plan.${ZONE}/`))).status).toBe(404)
+})
+
+// Accounts are the opt-in aliases are: no binding, no keys. The other half of
+// this pair — a Worker that does have one — is `accounts.test.ts`.
+test("without an ACCOUNTS binding there are no keys to mint or revoke", async () => {
+  const minted = await api("/v1/keys", {
+    method: "POST",
+    body: JSON.stringify({ githubToken: "gho_anything" }),
+    headers: { "content-type": "application/json" }
+  })
+  expect(minted.status).toBe(404)
+  expect(await minted.json()).toEqual({ _tag: "NotFound" })
+  expect((await api("/v1/keys/current", { method: "DELETE" })).status).toBe(404)
 })
 
 // The spec is the contract's, not a second description of the API kept in the

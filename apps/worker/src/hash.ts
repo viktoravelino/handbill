@@ -12,18 +12,26 @@ export const isHash = Schema.is(Hash)
 const hex = (byte: number): string => byte.toString(16).padStart(2, "0")
 
 /**
+ * The whole 64-character digest of some bytes. A page address is its first
+ * twelve characters; the accounts layer stores the full digest of an API key,
+ * which is the only form of a key the Worker ever keeps.
+ */
+export const sha256Hex = (bytes: Uint8Array): Effect.Effect<string> =>
+  Effect.map(
+    // `digest` wants an `ArrayBuffer`-backed view; a request body is never
+    // backed by a `SharedArrayBuffer`.
+    Effect.promise(() => crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>)),
+    (digest) => Array.from(new Uint8Array(digest), hex).join("")
+  )
+
+/**
  * `hex(sha256(bytes)).slice(0, 12)` — the content address a page is named by.
  * The client computes it to form the URL and the Worker recomputes it on every
  * publish, so a hash always names the bytes it was minted from.
  */
 export const hashBytes = (bytes: Uint8Array): Effect.Effect<Hash> =>
-  Effect.map(
-    // `digest` wants an `ArrayBuffer`-backed view; a request body is never
-    // backed by a `SharedArrayBuffer`.
-    Effect.promise(() => crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>)),
-    // Six bytes of the digest is the whole twelve-character address.
-    (digest) => Hash.make(Array.from(new Uint8Array(digest, 0, 6), hex).join(""))
-  )
+  // Six bytes of the digest is the whole twelve-character address.
+  Effect.map(sha256Hex(bytes), (digest) => Hash.make(digest.slice(0, 12)))
 
 const TITLE = /<title[^>]*>([\s\S]*?)<\/title>/iu
 /** Keyed by the entity's name, which is what the regex below captures. */

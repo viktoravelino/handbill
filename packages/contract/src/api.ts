@@ -16,6 +16,8 @@ import {
   AliasTarget,
   Hash,
   Health,
+  Key,
+  KeyRequest,
   Owner,
   PageList,
   PublishResult
@@ -100,6 +102,14 @@ export class AliasesGroup extends HttpApiGroup.make("aliases")
       success: AliasList,
       error: NotFound
     }),
+    // One name, read by key rather than out of the listing. The listing is a
+    // lagging index; this is what the name points at now. `NotFound` covers
+    // both "nobody set it" and "this deployment has no aliases at all".
+    HttpApiEndpoint.get("read", "/aliases/:name", {
+      params: { name: AliasName },
+      success: Alias,
+      error: NotFound
+    }),
     // Idempotent like unpublishing: 204 whether or not the name was in use.
     HttpApiEndpoint.delete("remove", "/aliases/:name", {
       params: { name: AliasName },
@@ -112,6 +122,36 @@ export class AliasesGroup extends HttpApiGroup.make("aliases")
     OpenApi.annotations({
       title: "Aliases",
       description: "Point a readable name at a hash. Absent unless the deployment enables it."
+    })
+  ) {}
+
+/**
+ * Keys, the hosted tier's identity. The whole group is optional the way the
+ * alias group is: a deployment running on one shared `PUBLISH_TOKEN` has no
+ * accounts to mint keys for and answers `404 NotFound` on both routes.
+ *
+ * `mint` is the one endpoint outside the bearer token that is not public: the
+ * GitHub access token in its body is the credential, which is why it carries
+ * `Unauthorized` itself rather than inheriting it from the middleware.
+ */
+export class KeysGroup extends HttpApiGroup.make("keys")
+  .add(
+    HttpApiEndpoint.post("mint", "/keys", {
+      payload: KeyRequest,
+      success: Key,
+      error: [Unauthorized, NotFound]
+    }),
+    // The presenting key revokes itself, so logging out needs nothing but the
+    // key already in hand. Idempotent: 204 whether or not it was still live.
+    HttpApiEndpoint.delete("revoke", "/keys/current", {
+      success: HttpApiSchema.NoContent,
+      error: NotFound
+    }).middleware(Authorization)
+  )
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Keys",
+      description: "Mint and revoke API keys. Absent unless the deployment runs accounts."
     })
   ) {}
 
@@ -137,6 +177,7 @@ export class MetaGroup extends HttpApiGroup.make("meta")
 export class HandbillApi extends HttpApi.make("handbill")
   .add(PagesGroup)
   .add(AliasesGroup)
+  .add(KeysGroup)
   .add(MetaGroup)
   .prefix("/v1")
   .annotateMerge(

@@ -28,6 +28,16 @@
   // nothing. Aliases are guessable by construction — see docs/SELF-HOSTING.md.
   // "kv_namespaces": [{ "binding": "ALIASES", "id": "<id>" }],
 
+  // EDIT 5 (optional) — hosted accounts, instead of one shared PUBLISH_TOKEN.
+  // With this binding the Worker mints a key per GitHub account (POST /v1/keys)
+  // and /v1/health reports "mode": "accounts"; without it those routes answer
+  // 404 and PUBLISH_TOKEN is unchanged. Removing the binding again reverts the
+  // Worker to the token, and every published page keeps serving either way:
+  //   bunx wrangler kv namespace create ACCOUNTS
+  // One "kv_namespaces" array holds both bindings, so with EDIT 4 it reads
+  // [{ "binding": "ALIASES", ... }, { "binding": "ACCOUNTS", ... }].
+  // "kv_namespaces": [{ "binding": "ACCOUNTS", "id": "<id>" }],
+
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "handbill" }]
 
   // `PUBLISH_TOKEN` is a secret, never a var:

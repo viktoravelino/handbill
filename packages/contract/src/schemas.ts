@@ -65,6 +65,28 @@ export const Health = Schema.Struct({
 export type Health = typeof Health.Type
 
 /**
+ * The body of `POST /v1/keys`: a GitHub access token the caller already holds
+ * (the CLI gets one from GitHub's device flow). The Worker verifies it with
+ * GitHub once and keeps nothing about it — it is an identity proof, not a
+ * credential this API stores.
+ */
+export const KeyRequest = Schema.Struct({
+  githubToken: Schema.String
+}).annotate({ identifier: "KeyRequest" })
+export type KeyRequest = typeof KeyRequest.Type
+
+/**
+ * A freshly minted key and the owner it authenticates. The server stores only
+ * `SHA-256(key)`, so this response is the one time the key exists in readable
+ * form: whoever loses it mints another rather than recovering this one.
+ */
+export const Key = Schema.Struct({
+  key: Schema.String,
+  owner: Owner
+}).annotate({ identifier: "Key" })
+export type Key = typeof Key.Type
+
+/**
  * A living name for a page: one DNS label under the zone, so `plan` is served at
  * `https://plan.<zone>`. The pattern is a hostname label (1–63 characters,
  * alphanumeric ends, hyphens inside) minus the two labels the zone has already
