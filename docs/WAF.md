@@ -94,7 +94,7 @@ The object and its index entry go, and the owner's stored bytes are released. It
 
 **What a takedown does and does not reach.** At the origin it is immediate: the object is gone and any *new* request 404s. But pages are served `Cache-Control: public, max-age=31536000, immutable`, which is what makes a hash URL safe to hand out — and it means a reader who already fetched the page keeps their own copy for up to a year and is told not to revalidate. A takedown stops new fetches; it cannot reach a browser that already has it. Cloudflare's edge copy *can* be cleared, and should be, since it serves everyone: Caching → Configuration → **Purge Cache** → purge by URL (`https://<hash>.<zone>/`), or `POST /zones/<id>/purge_cache` with that URL. Nothing in the Worker does this for you.
 
-So the honest promise to a reporter is "it stops being served now", not "every copy is gone". M18's drill should measure the first from a fresh client.
+So the honest promise to a reporter is "it stops being served now", not "every copy is gone". [DRILL.md](DRILL.md) §B5 measures the first from a fresh client, purge included.
 
 `ADMIN_TOKEN` is the operator's own secret and never a user key. Keep it out of the config file (which is where an ordinary key lives) and pass it through the environment.
 
@@ -144,4 +144,4 @@ Zeroing it under-counts rather than over-counts, which is the direction this cod
 
 ### 5. Write it down
 
-Time from report to 404, and time from report to revoked key. The drill (M18) exists to make those two numbers real rather than aspirational; abuse tooling that has never been exercised is decoration.
+Time from report to 404, and time from report to revoked key. [DRILL.md](DRILL.md) is where those two numbers live: it walks this runbook end to end on production, with the timings filled in from a real run rather than imagined. Abuse tooling that has never been exercised is decoration.

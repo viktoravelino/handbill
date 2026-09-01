@@ -39,9 +39,9 @@
   //
   // The same namespace holds the per-owner page index and the quota counters:
   // with it a hosted account gets 25 pages a day and 250 MB stored, and without
-  // it nothing is counted. Code-wise this is now complete; what is not yet in
-  // place for a live zone is the terms, the abuse address and the drill (M17,
-  // M18) — see docs/SELF-HOSTING.md "Hosted accounts" and docs/WAF.md.
+  // it nothing is counted. Hosting strangers takes more than the binding: a WAF
+  // rate limit, terms, an abuse address, and a drill that has actually been run
+  // — docs/SELF-HOSTING.md "Hosted accounts", docs/WAF.md and docs/DRILL.md.
   // "kv_namespaces": [{ "binding": "ACCOUNTS", "id": "<id>" }],
 
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "handbill" }]

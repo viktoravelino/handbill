@@ -29,7 +29,7 @@ CLOUDFLARE_ACCOUNT_ID=<account id>   # Workers & Pages overview, right-hand colu
 
 ## 2. Three edits in `wrangler.jsonc`
 
-`apps/worker/wrangler.jsonc` ships pointing at the maintainer's deployment. Change the three lines marked `EDIT`; the fourth and fifth are optional and belong to [living names](#living-names-optional) and [hosted accounts](#hosted-accounts-optional-not-for-production):
+`apps/worker/wrangler.jsonc` ships pointing at the maintainer's deployment. Change the three lines marked `EDIT`; the fourth and fifth are optional and belong to [living names](#living-names-optional) and [hosted accounts](#hosted-accounts-optional):
 
 ```jsonc
 "vars": { "ZONE": "<zone>" },
@@ -136,7 +136,7 @@ The same calls by hand are `PUT` and `DELETE /v1/aliases/plan` (body `{"hash":"<
 
 The page is *served* at the name, not redirected to the hash — the reader's address bar keeps the name. It is cached for a minute rather than a year, so re-pointing an alias is visible almost immediately; a hash page is unaffected either way. One KV habit to know: a name answers the moment it is set, but `handbill alias list` can take up to a minute to show a fresh one, because KV's key listing is eventually consistent while a read by key is not. "No aliases set." right after `handbill alias plan …` printed a URL is that lag, not a failure — ask again. Names are one DNS label: lowercase letters, digits and inner hyphens, up to 63 characters, and neither `api` nor anything shaped like a hash (nor `list` or `remove`, which the CLI takes as subcommands). Without the binding, every `/v1/aliases` route answers `404 {"_tag":"NotFound"}`, `handbill alias` says "Aliases are off on this deployment", and `<name>.<zone>` serves "Nothing here".
 
-## Hosted accounts (optional, not for production)
+## Hosted accounts (optional)
 
 Everything above runs on one shared `PUBLISH_TOKEN`: one operator, one owner. Binding an `ACCOUNTS` KV namespace (`EDIT 5` in `wrangler.jsonc`) switches the Worker to per-account keys instead — `POST /v1/keys` mints one per GitHub account, `/v1/health` reports `"mode":"accounts"`, and pages are owned by `gh:<id>` rather than by the operator. Without the binding none of that exists and this section does not apply.
 
@@ -155,9 +155,9 @@ HANDBILL_ADMIN_TOKEN=<that token> handbill admin takedown https://<hash>.<zone>
 
 It is never a publishing key: a user key gets `401` here, and this token cannot publish. Without the secret the route is not there at all (`404`), like the alias routes without their binding. The page stops being served, leaves its owner's list, and its bytes go back to that owner's quota; a taken-down hash then 404s exactly like one that was never published. Taking a page down does not touch the key that published it — revoking that is a separate act, described in [WAF.md](WAF.md).
 
-**Before a production zone.** Tenant isolation and quotas ship as of M16, but hosting strangers is more than code: you also need terms saying what may not be published and what you can see, and an address a report can arrive at. The maintainer's are [terms and acceptable use](https://handbill.dev/docs/terms/) and [reporting abuse](https://handbill.dev/docs/abuse/) — written for `handbill.dev`, so adapt rather than copy — and the drill that proves takedown and revocation work end to end is M18. Until you have your own, `ACCOUNTS` is for a deployment whose users you know.
+**Before a production zone.** Tenant isolation and quotas ship as of M16, but hosting strangers is more than code: you also need terms saying what may not be published and what you can see, and an address a report can arrive at. The maintainer's are [terms and acceptable use](https://handbill.dev/docs/terms/) and [reporting abuse](https://handbill.dev/docs/abuse/) — written for `handbill.dev`, so adapt rather than copy — and [DRILL.md](DRILL.md) is the script that proves takedown, revocation and the kill switch work end to end, which is worth running once on your own zone before strangers do it for you. Until you have all three, `ACCOUNTS` is for a deployment whose users you know.
 
-The kill switch is symmetrical: remove the `ACCOUNTS` binding and redeploy, and the Worker is back on `PUBLISH_TOKEN` with every published page still serving — accounts were never on the read path.
+The kill switch is symmetrical: remove the `ACCOUNTS` binding and redeploy, and the Worker is back on `PUBLISH_TOKEN` with every published page still serving — accounts were never on the read path. The namespace is untouched by the flip, so putting the binding back brings the keys, the index and the counters with it; [DRILL.md](DRILL.md) §D rehearses both halves and times them.
 
 ## Scripting against it
 
