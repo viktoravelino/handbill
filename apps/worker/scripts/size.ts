@@ -9,8 +9,8 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const BUNDLE_LIMIT = 1024 * 1024
-/** See AGENTS.md — `src/*.ts` minus tests, which grow freely. */
-const SOURCE_LINE_LIMIT = 750
+/** See AGENTS.md — `src/*.ts` minus tests, which grow freely. Raised from 750 for 0.3 in #88. */
+const SOURCE_LINE_LIMIT = 1125
 // `fileURLToPath`, not `.pathname`: the latter keeps the URL escaping, so a
 // checkout under a path with a space in it would not resolve.
 const root = fileURLToPath(new URL("..", import.meta.url))

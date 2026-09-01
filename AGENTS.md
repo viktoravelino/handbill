@@ -7,7 +7,7 @@ Hand someone a page: `handbill plan.html` → `https://<sha256[0:12]>.<zone>`. S
 ## Ground rules
 
 - The API contract lives in `packages/contract` and is versioned under `/v1`; it does not break inside a major version. Published links never change.
-- Keep it small. **The Worker budget is 750 lines of source** — every `.ts` file in `apps/worker/src` except `*.test.ts`, counted whole, comments included; tests grow freely. `bun run --cwd apps/worker size` prints the count and fails over the budget, and the CI `size` job runs it. It is a budget, not a target: once it binds, a PR that adds lines takes something out and says what. If a feature needs a framework, the feature is wrong.
+- Keep it small. **The Worker budget is 1125 lines of source** — every `.ts` file in `apps/worker/src` except `*.test.ts`, counted whole, comments included; tests grow freely. It was 750 through 0.2 and was raised once, in #88, because hosted mode earns it: 0.3's three services (accounts auth, the per-owner index, quotas) and its admin route cost about 315 lines measured against the services already here, and 0.4's billing webhook a further 90. `bun run --cwd apps/worker size` prints the count and fails over the budget, and the CI `size` job runs it. It is a budget, not a target: once it binds, a PR that adds lines takes something out and says what. If a feature needs a framework, the feature is wrong.
 - No `any`. Prefer inferred types; brand IDs (`Hash`) with Schema. Write TypeScript Matt Pocock would sign off on.
 - Non-goals are real: no multi-file sites, no server-side transforms, no analytics, no other clouds.
 - YAGNI: build the milestone in front of you, not the next version.
