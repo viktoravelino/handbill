@@ -27,7 +27,7 @@ One tier, `free`, per account:
 | Stored bytes  | 250 MB                        |
 | Per page      | 5 MB                          |
 
-Past either of the first two, publishing answers `429 QuotaExceeded` naming the limit, what it allows, and — for the daily one — when it resets. Unpublishing gives the stored bytes back; it does not refund the day's page count. A paid tier that raises these numbers is planned, with no pricing to quote yet, and nothing on the read path will ever ask whether a page's owner is paying.
+Past either of the first two, publishing answers `429 QuotaExceeded` naming the limit, what it allows, and — for the daily one — when it resets. They are ceilings rather than exact counts: a burst of publishes at once can slip a little past before the counter catches up, never short of it. Unpublishing gives the stored bytes back; it does not refund the day's page count. A paid tier that raises these numbers is planned, with no pricing to quote yet, and nothing on the read path will ever ask whether a page's owner is paying.
 
 ## How it differs from self-hosting
 
@@ -42,7 +42,7 @@ Past either of the first two, publishing answers `429 QuotaExceeded` naming the 
 
 Living names are operator-only here on purpose: a word on a shared domain is a word someone else wants, and `login.handbill.dev` in a stranger's hands is a phishing kit. Hosted publishing is hash URLs, full stop — [set up your own zone](/docs/self-hosting/#living-names-optional) if you want names.
 
-Everything else is identical, because it is the same code: same CLI, same `/v1` contract, same immutable `noindex` headers on the served page. The hosted deployment is this repository's Worker with one KV namespace bound to it, and moving between hosted and your own is one line in `~/.config/handbill/config.json`:
+Everything else is identical, because it is the same code: same CLI, same `/v1` contract, same immutable `noindex` headers on the served page. The hosted deployment is this repository's Worker with its KV namespaces bound — `ACCOUNTS` for keys, the page index and the counters, and `ALIASES`, which is separate and is why the operator has names here when you do not — and moving between hosted and your own is one line in `~/.config/handbill/config.json`:
 
 ```json
 { "endpoint": "https://api.yourdomain.dev", "token": "…" }

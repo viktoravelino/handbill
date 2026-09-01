@@ -16,8 +16,8 @@ The honest version: this is one person's service, not a trust-and-safety departm
 
 - Reports are read as they arrive, in practice within a day.
 - Once a report has been seen and the page is clearly abusive, taking it down is **seconds** — one command — and it happens before any reply is written.
-- You get a reply if you left a way to reach you. It says what happened to the page, not what was decided about the account.
-- Whether the publisher's key is revoked as well is a separate decision, and not one reported back to you.
+- You get a reply if you left a way to reach you. It says what happened to the page, not what was decided about the publisher.
+- Whether the publisher's keys are revoked as well is a separate decision, and not one reported back to you.
 
 Two things not to expect:
 

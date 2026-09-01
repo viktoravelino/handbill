@@ -6,7 +6,7 @@
 
 Do not publish, or link to from a page you publish:
 
-- **Child sexual abuse material.** Removed and reported to the authorities, account over, no notice.
+- **Child sexual abuse material.** Removed and reported — to the authorities and to GitHub — with every key revoked and no notice to you.
 - **Malware** — droppers, exploit kits, ransomware notes, anything whose purpose is to compromise the reader.
 - **Phishing**: a page that impersonates a person, a company or a login screen to collect credentials, payment details or one-time codes. An unguessable URL with free HTTPS on a plausible domain is exactly what a phisher wants, so this is the abuse this service expects and the fastest takedown here.
 - **Doxxing** — someone's address, phone number, government id or private material, published to expose or intimidate them.
@@ -21,9 +21,11 @@ Two things this list is not. It is not a taste test: a rough draft, an unpopular
 Two acts, deliberately separate:
 
 - **Takedown.** The page stops being served within seconds and its URL 404s exactly like a hash that was never published — no tombstone, no notice owed to you beforehand.
-- **Revocation.** Your key stops working, so you cannot publish more. Pages you published before it keep serving until they are taken down too.
+- **Revocation.** That key stops working, so it publishes nothing further. Pages published with it before then keep serving until they are taken down too.
 
-A mistaken publish gets the first and not the second. Repeat or deliberate abuse ends the account: every key revoked, every page taken down. For anything criminal the order reverses — the account goes first and the explanation comes later, if at all.
+A mistaken publish gets the first and not the second. Repeat or deliberate abuse gets both, against every page you have published and every key you hold. For anything criminal the pages go first and the explanation comes later, if at all.
+
+**What the operator cannot do is lock you out**, and it would be dishonest of this page to imply otherwise. Minting a key is open to any GitHub account by design, so nothing stops you signing in again and holding a working key a minute later — and nothing stops the operator revoking that one too, and the next. Enforcement here is a loop rather than a door: it makes abusing this service tedious and unrewarding, not impossible. The account itself can only be taken away by GitHub, which is where a persistent abuser gets reported.
 
 One honest limit: takedown stops the service serving the page. Pages are served `immutable`, so a reader who already fetched one keeps their copy, and the operator cannot reach it. Caches the operator controls are purged; caches they do not control are not.
 
@@ -56,9 +58,9 @@ Deliberately not kept: no reader logs of the operator's own, no reader IP addres
 
 ## Ending it
 
-You can leave whenever: `handbill remove` each page, then `handbill logout`, which revokes the key and deletes it from your machine. What survives is the revoked key record — the revocation stays on the books — and it holds nothing but your GitHub numeric id and the date. Pages you leave up keep serving.
+You can leave whenever: `handbill remove` each page, then `handbill logout`, which revokes the key and deletes it from your machine. What survives is the revoked key record — your GitHub numeric id, when the key was made and when it was revoked, and the tier it was on — plus the pointer that lets the operator find it and a stored-bytes counter reading zero. The revocation stays on the books deliberately; none of it is anything you did not already read in this page. Pages you leave up keep serving.
 
-The operator can end your access at any time, and will say why unless saying so would get in the way of a criminal investigation.
+The operator can revoke your keys and take your pages down at any time, and will say why unless saying so would get in the way of a criminal investigation.
 
 ## Reporting a page
 
