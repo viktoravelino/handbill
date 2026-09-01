@@ -35,6 +35,13 @@ bump() {
   require_clean_main
   [[ $v != $(current_version) ]] || die "apps/cli is already $v"
   git -C "$ROOT" rev-parse -q --verify "refs/tags/v$v" >/dev/null && die "tag v$v already exists"
+  # Releasing with the placeholder client id ships a `handbill login` that cannot
+  # work at all: GitHub refuses an unknown client_id, so nobody without a token
+  # already in hand can publish anything. A -dev version is main in progress and
+  # is never published, so it is allowed to carry the placeholder.
+  if [[ $v != *-dev ]] && grep -q 'REPLACE_WITH_THE_HANDBILL_OAUTH_APP_CLIENT_ID' "$ROOT/apps/cli/src/github.ts"; then
+    die "apps/cli/src/github.ts still holds the placeholder CLIENT_ID: create the GitHub OAuth app with device flow enabled and set it before releasing"
+  fi
 
   if [[ $DRY == 1 ]]; then
     # The version edits below are only there for the checks and the build. Put main back

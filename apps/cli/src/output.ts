@@ -2,7 +2,8 @@ import { Console, Data, Effect, Match, type PlatformError, Runtime, type Schema 
 import type { HttpClientError } from "effect/unstable/http"
 import type { HashMismatch, NotFound, TooLarge, Unauthorized } from "@handbill/contract"
 import type { CannotOpen } from "./browser"
-import type { BadConfigFile, MissingSetting } from "./config"
+import type { BadConfigFile, MissingToken, UnnamedEndpoint } from "./config"
+import type { LoginFailed } from "./github"
 
 /** stdout carries the result and nothing else: one line, or one JSON object. */
 export const line = (text: string) => Console.log(text)
@@ -44,6 +45,28 @@ export class ChecksFailed extends Data.TaggedError("ChecksFailed")<{
   readonly failed: number
 }> {}
 
+/** `login` reached an endpoint that runs on one shared token and has no keys to mint. */
+export class NoAccounts extends Data.TaggedError("NoAccounts")<{
+  readonly endpoint: string
+}> {}
+
+/**
+ * `logout` was pointed at a deployment that does not know the key it holds.
+ * The key is still live wherever it came from, so nothing local is cleared.
+ */
+export class WrongDeployment extends Data.TaggedError("WrongDeployment")<{
+  readonly endpoint: string
+}> {}
+
+/**
+ * `remove` was handed a hash the endpoint will not unpublish. The 404 is the
+ * "not yours" answer — never a 403, which would confirm another account holds it
+ * — so it covers a page belonging to someone else and one that was never here.
+ */
+export class NotYours extends Data.TaggedError("NotYours")<{
+  readonly hash: string
+}> {}
+
 /**
  * Every failure a command can end on. Keeping it a closed union is what makes
  * {@link describe} exhaustive, so a new error cannot ship without a sentence.
@@ -57,12 +80,17 @@ export type Failure =
   | ChecksFailed
   | HashMismatch
   | HttpClientError.HttpClientError
-  | MissingSetting
+  | LoginFailed
+  | MissingToken
+  | NoAccounts
   | NotFound
+  | NotYours
   | PlatformError.PlatformError
   | Schema.SchemaError
   | TooLarge
   | Unauthorized
+  | UnnamedEndpoint
+  | WrongDeployment
 
 export interface Described {
   /** The failure's tag, which is what `--json` consumers switch on. */
@@ -75,7 +103,7 @@ export interface Described {
 export const describe = Match.typeTags<Failure, Described>()({
   BadConfigFile: (failure) => ({
     error: "BadConfigFile",
-    message: `Could not read ${failure.path}: ${failure.reason}.`
+    message: `Could not use ${failure.path}: ${failure.reason}.`
   }),
   BadName: (failure) => ({
     error: "BadName",
@@ -105,21 +133,31 @@ export const describe = Match.typeTags<Failure, Described>()({
     error: "HttpClientError",
     message: `Could not talk to the endpoint: ${failure.message}`
   }),
-  MissingSetting: (failure) => ({
-    error: "MissingSetting",
-    message:
-      failure.setting === "endpoint"
-        ? `No endpoint configured. Pass --endpoint, set HANDBILL_ENDPOINT, or put it in ${failure.path}.`
-        : `No token configured. Set HANDBILL_TOKEN or put it in ${failure.path}.`
+  LoginFailed: (failure) => ({
+    error: "LoginFailed",
+    message: `Could not sign in: ${failure.reason}.`
   }),
-  // The API only answers 404 on the alias routes, and only when the deployment
-  // has no KV binding: the feature is absent, not the name. `update` is the one
-  // caller that can tell the two apart — it has already had a listing answered
-  // — and it raises `CannotRepoint` instead.
+  MissingToken: (failure) => ({
+    error: "MissingToken",
+    message: `No key configured. Run \`handbill login\`, set HANDBILL_TOKEN, or put a token in ${failure.path}.`
+  }),
+  NoAccounts: (failure) => ({
+    error: "NoAccounts",
+    message: `${failure.endpoint} does not run accounts, so there is no key to mint. A self-hosted deployment publishes with its PUBLISH_TOKEN: set HANDBILL_TOKEN, or put it in the config file.`
+  }),
+  // Every caller that can reach a 404 on a route other than the alias ones maps
+  // it to something that names what was not found — `NotYours` from `remove`,
+  // `NoAccounts` from `login`, `CannotRepoint` from `update`, which has already
+  // had a listing answered — so what is left here is the alias group, where a
+  // deployment with no KV binding 404s the feature rather than the name.
   NotFound: () => ({
     error: "NotFound",
     message:
       "Aliases are off on this deployment: it has no ALIASES KV binding. Create one (docs/SELF-HOSTING.md) and redeploy."
+  }),
+  NotYours: (failure) => ({
+    error: "NotYours",
+    message: `Nothing here to unpublish for ${failure.hash}: either it was never published on this deployment, or it belongs to another account.`
   }),
   PlatformError: (failure) => ({
     error: "PlatformError",
@@ -135,7 +173,16 @@ export const describe = Match.typeTags<Failure, Described>()({
   }),
   Unauthorized: () => ({
     error: "Unauthorized",
-    message: "The endpoint rejected the token. Check it against the Worker's PUBLISH_TOKEN."
+    message:
+      "The endpoint rejected the token. Run `handbill login` for a hosted deployment, or check it against the Worker's PUBLISH_TOKEN."
+  }),
+  UnnamedEndpoint: (failure) => ({
+    error: "UnnamedEndpoint",
+    message: `This token was not minted by \`handbill login\`, and no endpoint was named — it will not be sent to ${failure.endpoint}. Pass --endpoint, set HANDBILL_ENDPOINT, or put "endpoint" in the config file.`
+  }),
+  WrongDeployment: (failure) => ({
+    error: "WrongDeployment",
+    message: `${failure.endpoint} does not know this key, so it is not the deployment that minted it. Nothing was revoked and the local key was left alone: point --endpoint or HANDBILL_ENDPOINT at the deployment you logged in to.`
   })
 })
 

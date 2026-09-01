@@ -19,15 +19,30 @@ npm i -g handbill
 
 Node ≥ 22. Two dependencies: `effect` and `marked`. Bleeding edge from `main`: `npm i -g handbill@nightly`.
 
-## Point it at a deployment
+## Sign in, or point it at your own
 
-`~/.config/handbill/config.json`:
+```sh
+handbill login
+```
+
+Opens `github.com/login/device` on a short code, mints an API key for your GitHub account, and writes it to `~/.config/handbill/config.json`. Nothing else to configure: the endpoint defaults to the hosted deployment. `handbill logout` revokes that key and removes it again.
+
+Self-hosting instead? Put your deployment in the same file:
 
 ```json
 { "endpoint": "https://api.yourdomain.dev", "token": "…" }
 ```
 
-or `HANDBILL_ENDPOINT` and `HANDBILL_TOKEN` in the environment (they win over the file). `--endpoint` on any command overrides both for one run.
+The endpoint is taken from the first of these that says anything, so a config file that names one behaves exactly as it always has:
+
+1. `--endpoint <url>`, for one command
+2. `HANDBILL_ENDPOINT`, for one shell
+3. `endpoint` in the config file, for this machine
+4. `https://api.handbill.dev`, the default
+
+The token has no flag — a secret on the command line ends up in the shell history — so it comes from `HANDBILL_TOKEN` or from `token` in the config file, which is where `handbill login` puts the key it mints. The file is written `0600`.
+
+Falling back to step 4 only happens silently for a key `handbill login` minted (they start with `hb_`). A token of your own with no endpoint named anywhere is refused rather than sent to the hosted deployment: it is your Worker's `PUBLISH_TOKEN`, and it should not leave for a host you did not choose. Name the endpoint and it goes where you meant.
 
 Don't have a deployment yet? It is one Worker, one bucket and two DNS records — about ten minutes: [self-hosting guide](https://github.com/viktoravelino/handbill/blob/main/docs/SELF-HOSTING.md).
 
@@ -44,7 +59,8 @@ Don't have a deployment yet? It is one Worker, one bucket and two DNS records �
 | `handbill update <url-or-hash> plan.html` | Republish: the new page up, its names moved, the old hash gone.                           |
 | `handbill alias plan <url-or-hash>`       | Point a name at a page: `https://plan.yourdomain.dev` serves it. Opt-in, see below.       |
 | `handbill alias list`                     | Your aliases: URL, then the hash each points at. `handbill alias remove plan` drops one.  |
-| `handbill doctor`                         | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix. |
+| `handbill login`                          | Sign in with GitHub; prints the account the key belongs to. `handbill logout` revokes it. |
+| `handbill doctor`                         | Endpoint, mode, key, key accepted, wildcard certificate — each with a one-line fix.       |
 | `handbill completions zsh`                | Shell completions (bash, zsh, fish).                                                      |
 
 Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents. `--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the URL in your browser after printing it; stdout is still that one line. `--qr` on `handbill <file>` and `handbill alias` prints a scannable QR code for the URL to stderr — and skips it silently when stderr is not a terminal, so pipes never see it.

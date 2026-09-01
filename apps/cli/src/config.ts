@@ -11,20 +11,39 @@ const ConfigFile = Schema.Struct({
 })
 type ConfigFile = typeof ConfigFile.Type
 
+/**
+ * Where `handbill` publishes when nothing says otherwise: the hosted
+ * deployment. It is the last candidate in the chain rather than a special case,
+ * so a self-hoster who sets `--endpoint`, `HANDBILL_ENDPOINT` or the config
+ * file's `endpoint` notices nothing at all.
+ */
+export const DEFAULT_ENDPOINT = "https://api.handbill.dev"
+
 /** The config file exists but cannot be used. A missing file is not an error. */
 export class BadConfigFile extends Data.TaggedError("BadConfigFile")<{
   readonly path: string
   readonly reason: string
 }> {}
 
-/** A setting the command needs was not found in any of the three places. */
-export class MissingSetting extends Data.TaggedError("MissingSetting")<{
-  readonly setting: "endpoint" | "token"
+/**
+ * No key or token anywhere. The endpoint has no such failure — there is always
+ * {@link DEFAULT_ENDPOINT} — so this is the one thing a command can be missing.
+ */
+export class MissingToken extends Data.TaggedError("MissingToken")<{
   readonly path: string
 }> {}
 
+/**
+ * A token that no deployment minted, and no endpoint to send it to but the
+ * built-in default. Raised by {@link sendable} before any request, so an
+ * operator's shared secret never reaches a host they did not name.
+ */
+export class UnnamedEndpoint extends Data.TaggedError("UnnamedEndpoint")<{
+  readonly endpoint: string
+}> {}
+
 /** Where a value came from, in precedence order. */
-export type Source = "flag" | "env" | "file"
+export type Source = "flag" | "env" | "file" | "default"
 
 export interface Setting<A> {
   readonly value: A
@@ -33,14 +52,14 @@ export interface Setting<A> {
 
 /**
  * Everything the CLI knows about how to reach a deployment. `doctor` reports
- * the sources and the missing pieces; every other command only wants the values
+ * the sources and the missing key; every other command only wants the values
  * and gets them from {@link credentials}.
  */
 export interface Settings {
   /** The config file path, whether or not anything is there. */
   readonly path: string
-  readonly file: Option.Option<ConfigFile>
-  readonly endpoint: Option.Option<Setting<string>>
+  /** Always resolved: the flag, the environment, the file, or the default. */
+  readonly endpoint: Setting<string>
   readonly token: Option.Option<Setting<Redacted.Redacted<string>>>
 }
 
@@ -65,12 +84,17 @@ const pick = <A>(
   return Option.none()
 }
 
-/** Reads and decodes the config file. Absent is `None`; corrupt is a failure. */
-const readConfigFile = Effect.fn(function* (path: string) {
+/**
+ * The config file's JSON, whatever is in it. Absent is `None`; unreadable or
+ * unparseable is a failure. {@link resolve} decodes the result and {@link save}
+ * merges into it, which is why the two are separate: writing must not drop a
+ * field this version of the CLI does not know about.
+ */
+const readJson = Effect.fn(function* (path: string) {
   const fs = yield* FileSystem.FileSystem
   // Only a file that is not there means "no config file". Every other read
   // failure — no permission, a directory in the way — is something the user has
-  // to fix, and reporting it as a missing setting would send them the wrong way.
+  // to fix, and reporting it as a missing key would send them the wrong way.
   const contents = yield* fs.readFileString(path).pipe(
     Effect.map(Option.some),
     Effect.catchTag("PlatformError", (error) => {
@@ -80,38 +104,54 @@ const readConfigFile = Effect.fn(function* (path: string) {
         : Effect.fail(new BadConfigFile({ path, reason: `the file system reported ${cause}` }))
     })
   )
-  if (Option.isNone(contents)) return Option.none<ConfigFile>()
+  if (Option.isNone(contents)) return Option.none<unknown>()
   const json = yield* Effect.try((): unknown => JSON.parse(contents.value)).pipe(
     Effect.mapError(() => new BadConfigFile({ path, reason: "it is not valid JSON" }))
   )
-  const decoded = yield* Schema.decodeUnknownEffect(ConfigFile)(json).pipe(
-    Effect.mapError((error) => new BadConfigFile({ path, reason: error.message }))
-  )
-  return Option.some(decoded)
+  return Option.some(json)
+})
+
+const decodeConfigFile = Schema.decodeUnknownEffect(ConfigFile)
+
+/** The config file path, from `XDG_CONFIG_HOME` or `~/.config`. */
+const configPath = Effect.fn(function* (configHome: Option.Option<string>) {
+  const path = yield* Path.Path
+  const home = Option.getOrElse(configHome, () => path.join(homedir(), ".config"))
+  return path.join(home, "handbill", "config.json")
 })
 
 /**
- * Resolves the configuration: flag beats environment beats config file. The
- * token has no flag — a secret on the command line ends up in the shell history
- * and in `ps` — so it comes from `HANDBILL_TOKEN` or the file.
+ * Resolves the configuration: flag beats environment beats config file beats
+ * {@link DEFAULT_ENDPOINT}. The token has no flag — a secret on the command line
+ * ends up in the shell history and in `ps` — so it comes from `HANDBILL_TOKEN`,
+ * or from the file, where `handbill login` puts the key it mints.
  */
 export const resolve = Effect.fn(function* (flags: { readonly endpoint: Option.Option<string> }) {
-  const path = yield* Path.Path
   const env = yield* environment
-  const home = Option.getOrElse(env.configHome, () => path.join(homedir(), ".config"))
-  const configPath = path.join(home, "handbill", "config.json")
-  const file = yield* readConfigFile(configPath)
+  const path = yield* configPath(env.configHome)
+  const file = yield* Option.match(yield* readJson(path), {
+    onNone: () => Effect.succeed(Option.none<ConfigFile>()),
+    onSome: (json) =>
+      decodeConfigFile(json).pipe(
+        Effect.mapBoth({
+          onFailure: (error) => new BadConfigFile({ path, reason: error.message }),
+          onSuccess: Option.some
+        })
+      )
+  })
   const fromFile = (read: (file: ConfigFile) => string | undefined) =>
     Option.flatMap(file, (contents) => Option.fromUndefinedOr(read(contents)))
 
   return {
-    path: configPath,
-    file,
-    endpoint: pick([
-      ["flag", flags.endpoint],
-      ["env", env.endpoint],
-      ["file", fromFile((contents) => contents.endpoint)]
-    ]),
+    path,
+    endpoint: Option.getOrElse(
+      pick([
+        ["flag", flags.endpoint],
+        ["env", env.endpoint],
+        ["file", fromFile((contents) => contents.endpoint)]
+      ]),
+      (): Setting<string> => ({ value: DEFAULT_ENDPOINT, source: "default" })
+    ),
     token: pick([
       ["env", env.token],
       [
@@ -125,13 +165,94 @@ export const resolve = Effect.fn(function* (flags: { readonly endpoint: Option.O
   } satisfies Settings
 })
 
-/** The endpoint and token an API call needs, or a failure naming what is missing. */
+/** The endpoint and token an API call needs, or the failure that says there is no token. */
 export const credentials = Effect.fn(function* (settings: Settings) {
-  const endpoint = yield* Option.isSome(settings.endpoint)
-    ? Effect.succeed(settings.endpoint.value.value)
-    : Effect.fail(new MissingSetting({ setting: "endpoint", path: settings.path }))
   const token = yield* Option.isSome(settings.token)
     ? Effect.succeed(settings.token.value.value)
-    : Effect.fail(new MissingSetting({ setting: "token", path: settings.path }))
-  return { endpoint, token }
+    : Effect.fail(new MissingToken({ path: settings.path }))
+  return { endpoint: settings.endpoint.value, token }
 })
+
+/** A JSON object, which is the only shape the config file can have. */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
+/**
+ * Writes the config file with `changes` merged into whatever is already there —
+ * an `undefined` value removes the field. What `login` and `logout` use to add
+ * and drop the key: the merge is against the raw JSON, so a field this version
+ * of the CLI does not know about survives being written by it.
+ *
+ * The file holds a credential, so it is written to a sibling created `0600` and
+ * renamed over the target. That is one move for two problems: the key is never
+ * in a file at the process umask, not even for the length of a write, and a
+ * `rename` is atomic, so a crash half way through leaves the old config rather
+ * than a truncated one every later command would report as `BadConfigFile`.
+ * The new inode carries the mode, so a hand-written `0644` config comes out
+ * `0600` too, with no `chmod` to race.
+ */
+export const save = Effect.fn(function* (
+  settings: Settings,
+  changes: { readonly [K in keyof ConfigFile]?: ConfigFile[K] | undefined }
+) {
+  const fs = yield* FileSystem.FileSystem
+  const path = yield* Path.Path
+  const existing = yield* readJson(settings.path)
+  const base = Option.filter(existing, isRecord).pipe(Option.getOrElse(() => ({})))
+  const merged = Object.entries({ ...base, ...changes }).filter(([, value]) => value !== undefined)
+  // Named after this process, so two `handbill` commands writing at once cannot
+  // publish each other's half-written content through the rename.
+  const pending = `${settings.path}.${process.pid}.pending`
+  yield* fs.makeDirectory(path.dirname(settings.path), { recursive: true, mode: 0o700 }).pipe(
+    Effect.andThen(
+      fs.writeFileString(pending, `${JSON.stringify(Object.fromEntries(merged), null, 2)}\n`, {
+        mode: 0o600
+      })
+    ),
+    Effect.andThen(fs.rename(pending, settings.path)),
+    // A rename that never happened leaves the sibling holding the key. It is
+    // `0600`, so this is litter rather than disclosure, but litter that holds a
+    // credential is worth sweeping up.
+    Effect.onError(() => Effect.ignore(fs.remove(pending))),
+    Effect.mapError(
+      ({ reason: { _tag: cause } }) =>
+        new BadConfigFile({
+          path: settings.path,
+          reason: `the file system reported ${cause} writing it`
+        })
+    )
+  )
+})
+
+/**
+ * Keys a handbill deployment mints start with `hb_` — the Worker's own prefix,
+ * there so a leaked key is greppable. A self-hosted `PUBLISH_TOKEN` is an
+ * operator-chosen string, so the prefix is the one thing that tells "a key this
+ * CLI was given by a deployment" from "the operator's shared secret" without
+ * asking anyone. It is a heuristic — an operator may choose a `PUBLISH_TOKEN`
+ * starting with `hb_`, and then it is treated as a key — and the two places it
+ * is used both fail safe: {@link Settings} still resolves, and the caller only
+ * ever declines to send the token somewhere it was not told to.
+ */
+export const isMintedKey = (token: Redacted.Redacted<string>): boolean =>
+  Redacted.value(token).startsWith("hb_")
+
+/**
+ * The one rule about where a credential may go, in the one place that states
+ * it: a token no deployment minted is not sent to an endpoint nobody named.
+ * That pairing — an operator's `PUBLISH_TOKEN` and a `handbill` that fell back
+ * to {@link DEFAULT_ENDPOINT} — is the only case where a secret would reach a
+ * host the user did not choose, and it is worth a failure rather than a
+ * warning. A minted key takes the default in silence, which is what lets
+ * `HANDBILL_TOKEN=hb_… handbill plan.html` work with nothing configured.
+ *
+ * Every path that puts a token on the wire goes through this: `connect` for the
+ * publishing commands, `logout` before it revokes, and `doctor` inverted into a
+ * check. It lives here rather than at those three call sites because the first
+ * time the rule was written it was written once — and `logout` and `doctor`
+ * quietly went on leaking.
+ */
+export const sendable = (settings: Settings, token: Redacted.Redacted<string>) =>
+  settings.endpoint.source === "default" && !isMintedKey(token)
+    ? Effect.fail(new UnnamedEndpoint({ endpoint: settings.endpoint.value }))
+    : Effect.void

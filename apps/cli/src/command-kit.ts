@@ -27,7 +27,13 @@ export const handler =
 /** The configuration and the client that every API-calling command starts from. */
 export const connect = Effect.fn(function* (endpoint: Option.Option<string>) {
   const settings = yield* Config.resolve({ endpoint })
-  return yield* Client.make(yield* Config.credentials(settings))
+  const credentials = yield* Config.credentials(settings)
+  // Before the client exists, so nothing can put the token on the wire by
+  // accident. `credentials` runs first, so a machine with nothing configured is
+  // told to run `handbill login` rather than lectured about endpoints it has no
+  // token for.
+  yield* Config.sendable(settings, credentials.token)
+  return yield* Client.make(credentials)
 })
 
 /** An `Option` a command cannot go on without: its value, or the failure that says why. */

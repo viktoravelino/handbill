@@ -1,14 +1,42 @@
 import { Clock, Context, Duration, Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 import type { Hash } from "@handbill/contract"
-import { Owner } from "@handbill/contract"
+import { Owner, Unauthorized } from "@handbill/contract"
 import { AliasesDisabled, AliasesMemory } from "@handbill/worker/src/aliases"
 import { makeApp } from "@handbill/worker/src/app"
-import { AuthSecret } from "@handbill/worker/src/auth"
-import { IndexBucket, Storage, StorageMemory } from "@handbill/worker/src/storage"
+import { AuthAccounts, AuthSecret, type Identify, type KeyStore } from "@handbill/worker/src/auth"
+import { IndexBucket, IndexMemory, Storage, StorageMemory } from "@handbill/worker/src/storage"
 
 export const TOKEN = "publish-me"
 export const ZONE = "example.dev"
+
+/**
+ * Accounts mode as the CLI meets it: two GitHub accounts the in-memory
+ * `identify` knows, so `login` mints a key for one of them and a test can put a
+ * page beyond the other's reach. Nothing else about GitHub is involved — the
+ * CLI's own device flow is a swapped layer, and the Worker's check is this
+ * function.
+ */
+export const GITHUB_TOKEN = "gho_from-the-device-flow"
+export const OWNER = Owner.make("gh:4242")
+export const OTHER_GITHUB_TOKEN = "gho_a-second-account"
+export const OTHER_OWNER = Owner.make("gh:9001")
+
+const identify: Identify = (githubToken) =>
+  githubToken === GITHUB_TOKEN
+    ? Effect.succeed(OWNER)
+    : githubToken === OTHER_GITHUB_TOKEN
+      ? Effect.succeed(OTHER_OWNER)
+      : Effect.fail(new Unauthorized())
+
+/** The `ACCOUNTS` namespace as a `Map`: one key record per minted key. */
+const memoryKeys = (): KeyStore => {
+  const records = new Map<string, string>()
+  return {
+    get: (key): Promise<unknown> => Promise.resolve(JSON.parse(records.get(key) ?? "null")),
+    put: (key, value): Promise<void> => Promise.resolve(void records.set(key, value))
+  }
+}
 
 /** Small enough that a test can go over it without carrying a megabyte around. */
 export const MAX_BYTES = 4096
@@ -17,7 +45,7 @@ export const MAX_BYTES = 4096
 const CLOCK_START = Date.UTC(2026, 0, 15)
 export const PUBLISHED_AT = new Date(CLOCK_START).toISOString()
 
-/** `AuthSecret` owns every page as `"self"`, so that is who `hashes` asks about. */
+/** `AuthSecret` owns every page as `"self"`, so that is who `hashes` asks about by default. */
 const SELF = Owner.make("self")
 
 /**
@@ -66,12 +94,24 @@ const recordingFetch = (
   )
 
 /**
+ * The two layers accounts mode swaps: per-account keys instead of one shared
+ * token, and its own index rather than the bucket a self-hosted Worker reads.
+ */
+const authAndIndex = (accounts: boolean, storage: Layer.Layer<Storage>) =>
+  accounts
+    ? Layer.mergeAll(AuthAccounts(memoryKeys(), identify), IndexMemory)
+    : Layer.mergeAll(AuthSecret(TOKEN), IndexBucket.pipe(Layer.provide(storage)))
+
+/**
  * The real Worker on `StorageMemory`, handed to the CLI as its `fetch`. The
  * round-trip tests drive `makeApp` — the same function `wrangler` calls — so
  * they exercise the Worker's own layers, routing and headers with no network
- * and no account. `aliases: false` is a deployment with no KV binding.
+ * and no account. `aliases: false` is a deployment with no KV binding, and
+ * `accounts: true` is the hosted tier: keys instead of one shared token.
  */
-export const makeServer = (options: { readonly aliases?: boolean } = {}) => {
+export const makeServer = (
+  options: { readonly aliases?: boolean; readonly accounts?: boolean } = {}
+) => {
   // Built here rather than inside `makeApp` so the test can read the store
   // without going through the API. `StorageMemory` has no finalizer, so
   // closing the scope leaves the instance alive.
@@ -83,9 +123,7 @@ export const makeServer = (options: { readonly aliases?: boolean } = {}) => {
     { zone: ZONE, maxBytes: MAX_BYTES },
     Layer.mergeAll(
       storageLayer,
-      // Self-hosted mode: the bucket is the index, reading this same instance.
-      IndexBucket.pipe(Layer.provide(storageLayer)),
-      AuthSecret(TOKEN),
+      authAndIndex(options.accounts === true, storageLayer),
       options.aliases === false ? AliasesDisabled : AliasesMemory,
       // `Clock` is a reference, so this only replaces the default the Worker's
       // own runtime would have used; it adds nothing to `AppServices`.
@@ -100,8 +138,11 @@ export const makeServer = (options: { readonly aliases?: boolean } = {}) => {
   return {
     /** Point the CLI's `HttpClient` at the Worker instead of the network. */
     layer: Layer.succeed(FetchHttpClient.Fetch, fetch).pipe(Layer.merge(FetchHttpClient.layer)),
-    /** What a reader would get from a hostname, for assertions about what an alias serves. */
-    fetch: (url: string) => app.fetch(new Request(url)),
+    /**
+     * The Worker reached directly, outside the CLI: what a reader would get from
+     * a hostname, and how a test sets up state another account owns.
+     */
+    fetch: (url: string, init?: RequestInit) => app.fetch(new Request(url, init)),
     dispose: () => app.dispose(),
     /** Move the Worker's clock, so pages published after it are demonstrably newer. */
     advance: time.advance,
@@ -112,7 +153,8 @@ export const makeServer = (options: { readonly aliases?: boolean } = {}) => {
      * The rotation `update` performs is only interesting when it is interrupted.
      */
     transport: (request: Request) => fetch(request),
-    /** What the store holds, for assertions that do not go through the API. */
-    hashes: (): ReadonlyArray<Hash> => Effect.runSync(storage.list(SELF)).map((meta) => meta.hash)
+    /** What the store holds for an owner, for assertions that do not go through the API. */
+    hashes: (owner: Owner = SELF): ReadonlyArray<Hash> =>
+      Effect.runSync(storage.list(owner)).map((meta) => meta.hash)
   }
 }
