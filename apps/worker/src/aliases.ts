@@ -1,12 +1,8 @@
 import type { AliasName, Hash } from "@handbill/contract"
-import {
-  AliasName as AliasNameSchema,
-  Hash as HashSchema,
-  NotFound,
-  Owner
-} from "@handbill/contract"
+import { AliasName as AliasNameSchema, NotFound, Owner } from "@handbill/contract"
 import type { KVNamespace } from "@cloudflare/workers-types"
 import { Context, Effect, Layer, Option, Schema } from "effect"
+import { isHash } from "./hash"
 
 /** An alias as `list` reports it: the name, what it points at, and who set it. */
 export interface StoredAlias {
@@ -64,7 +60,6 @@ export const AliasesMemory: Layer.Layer<Aliases> = Layer.sync(Aliases, () => {
  * is treated as absent rather than served or listed.
  */
 const isAliasName = Schema.is(AliasNameSchema)
-const isHash = Schema.is(HashSchema)
 
 /**
  * Aliases on KV: the name is the key and the hash is the value, so resolving one

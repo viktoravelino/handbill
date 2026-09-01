@@ -1,7 +1,8 @@
 import type { AliasName, Hash } from "@handbill/contract"
-import { AliasName as AliasNameSchema, Hash as HashSchema } from "@handbill/contract"
+import { AliasName as AliasNameSchema } from "@handbill/contract"
 import { Effect, Option, Schema } from "effect"
 import { Aliases } from "./aliases"
+import { isHash } from "./hash"
 import { Storage } from "./storage"
 
 /**
@@ -15,7 +16,6 @@ export type HostKind =
   | { readonly kind: "alias"; readonly name: AliasName }
   | { readonly kind: "unknown" }
 
-const HASH_LABEL = /^[0-9a-f]{12}$/u
 const isAliasName = Schema.is(AliasNameSchema)
 
 /**
@@ -38,7 +38,7 @@ export const classifyHost = (hostname: string, zone: string): HostKind => {
   if (host === `api${suffix}`) return { kind: "api" }
   if (host.endsWith(suffix)) {
     const label = host.slice(0, -suffix.length)
-    if (HASH_LABEL.test(label)) return { kind: "page", hash: HashSchema.make(label) }
+    if (isHash(label)) return { kind: "page", hash: label }
     if (isAliasName(label)) return { kind: "alias", name: label }
   }
   return { kind: "unknown" }

@@ -1,6 +1,7 @@
-import { Hash, Owner } from "@handbill/contract"
-import type { R2Bucket } from "@cloudflare/workers-types"
-import { Context, Effect, Layer, Option, Schema } from "effect"
+import { type Hash, Owner } from "@handbill/contract"
+import type { R2Bucket, R2Object } from "@cloudflare/workers-types"
+import { Context, Effect, Layer, Option } from "effect"
+import { isHash } from "./hash"
 
 /** Everything about a stored document except its bytes — i.e. its `customMetadata` plus the object size. */
 export interface StoredMeta {
@@ -34,13 +35,7 @@ export interface StorageShape {
 export class Storage extends Context.Service<Storage, StorageShape>()("handbill/Storage") {}
 
 /** The stored document minus its bytes — what `head` and `list` report. */
-const metaOf = (document: StoredDocument): StoredMeta => ({
-  hash: document.hash,
-  owner: document.owner,
-  title: document.title,
-  publishedAt: document.publishedAt,
-  size: document.size
-})
+const metaOf = ({ body: _body, ...meta }: StoredDocument): StoredMeta => meta
 
 /** Newest first, hash-ordered within the same instant so listings are stable. */
 const byNewest = (a: StoredMeta, b: StoredMeta): number =>
@@ -63,34 +58,31 @@ export const StorageMemory: Layer.Layer<Storage> = Layer.sync(Storage, () => {
   }
 })
 
-/** Reads `customMetadata` back into a `StoredMeta`, tolerating objects written by an older deployment. */
-const metaFromR2 = (
-  hash: Hash,
-  size: number,
-  customMetadata: Record<string, string> | undefined
-): StoredMeta => ({
+/**
+ * Reads `customMetadata` back into a `StoredMeta`, tolerating objects written by
+ * an older deployment. The hash is passed in rather than read off `object.key`:
+ * the caller is the one that knows the key is a hash.
+ */
+const metaFromR2 = (hash: Hash, object: R2Object): StoredMeta => ({
   hash,
-  owner: Owner.make(customMetadata?.["owner"] ?? "self"),
-  title: customMetadata?.["title"] ?? "",
-  publishedAt: customMetadata?.["publishedAt"] ?? "",
-  size
+  owner: Owner.make(object.customMetadata?.["owner"] ?? "self"),
+  title: object.customMetadata?.["title"] ?? "",
+  publishedAt: object.customMetadata?.["publishedAt"] ?? "",
+  size: object.size
 })
 
 /**
- * Every key this Worker writes is a hash, but the bucket may be shared or hold
- * leftovers from something else. `list` skips whatever is not one rather than
- * reporting a key the contract's `Hash` would reject.
+ * Production storage: one R2 object per document, metadata on the object itself
+ * — no index to keep in sync. The bucket may be shared or hold leftovers from
+ * something else, so `list` skips every key that is not a hash.
  */
-const isHash = Schema.is(Hash)
-
-/** Production storage: one R2 object per document, metadata on the object itself — no index to keep in sync. */
 export const StorageR2 = (bucket: R2Bucket): Layer.Layer<Storage> =>
   Layer.succeed(Storage, {
-    put: ({ body, hash, ...meta }) =>
+    put: ({ body, hash, owner, title, publishedAt }) =>
       Effect.promise(() =>
         bucket.put(hash, body, {
           httpMetadata: { contentType: "text/html; charset=utf-8" },
-          customMetadata: { owner: meta.owner, title: meta.title, publishedAt: meta.publishedAt }
+          customMetadata: { owner, title, publishedAt }
         })
       ),
     get: (hash) =>
@@ -98,14 +90,12 @@ export const StorageR2 = (bucket: R2Bucket): Layer.Layer<Storage> =>
         const object = await bucket.get(hash)
         if (object === null) return Option.none()
         const body = new Uint8Array(await object.arrayBuffer())
-        return Option.some({ ...metaFromR2(hash, object.size, object.customMetadata), body })
+        return Option.some({ ...metaFromR2(hash, object), body })
       }),
     head: (hash) =>
       Effect.promise(async () => {
         const object = await bucket.head(hash)
-        return object === null
-          ? Option.none()
-          : Option.some(metaFromR2(hash, object.size, object.customMetadata))
+        return object === null ? Option.none() : Option.some(metaFromR2(hash, object))
       }),
     remove: (hash) => Effect.promise(() => bucket.delete(hash)),
     list: (owner) =>
@@ -119,7 +109,7 @@ export const StorageR2 = (bucket: R2Bucket): Layer.Layer<Storage> =>
           })
           for (const object of page.objects) {
             if (!isHash(object.key)) continue
-            const meta = metaFromR2(object.key, object.size, object.customMetadata)
+            const meta = metaFromR2(object.key, object)
             if (meta.owner === owner) found.push(meta)
           }
           if (!page.truncated) return found.toSorted(byNewest)
