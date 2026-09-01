@@ -310,3 +310,25 @@ test("a second owner publishing the same bytes gets the URL but not ownership", 
   expect((await servePage(app, hash)).status).toBe(200)
   expect(await pageHashes(await listPages(app, a))).toEqual([hash])
 })
+
+// A title larger than KV's 1024-byte metadata cap once made the hosted index
+// write reject after the R2 write had landed — a 500 and a served-but-unlisted
+// page. `extractTitle` now clamps, so publish stays a 200 and the page lists
+// with a title that fits. (Needs a larger `maxBytes` than the shared apps do:
+// the document carries the oversized title.)
+test("a title over the KV metadata budget still publishes and lists, clamped", async () => {
+  const app = makeApp(
+    { zone: ZONE, maxBytes: 4096 },
+    Layer.mergeAll(StorageMemory, IndexMemory, AuthAccounts(memoryKeys(), identify), AliasesMemory)
+  )
+  const key = await keyFor(app, GITHUB_TOKEN)
+  const doc = `<html><head><title>${"T".repeat(1000)}</title></head><body>hi</body></html>`
+  const hash = await hashOf(doc)
+  expect((await publishAs(app, key, hash, doc)).status).toBe(200)
+
+  const listed = (await (await listPages(app, key)).json()) as {
+    pages: ReadonlyArray<{ hash: string; title: string }>
+  }
+  expect(listed.pages.map((p) => p.hash)).toEqual([hash])
+  expect(new TextEncoder().encode(listed.pages[0]!.title).length).toBeLessThanOrEqual(256)
+})

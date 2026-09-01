@@ -129,7 +129,9 @@ export const StorageR2 = (bucket: R2Bucket): Layer.Layer<Storage> =>
  * object with no entry: invisible in `list`, yet still served and still removable
  * by its owner (which is why `remove` reads ownership from R2, never from here).
  * An entry with no object serves 404 like any unknown hash. Both states are
- * harmless and self-correct on the next publish or remove of that hash.
+ * harmless, but only the owner's `remove` heals them — a same-hash republish
+ * returns early on the existing object (publish `head` check) and never re-runs
+ * `add`, so it does not re-file a missing entry.
  */
 export interface IndexShape {
   readonly add: (meta: StoredMeta) => Effect.Effect<void>

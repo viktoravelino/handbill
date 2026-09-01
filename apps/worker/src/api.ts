@@ -93,10 +93,13 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
       })
     )
     // Idempotent for a page that is not there (204), but ownership-checked:
-    // a hash owned by someone else answers 404, deletes nothing, and never 403,
-    // so a non-owner cannot even learn the hash exists (architecture decision 05).
-    // Ownership is read from R2 (`head`), never from the index — a crashed
-    // publish that left an object with no entry is still removable by its owner.
+    // a hash owned by someone else answers 404, deletes nothing, and never 403.
+    // Decision 05's bar is that a non-owner learns no *ownership* — 404 is the
+    // "not yours" answer, not a "forbidden" that would confirm another account
+    // holds it. (Existence itself is already public: the page serves 200 on its
+    // hash host to anyone with the hash.) Ownership is read from R2 (`head`),
+    // never the index, so a crashed publish that left an object with no entry is
+    // still removable by its owner.
     .handle("remove", ({ params }) =>
       Effect.gen(function* () {
         const storage = yield* Storage
