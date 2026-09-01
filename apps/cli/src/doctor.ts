@@ -1,13 +1,22 @@
 import { Effect, Option, Redacted, Result } from "effect"
+import { Command } from "effect/unstable/cli"
 import { HttpClient } from "effect/unstable/http"
 import * as Client from "./client"
+import { handler } from "./command-kit"
 import * as Config from "./config"
+import { endpointFlag, jsonFlag } from "./flags"
 import * as Output from "./output"
+
+/**
+ * The `doctor` command and the five checks it runs, together the way
+ * `completions.ts` keeps its command next to the script it prints. Nothing
+ * outside runs a check on its own, so only the command is exported.
+ */
 
 /** `FAIL` is the only status that makes `doctor` exit non-zero. */
 type Status = "ok" | "FAIL" | "skip"
 
-export interface Check {
+interface Check {
   readonly name: string
   readonly status: Status
   readonly detail: string
@@ -121,7 +130,7 @@ const reachable = Effect.fn(function* (settings: Config.Settings, endpoint: stri
  * prerequisite failed is skipped rather than reported as a second failure, so
  * the first `FAIL` in the list is the thing to fix.
  */
-export const diagnose = Effect.fn(function* (endpoint: Option.Option<string>) {
+const diagnose = Effect.fn(function* (endpoint: Option.Option<string>) {
   const settings = yield* Config.resolve({ endpoint })
   const checks = configured(settings)
   if (Option.isNone(settings.endpoint)) {
@@ -136,7 +145,7 @@ export const diagnose = Effect.fn(function* (endpoint: Option.Option<string>) {
 })
 
 /** Prints the report — to stdout, because for `doctor` the report is the result. */
-export const render = Effect.fn(function* (checks: ReadonlyArray<Check>, asJson: boolean) {
+const render = Effect.fn(function* (checks: ReadonlyArray<Check>, asJson: boolean) {
   if (asJson) {
     yield* Output.json({ checks })
   } else {
@@ -147,3 +156,24 @@ export const render = Effect.fn(function* (checks: ReadonlyArray<Check>, asJson:
   const failed = checks.filter((entry) => entry.status === "FAIL").length
   if (failed > 0) yield* Effect.fail(new Output.ChecksFailed({ failed }))
 })
+
+export const doctor = Command.make(
+  "doctor",
+  { endpoint: endpointFlag, json: jsonFlag },
+  handler(({ endpoint, json }) =>
+    diagnose(endpoint).pipe(
+      // A config file that cannot be parsed is exactly what doctor exists to
+      // explain, so it becomes a failed check rather than an aborted command.
+      Effect.catchTag("BadConfigFile", (error) =>
+        Effect.succeed<ReadonlyArray<Check>>([
+          { name: "config", status: "FAIL", detail: Output.describe(error).message }
+        ])
+      ),
+      Effect.flatMap((checks) => render(checks, json))
+    )
+  )
+).pipe(
+  Command.withDescription(
+    "Check the configuration, the endpoint, the token and the wildcard certificate."
+  )
+)

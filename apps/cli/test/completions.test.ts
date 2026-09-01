@@ -1,20 +1,20 @@
-import { afterAll, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import type { Command, Completions } from "effect/unstable/cli"
 import { handbill } from "../src/commands"
 import { descriptor } from "../src/completions"
+import { session } from "./fixtures"
 import { run } from "./harness"
-import { makeServer } from "./server"
 
-// `--help` never reaches the transport, but the harness wants one.
-const server = makeServer()
-afterAll(() => server.dispose())
+// `--help` never reaches the transport, but the harness wants one; the
+// round-trip below wants a real one.
+const { cli, server } = session()
 
 /**
  * The flags `<command> --help` lists for the command itself. The GLOBAL FLAGS
  * section under it belongs to the framework, not to the descriptor.
  */
 const helpFlags = async (path: ReadonlyArray<string>): Promise<ReadonlyArray<string>> => {
-  const { stdout } = await run([...path, "--help"], { http: server.layer })
+  const { stdout } = await run([...path, "--help"], { http: server().layer })
   const help = stdout.join("\n")
   const start = help.indexOf("\nFLAGS\n")
   if (start === -1) return []
@@ -64,3 +64,19 @@ test.each(walk(descriptor))(
     )
   }
 )
+
+describe("completions", () => {
+  test("prints a script for the shell it was asked for", async () => {
+    const outcome = await cli(["completions", "zsh"])
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stdout.join("\n")).toContain("#compdef handbill")
+  })
+
+  // S1.3 asks for `--json` on every command, so this one wraps its script.
+  test("wraps the script in an object under --json", async () => {
+    const outcome = await cli(["completions", "zsh", "--json"])
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stdout).toHaveLength(1)
+    expect(JSON.parse(outcome.stdout[0] ?? "").script).toContain("#compdef handbill")
+  })
+})

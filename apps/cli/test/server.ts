@@ -45,6 +45,27 @@ const controlledClock = (start: number) => {
 }
 
 /**
+ * The CLI-facing `fetch`: every call recorded as `PUT /v1/pages/<hash>`, in
+ * order, then handed to the Worker. A command that rotates several calls is only
+ * correct if they happen in the right order, and that is not visible in the
+ * final state. `preconnect` is part of the runtime's `fetch` type and the client
+ * never calls it.
+ */
+const recordingFetch = (
+  app: ReturnType<typeof makeApp>,
+  requests: Array<string>
+): typeof globalThis.fetch =>
+  Object.assign(
+    (input: string | URL | Request, init?: RequestInit) => {
+      const request =
+        input instanceof Request ? new Request(input, init) : new Request(String(input), init)
+      requests.push(`${request.method} ${new URL(request.url).pathname}`)
+      return app.fetch(request)
+    },
+    { preconnect: () => Promise.resolve() }
+  )
+
+/**
  * The real Worker on `StorageMemory`, handed to the CLI as its `fetch`. The
  * round-trip tests drive `makeApp` — the same function `wrangler` calls — so
  * they exercise the Worker's own layers, routing and headers with no network
@@ -69,22 +90,9 @@ export const makeServer = (options: { readonly aliases?: boolean } = {}) => {
     )
   )
 
-  // Every API call the CLI made, as `PUT /v1/pages/<hash>`, in order. A command
-  // that rotates several calls is only correct if they happen in the right
-  // order, and that is not visible in the final state.
+  // Every API call the CLI made, in order; `recordingFetch` fills it.
   const requests: Array<string> = []
-
-  // `preconnect` is part of the runtime's `fetch` type and the client never
-  // calls it; the rest is the Worker standing in for the network.
-  const fetch: typeof globalThis.fetch = Object.assign(
-    (input: string | URL | Request, init?: RequestInit) => {
-      const request =
-        input instanceof Request ? new Request(input, init) : new Request(String(input), init)
-      requests.push(`${request.method} ${new URL(request.url).pathname}`)
-      return app.fetch(request)
-    },
-    { preconnect: () => Promise.resolve() }
-  )
+  const fetch = recordingFetch(app, requests)
 
   return {
     /** Point the CLI's `HttpClient` at the Worker instead of the network. */
