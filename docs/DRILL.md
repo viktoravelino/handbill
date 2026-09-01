@@ -243,7 +243,7 @@ handbill login    # on the publisher's account, if you want to confirm it
 
 ## C · The daily quota refuses a publish
 
-The 429 the code promises, observed on production rather than in a test. The refusal was seen on `handbill.dev` on 2026-09-01; what it said goes in the slot at the end of this scenario, verbatim, and the loop is here so it can be re-run after any change to `quotas.ts`.
+The 429 the code promises, observed on production rather than in a test. Pending like the rest of this file: the refusal has not been seen on `handbill.dev` yet — WAF rule 1 has been confirmed working, which is a different control — so run 1 is the first sighting, and what it says goes in the slot at the end of this scenario, verbatim. The loop is here so it can also be re-run after any change to `quotas.ts`.
 
 **Pre-conditions.** An account you are willing to spend a day's quota on — the day's page count is not refunded by unpublishing, so this account cannot publish again until the next UTC midnight. `sleep 6` holds the loop at WAF rule 1's allowance rather than over it, so nothing else may write to the zone while it runs.
 
@@ -333,7 +333,9 @@ curl -si "https://<hosted hash>.handbill.dev/" | grep -i cache-control
 # The body is required: without one the payload fails to decode and the answer is
 # 400, from validation, never reaching the `AuthSecret.mint` that produces the 404.
 # The token is junk on purpose — in secret mode `mint` fails before anything is sent
-# to GitHub. Do not run this line in accounts mode, where the same curl forwards it.
+# to GitHub. Do not run this line in accounts mode, where the same curl forwards it;
+# a 401 here instead of a 404 is that mistake reporting itself, GitHub having
+# refused the token, and means D2's deploy did not take.
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://api.handbill.dev/v1/keys \
   -H 'content-type: application/json' -d '{"githubToken":"drill-not-a-real-token"}'   # 404
 
