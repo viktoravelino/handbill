@@ -207,6 +207,44 @@ exports[`spec matches the published spec 1`] = `
         ],
         "type": "object",
       },
+      "QuotaExceededEncoded": {
+        "additionalProperties": false,
+        "properties": {
+          "_tag": {
+            "enum": [
+              "QuotaExceeded",
+            ],
+            "type": "string",
+          },
+          "allowed": {
+            "minimum": 0,
+            "type": "integer",
+          },
+          "limit": {
+            "enum": [
+              "pagesPerDay",
+              "storedBytes",
+            ],
+            "type": "string",
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+              },
+              {
+                "type": "null",
+              },
+            ],
+          },
+        },
+        "required": [
+          "_tag",
+          "limit",
+          "allowed",
+        ],
+        "type": "object",
+      },
       "TooLargeEncoded": {
         "additionalProperties": false,
         "properties": {
@@ -257,6 +295,51 @@ exports[`spec matches the published spec 1`] = `
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/admin/pages/{hash}": {
+      "delete": {
+        "operationId": "admin.takedown",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hash",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{12}$",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded",
+                },
+              },
+            },
+            "description": "Unauthorized",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundEncoded",
+                },
+              },
+            },
+            "description": "NotFound",
+          },
+        },
+        "security": [],
+        "tags": [
+          "Admin",
+        ],
+      },
+    },
     "/v1/aliases": {
       "get": {
         "operationId": "aliases.list",
@@ -718,6 +801,16 @@ exports[`spec matches the published spec 1`] = `
             },
             "description": "TooLarge",
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaExceededEncoded",
+                },
+              },
+            },
+            "description": "QuotaExceeded",
+          },
         },
         "security": [
           {
@@ -743,6 +836,10 @@ exports[`spec matches the published spec 1`] = `
     {
       "description": "Mint and revoke API keys. Absent unless the deployment runs accounts.",
       "name": "Keys",
+    },
+    {
+      "description": "Operator takedown. Absent unless the deployment sets an admin token.",
+      "name": "Admin",
     },
     {
       "description": "Endpoints that need no token.",
