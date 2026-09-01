@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, test } from "bun:test"
 import { NodeFileSystem, NodePath } from "@effect/platform-node"
@@ -31,6 +31,8 @@ const resolveWith = (options: {
 }) => resolveIn(configHome(options.file), options)
 
 const file = JSON.stringify({ endpoint: "https://file.example.dev", token: "file-token" })
+
+const contentsOf = (path: string): unknown => JSON.parse(readFileSync(path, "utf8"))
 
 describe("resolve", () => {
   // The whole endpoint chain in one place: flag, environment, file, default.
@@ -100,15 +102,11 @@ describe("credentials", () => {
 })
 
 describe("save", () => {
+  /** Saves into a config home and hands back the file it wrote to. */
   const saveIn = (home: string, changes: { readonly token?: string | undefined }) =>
     Effect.runPromise(
       resolve({ endpoint: Option.none() }).pipe(
-        Effect.flatMap((settings) =>
-          Effect.andThen(
-            save(settings, changes),
-            Effect.sync(() => readFileSync(settings.path, "utf8"))
-          )
-        ),
+        Effect.flatMap((settings) => Effect.as(save(settings, changes), settings.path)),
         Effect.provide(
           ConfigProvider.layer(ConfigProvider.fromEnvRecord({ XDG_CONFIG_HOME: home }))
         ),
@@ -120,8 +118,7 @@ describe("save", () => {
   // of the CLI has never heard of has to survive being written by it.
   test("merges into what is already there, unknown fields included", async () => {
     const home = configHome(JSON.stringify({ endpoint: "https://file.example.dev", editor: "hx" }))
-    const written = JSON.parse(await saveIn(home, { token: "hb_minted" }))
-    expect(written).toEqual({
+    expect(contentsOf(await saveIn(home, { token: "hb_minted" }))).toEqual({
       endpoint: "https://file.example.dev",
       editor: "hx",
       token: "hb_minted"
@@ -130,7 +127,24 @@ describe("save", () => {
 
   // What `logout` does: the field goes, the file stays.
   test("removes a field set to undefined, and creates a file that is not there", async () => {
-    const written = JSON.parse(await saveIn(configHome(), { token: undefined }))
-    expect(written).toEqual({})
+    expect(contentsOf(await saveIn(configHome(), { token: undefined }))).toEqual({})
+  })
+
+  // The file holds a key. Both cases: one created here, and one that already
+  // existed at the umask the fixture wrote it with (0644).
+  test.each([
+    ["a file it creates", undefined],
+    ["a file that was already there", JSON.stringify({ editor: "hx" })]
+  ])("leaves %s readable only by its owner", async (_, existing) => {
+    const path = await saveIn(configHome(existing), { token: "hb_minted" })
+    // eslint-disable-next-line no-bitwise
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+  })
+
+  // The write goes to a sibling and is renamed over the target, so a crash
+  // cannot leave a half-written config every later command reports as broken.
+  test("leaves nothing behind next to the file", async () => {
+    const path = await saveIn(configHome(), { token: "hb_minted" })
+    expect(existsSync(`${path}.pending`)).toBe(false)
   })
 })

@@ -132,12 +132,62 @@ describe("logout", () => {
     expect(outcome.ok).toBe(false)
     expect(outcome.stderr.join("\n")).toContain("No key configured")
   })
+})
 
-  test("says the environment still holds a key it cannot remove", async () => {
-    const key = await mint(GITHUB_TOKEN)
-    const outcome = await cli(["logout"], { env: { HANDBILL_TOKEN: key } })
+// Which key `logout` is holding decides both what it revokes and what it may
+// clear, and the two are not always the same key.
+describe("logout and the key it is actually holding", () => {
+  // The environment beats the file, so the environment's key is the one that
+  // gets revoked — and clearing the file would then delete a *different* live
+  // key that nothing could ever revoke again, because the route needs the key
+  // itself and the file was the only thing holding it.
+  test("revokes the environment's key and leaves the file's alone", async () => {
+    await cli(["login"], { githubToken: GITHUB_TOKEN })
+    const stored = String(configFile().token)
+    const exported = await mint(GITHUB_TOKEN)
+
+    const outcome = await cli(["logout", "--json"], { env: { HANDBILL_TOKEN: exported } })
     expect(outcome.ok).toBe(true)
-    expect(outcome.stderr.join("\n")).toContain("HANDBILL_TOKEN is still set")
+    expect(JSON.parse(outcome.stdout[0] ?? "")).toMatchObject({ revoked: true, cleared: false })
+    expect(outcome.stderr.join("\n")).toContain("HANDBILL_TOKEN is set")
+    expect(configFile().token).toBe(stored)
+
+    // The one that was left behind is still usable, so signing out again
+    // without the variable reaches it.
+    expect((await cli([plan.path])).ok).toBe(true)
+  })
+
+  // A key a deployment minted meeting a 404 means "this is not where it came
+  // from", not "there was nothing to revoke" — so nothing local is cleared and
+  // the command does not claim success over a key that is still live.
+  test("refuses to sign out at a deployment that never minted the key", async () => {
+    await cli(["login"], { githubToken: GITHUB_TOKEN })
+    const stored = String(configFile().token)
+    const elsewhere = makeServer()
+    const outcome = await cli(["logout"], { http: elsewhere.layer })
+    await elsewhere.dispose()
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stderr.join("\n")).toContain("is not the deployment that minted it")
+    expect(configFile().token).toBe(stored)
+  })
+})
+
+// Every `POST /v1/keys` mints a fresh record and nothing expires the one
+// before it, so the key a second login overwrites would otherwise stay live in
+// KV forever — unrevokable, because the route needs the key in hand and the
+// file that held it has just been overwritten.
+describe("logging in twice", () => {
+  test("gives back the key it replaces", async () => {
+    await cli(["login"], { githubToken: GITHUB_TOKEN })
+    const first = String(configFile().token)
+
+    await cli(["login"], { githubToken: GITHUB_TOKEN })
+    expect(configFile().token).not.toBe(first)
+
+    // Dead, not merely forgotten.
+    const published = await cli([plan.path], { env: { HANDBILL_TOKEN: first } })
+    expect(published.ok).toBe(false)
+    expect(published.stderr.join("\n")).toContain("rejected the token")
   })
 })
 

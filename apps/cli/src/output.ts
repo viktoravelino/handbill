@@ -51,6 +51,23 @@ export class NoAccounts extends Data.TaggedError("NoAccounts")<{
 }> {}
 
 /**
+ * A token that no deployment minted, and no endpoint to send it to but the
+ * built-in default. Raised before the request rather than after the 401, so an
+ * operator's shared secret never reaches a host they did not name.
+ */
+export class UnnamedEndpoint extends Data.TaggedError("UnnamedEndpoint")<{
+  readonly endpoint: string
+}> {}
+
+/**
+ * `logout` was pointed at a deployment that does not know the key it holds.
+ * The key is still live wherever it came from, so nothing local is cleared.
+ */
+export class WrongDeployment extends Data.TaggedError("WrongDeployment")<{
+  readonly endpoint: string
+}> {}
+
+/**
  * `remove` was handed a hash the endpoint will not unpublish. The 404 is the
  * "not yours" answer — never a 403, which would confirm another account holds it
  * — so it covers a page belonging to someone else and one that was never here.
@@ -81,6 +98,8 @@ export type Failure =
   | Schema.SchemaError
   | TooLarge
   | Unauthorized
+  | UnnamedEndpoint
+  | WrongDeployment
 
 export interface Described {
   /** The failure's tag, which is what `--json` consumers switch on. */
@@ -165,6 +184,14 @@ export const describe = Match.typeTags<Failure, Described>()({
     error: "Unauthorized",
     message:
       "The endpoint rejected the token. Run `handbill login` for a hosted deployment, or check it against the Worker's PUBLISH_TOKEN."
+  }),
+  UnnamedEndpoint: (failure) => ({
+    error: "UnnamedEndpoint",
+    message: `This token was not minted by \`handbill login\`, and no endpoint was named — it will not be sent to ${failure.endpoint}. Pass --endpoint, set HANDBILL_ENDPOINT, or put "endpoint" in the config file.`
+  }),
+  WrongDeployment: (failure) => ({
+    error: "WrongDeployment",
+    message: `${failure.endpoint} does not know this key, so it is not the deployment that minted it. Nothing was revoked and the local key was left alone: point --endpoint or HANDBILL_ENDPOINT at the deployment you logged in to.`
   })
 })
 

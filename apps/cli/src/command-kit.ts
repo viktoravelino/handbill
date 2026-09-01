@@ -28,12 +28,15 @@ export const handler =
 export const connect = Effect.fn(function* (endpoint: Option.Option<string>) {
   const settings = yield* Config.resolve({ endpoint })
   const credentials = yield* Config.credentials(settings)
-  // Nothing named a deployment, so this is the hosted one. Said out loud
-  // because the key being sent may well belong to somewhere else: a token
-  // exported without its endpoint would otherwise go quietly to a host the
-  // user never chose, and come back 401 with no clue why.
-  if (settings.endpoint.source === "default") {
-    yield* Output.note(`No endpoint configured; using ${settings.endpoint.value}.`)
+  // Nobody named a deployment and this is not a key a deployment minted, so it
+  // is an operator's `PUBLISH_TOKEN` about to be sent to a host the user never
+  // chose. Refused rather than warned about: a warning here would also fire on
+  // the hosted path, where the default endpoint is exactly right, and one that
+  // fires for everyone flags nothing. An `hb_` key takes the default in
+  // silence, which is what keeps `HANDBILL_TOKEN=hb_… handbill plan.html`
+  // working with no configuration at all.
+  if (settings.endpoint.source === "default" && !Config.isMintedKey(credentials.token)) {
+    return yield* Effect.fail(new Output.UnnamedEndpoint({ endpoint: settings.endpoint.value }))
   }
   return yield* Client.make(credentials)
 })

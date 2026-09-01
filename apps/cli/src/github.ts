@@ -1,5 +1,5 @@
 import { Context, Data, Duration, Effect, Layer, Redacted, Schema } from "effect"
-import { HttpClient, HttpClientRequest, type HttpClientError } from "effect/unstable/http"
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 
 /**
  * GitHub's device flow, which is all `handbill login` wants from GitHub: an
@@ -45,10 +45,7 @@ export interface GitHubDeviceShape {
    */
   readonly authorize: (
     announce: (code: DeviceCode) => Effect.Effect<void>
-  ) => Effect.Effect<
-    Redacted.Redacted<string>,
-    LoginFailed | HttpClientError.HttpClientError | Schema.SchemaError
-  >
+  ) => Effect.Effect<Redacted.Redacted<string>, LoginFailed>
 }
 
 export class GitHubDevice extends Context.Service<GitHubDevice, GitHubDeviceShape>()(
@@ -89,6 +86,14 @@ const refused = (grant: Grant) =>
 /**
  * One call to an OAuth endpoint. `accept: application/json` is what stops GitHub
  * answering these two in `application/x-www-form-urlencoded`.
+ *
+ * Everything that can go wrong becomes a {@link LoginFailed} naming github.com,
+ * because the sentences the shared failures carry — "could not talk to the
+ * endpoint", "the endpoint answered with something this CLI does not
+ * understand" — mean the handbill deployment everywhere else in this CLI, and
+ * would send someone to check `api.handbill.dev` for a GitHub outage. A refusal
+ * GitHub words itself arrives as a 200 with an `error` field and is not a
+ * failure here at all; the caller reads it.
  */
 const ask = (url: string, body: Record<string, string>) =>
   HttpClient.execute(
@@ -96,8 +101,12 @@ const ask = (url: string, body: Record<string, string>) =>
       HttpClientRequest.bodyJsonUnsafe(body)
     )
   ).pipe(
+    Effect.flatMap(HttpClientResponse.filterStatusOk),
     Effect.flatMap((response) => response.json),
-    Effect.flatMap(decodeGrant)
+    Effect.flatMap(decodeGrant),
+    Effect.catch((error) =>
+      Effect.fail(new LoginFailed({ reason: `github.com did not answer ${url}: ${error.message}` }))
+    )
   )
 
 /**

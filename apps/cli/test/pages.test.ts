@@ -96,16 +96,18 @@ describe("publish errors", () => {
     expect(outcome.stderr.join("\n")).toContain("handbill login")
   })
 
-  // A token exported without its endpoint would otherwise go quietly to a host
-  // the user never named.
-  test("says when it is falling back to the hosted endpoint", async () => {
+  // A self-hosted token exported without its endpoint would otherwise be sent
+  // to a host the user never named. Refused before the request, not after the
+  // 401 — an `hb_` key in the same position takes the default in silence, which
+  // is what keeps the hosted path quiet.
+  test("will not send a token that is not a key to the default endpoint", async () => {
     const outcome = await run([plan.path], {
       http: server().layer,
       env: { XDG_CONFIG_HOME: configHome(), HANDBILL_TOKEN: TOKEN }
     })
-    expect(outcome.stderr.join("\n")).toContain(
-      "No endpoint configured; using https://api.handbill.dev."
-    )
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stderr.join("\n")).toContain("no endpoint was named")
+    expect(server().hashes()).toEqual([])
   })
 })
 

@@ -40,7 +40,9 @@ The endpoint is taken from the first of these that says anything, so a config fi
 3. `endpoint` in the config file, for this machine
 4. `https://api.handbill.dev`, the default
 
-The token has no flag — a secret on the command line ends up in the shell history — so it comes from `HANDBILL_TOKEN` or from `token` in the config file, which is where `handbill login` puts the key it mints.
+The token has no flag — a secret on the command line ends up in the shell history — so it comes from `HANDBILL_TOKEN` or from `token` in the config file, which is where `handbill login` puts the key it mints. The file is written `0600`.
+
+Falling back to step 4 only happens silently for a key `handbill login` minted (they start with `hb_`). A token of your own with no endpoint named anywhere is refused rather than sent to the hosted deployment: it is your Worker's `PUBLISH_TOKEN`, and it should not leave for a host you did not choose. Name the endpoint and it goes where you meant.
 
 Don't have a deployment yet? It is one Worker, one bucket and two DNS records — about ten minutes: [self-hosting guide](https://github.com/viktoravelino/handbill/blob/main/docs/SELF-HOSTING.md).
 

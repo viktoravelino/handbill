@@ -172,10 +172,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * Writes the config file with `changes` merged into whatever is already there —
  * an `undefined` value removes the field. What `login` and `logout` use to add
  * and drop the key: the merge is against the raw JSON, so a field this version
- * of the CLI does not know about survives being written by it. The file holds a
- * credential, so it is left readable by this user only — `chmod` after the
- * write rather than a mode on it, because a mode only applies to a file being
- * created and a hand-written config is usually already there.
+ * of the CLI does not know about survives being written by it.
+ *
+ * The file holds a credential, so it is written to a sibling created `0600` and
+ * renamed over the target. That is one move for two problems: the key is never
+ * in a file at the process umask, not even for the length of a write, and a
+ * `rename` is atomic, so a crash half way through leaves the old config rather
+ * than a truncated one every later command would report as `BadConfigFile`.
+ * The new inode carries the mode, so a hand-written `0644` config comes out
+ * `0600` too, with no `chmod` to race.
  */
 export const save = Effect.fn(function* (
   settings: Settings,
@@ -186,24 +191,33 @@ export const save = Effect.fn(function* (
   const existing = yield* readJson(settings.path)
   const base = Option.filter(existing, isRecord).pipe(Option.getOrElse(() => ({})))
   const merged = Object.entries({ ...base, ...changes }).filter(([, value]) => value !== undefined)
-  yield* fs
-    .makeDirectory(path.dirname(settings.path), { recursive: true, mode: 0o700 })
-    .pipe(
-      Effect.andThen(
-        fs.writeFileString(
-          settings.path,
-          `${JSON.stringify(Object.fromEntries(merged), null, 2)}\n`
-        )
-      ),
-      Effect.andThen(fs.chmod(settings.path, 0o600))
+  const pending = `${settings.path}.pending`
+  yield* fs.makeDirectory(path.dirname(settings.path), { recursive: true, mode: 0o700 }).pipe(
+    Effect.andThen(
+      fs.writeFileString(pending, `${JSON.stringify(Object.fromEntries(merged), null, 2)}\n`, {
+        mode: 0o600
+      })
+    ),
+    Effect.andThen(fs.rename(pending, settings.path)),
+    Effect.mapError(
+      ({ reason: { _tag: cause } }) =>
+        new BadConfigFile({
+          path: settings.path,
+          reason: `the file system reported ${cause} writing it`
+        })
     )
-    .pipe(
-      Effect.mapError(
-        ({ reason: { _tag: cause } }) =>
-          new BadConfigFile({
-            path: settings.path,
-            reason: `the file system reported ${cause} writing it`
-          })
-      )
-    )
+  )
 })
+
+/**
+ * Keys a handbill deployment mints start with `hb_` — the Worker's own prefix,
+ * there so a leaked key is greppable. A self-hosted `PUBLISH_TOKEN` is an
+ * operator-chosen string, so the prefix is the one thing that tells "a key this
+ * CLI was given by a deployment" from "the operator's shared secret" without
+ * asking anyone. It is a heuristic — an operator may choose a `PUBLISH_TOKEN`
+ * starting with `hb_`, and then it is treated as a key — and the two places it
+ * is used both fail safe: {@link Settings} still resolves, and the caller only
+ * ever declines to send the token somewhere it was not told to.
+ */
+export const isMintedKey = (token: Redacted.Redacted<string>): boolean =>
+  Redacted.value(token).startsWith("hb_")
