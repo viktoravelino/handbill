@@ -13,6 +13,7 @@
 //      NPM_PACKAGE                  npm package name (skip npm when unset)
 //      CF_API_TOKEN, CF_ACCOUNT_TAG, CF_SITE_TAG   Web Analytics (skip when unset)
 
+/* oxlint-disable no-console -- console.error is this script's logging; CI reads it */
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 
@@ -39,7 +40,7 @@ const readJson = async (name) => {
 const writeJson = (name, obj) =>
   writeFile(
     join(dataDir, name),
-    JSON.stringify(Object.fromEntries(Object.entries(obj).sort()), null, 2) + "\n"
+    JSON.stringify(Object.fromEntries(Object.entries(obj).toSorted()), null, 2) + "\n"
   )
 
 const get = async (url, headers) => {
@@ -138,4 +139,6 @@ if (ok === 0) {
   console.error(`every section failed: ${failures.join(", ")}`)
   process.exit(1)
 }
-console.error(`done: ${ok} section(s) ok${failures.length ? `, failed: ${failures.join(", ")}` : ""}`)
+console.error(
+  `done: ${ok} section(s) ok${failures.length ? `, failed: ${failures.join(", ")}` : ""}`
+)
