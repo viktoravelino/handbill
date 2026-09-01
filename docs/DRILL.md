@@ -13,7 +13,7 @@ Two standing rules:
 
 | Run | Date | Operator | Worker deployed | Notes |
 |---|---|---|---|---|
-| 1 | — | — | — | — |
+| 1 | 2026-09-01 | Viktor Avelino (agent as scribe) | `d809693` | B, C, D run on production. A and B9.2 pending: no stranger and no second GitHub account on hand — they are run 2's opening items. C was observed rather than looped: the operator had already spent the day's quota, so B1's first refusal *was* the observation, and the day counter was reset per WAF.md §4 to let B proceed — an unplanned rehearsal of that runbook section. |
 
 ## Shared pre-conditions
 
@@ -73,7 +73,7 @@ If they reach for `npx handbill` instead, let them — the roadmap's own wording
 - Every question they asked and every place they stopped to re-read, quoted.
 - Anything they typed that the page did not tell them to type.
 
-**Result:** —
+**Result:** run 1 — not run: no stranger was on hand. The flow itself was exercised by the operator on 2026-09-01 (login → publish, well under two minutes), but the operator cannot be the stranger; this scenario opens run 2.
 **Time:** — (install — · login — · publish —)
 
 **If this fails** (over two minutes, or they got stuck): fix the words, not the person. Open an issue against `apps/web/src/docs/hosted.md` quoting the sentence they were standing on when the clock ran out.
@@ -100,8 +100,8 @@ Publish a second page from the same key, six seconds later. It is never reported
 
 **Expected.** Two URLs. Fetch the first one in a browser — deliberately, because a page that was never fetched never entered the edge cache, and B5 is about the cache.
 
-**Result:** — (reported page —, second page —)
-**Time:** —
+**Result:** run 1 — both published; edge fetch 200. The page carried no `cf-cache-status` header: Worker responses are not CDN-cached on a stock zone, which B5 then confirmed. (reported page `2452411654b9`, second page `2049b8e534e8`)
+**Time:** 17:46:02–17:46:21Z. First attempt was refused by the day quota the operator had spent testing C; counter reset per WAF.md §4, then clean.
 
 ### B2 · Report it as a stranger would
 
@@ -113,15 +113,15 @@ Send: the URL in full, one sentence saying what is wrong with it, and a way to r
 
 **Record.** How long it took the reporter to find the address; whether the page's three-item list was enough to write a usable report; where the mail landed.
 
-**Result:** —
-**Time:** — (sent → received)
+**Result:** run 1 — **finding, issue filed.** The report was sent from the operator's own mailbox (no other was on hand), and no delivered copy ever appeared — nor had two test mails an hour earlier. Gmail suppresses a forward that loops back to the sending account (same Message-ID), so a self-sent test cannot distinguish a working route from a broken one. This step is unproven until a third-party sender runs it; the reporter for run 2 must not be the destination account.
+**Time:** sent 17:46:36Z → received: never observed (see above)
 
 ### B3 · The operator receives it
 
 The clock for everything below starts here, at the moment the report is *seen* — that is the number the abuse page promises against ("taking it down is seconds").
 
-**Result:** —
-**Time:** — (received at —, seen at —)
+**Result:** run 1 — seen via the sent copy, the forward being unproven (B2).
+**Time:** received at — (never observed), seen at 17:47:00Z — the clock below starts here
 
 ### B4 · Find the owner, then take the page down
 
@@ -143,8 +143,8 @@ handbill admin takedown https://<hash>.handbill.dev
 
 **Expected.** The hash on stdout, exit 0. It is idempotent — running it twice is not an error. `HANDBILL_ADMIN_TOKEN` never goes in the config file.
 
-**Result:** — (owner —)
-**Time:** —
+**Result:** run 1 — `i:gh:64113566:2452411654b9` found first, takedown printed the hash, exit 0. (owner `gh:64113566`)
+**Time:** 17:47:34–17:47:36Z
 
 ### B5 · Confirm the 404, and purge
 
@@ -159,8 +159,8 @@ If that answers `200`, it is the edge cache, not the origin: pages are served `i
 
 **Record.** Whether the first `curl` needed the purge — the honest answer to "how long until it stops being served" is the one that includes it.
 
-**Result:** —
-**Time:** — (B3 → first 404)
+**Result:** run 1 — 404 on the first `curl`, no purge needed. The B1 fetch had already shown no `cf-cache-status` on page responses: a stock zone does not CDN-cache Worker output, so the `immutable` copy this step guards against does not exist unless a Cache Rule is added. If one ever is, this step's purge becomes real.
+**Time:** 17:47:37Z (B3 → first 404: ~37s)
 
 ### B6 · Confirm it left the owner's list
 
@@ -170,8 +170,8 @@ From the publisher's terminal, whose key is still live at this point:
 handbill list      # the reported hash is gone; the second page is still there
 ```
 
-**Result:** —
-**Time:** —
+**Result:** run 1 — reported hash gone, second page and the operator's earlier pages intact.
+**Time:** 17:47:44Z
 
 ### B7 · Revoke the publisher's keys
 
@@ -190,8 +190,8 @@ bunx wrangler kv key put --remote --namespace-id "$NS" "k:<digest>" \
 
 **Expected.** The record reads back with `revoked` set, and every other field exactly as it was. Repeat for every digest the `o:` prefix listed.
 
-**Result:** — (keys revoked: —)
-**Time:** — (B3 → key dead)
+**Result:** run 1 — one digest listed, revoked, read back with `revoked` set and every other field unchanged. (keys revoked: 1)
+**Time:** 17:48:01Z (B3 → key dead: ~61s)
 
 ### B8 · Confirm the key is dead
 
@@ -205,8 +205,8 @@ handbill /tmp/dead.html                                        # success cannot 
 
 **Expected.** Both fail, non-zero, on stderr: *"The endpoint rejected the token. Run `handbill login` for a hosted deployment, or check it against the Worker's PUBLISH_TOKEN."* Nothing on stdout.
 
-**Result:** —
-**Time:** —
+**Result:** run 1 — both failed exactly as written: the expected sentence byte-for-byte, exit 1, empty stdout.
+**Time:** 17:48:06Z
 
 ### B9 · Confirm nobody else was touched
 
@@ -226,16 +226,16 @@ handbill login    # on the publisher's account, if you want to confirm it
 
 **Expected.** 200, a listing, a URL. Check 3 is meant to succeed: `POST /v1/keys` is open to any GitHub account by design, and a repeat offender is a policy problem, not a KV one.
 
-**Result:** —
-**Time:** —
+**Result:** run 1 — check 1: both the second page and a pre-0.3 page answered 200 after the revocation. Check 2: **not run** — no second GitHub account was on hand, so tenant isolation is asserted by the M16 test suite but not yet by a drill; run 2 opens with it. Check 3: `handbill login` on the revoked account minted a working key that listed the same pages — the door stayed open, as designed.
+**Time:** 17:48:13Z (checks 1); 17:49:30Z (check 3)
 
 ### B · Headline numbers
 
-| | |
+| | run 1 |
 |---|---|
-| Report received → page 404s | — |
-| Report received → key dead | — |
-| Purge needed? | — |
+| Report received → page 404s | ~37s |
+| Report received → key dead | ~61s |
+| Purge needed? | no — a stock zone never edge-cached the page |
 
 **If any step fails:** finish the scenario anyway — a half-run drill measures nothing — then open one issue per failure. A takedown that did not 404, a report that never arrived, and a revoked key that still published are three different bugs in three different systems.
 
@@ -273,10 +273,10 @@ bunx wrangler kv key get --remote --namespace-id "$NS" "q:<owner>:bytes"
 
 **Record.** The message verbatim, the number of publishes that actually went through, and the counter's value when it stopped.
 
-**Observed message:** —
-**Publishes before the refusal:** —
-**Result:** —
-**Time:** —
+**Observed message:** "You have published 25 pages today, which is this account's daily limit. It resets at 2026-09-02T00:00:00.000Z."
+**Publishes before the refusal:** 25 — the operator had run the loop before the drill (serial, 6s spacing), and the day counter read exactly 25: no overshoot, matching the prediction that eventual consistency needs *parallel* publishes to slip past.
+**Result:** run 1 — pass. The refusal was observed at 17:45:20Z as B1's first attempt rather than from this scenario's loop, which is a stricter sighting: it names the limit and the exact next UTC midnight on a production response.
+**Time:** 17:45:20Z
 
 **Clean-up.** `handbill remove` each hash to give the stored bytes back; the day's count expires itself in 48 hours.
 
@@ -307,7 +307,7 @@ bunx wrangler kv key get --remote --namespace-id "$NS" "q:<owner>:bytes"   # not
 
 Pick two page URLs that must keep serving: one published by a hosted account, one published before 0.3.
 
-**Result:** —
+**Result:** run 1 — diff: the 4-line binding block, uncommitted; mode `accounts`; bytes counter 1790; survivors `2049b8e534e8` (hosted) and `25e4f4d7789f` (pre-0.3). 17:49:30Z.
 
 ### D2 · Unbind and deploy
 
@@ -317,7 +317,7 @@ Comment the `ACCOUNTS` entry out of `kv_namespaces` — leave `ALIASES` bound, a
 bunx wrangler deploy
 ```
 
-**Time:** — (deploy)
+**Time:** run 1 — 17:50:02→17:50:11Z (9s).
 
 ### D3 · Verify secret mode
 
@@ -354,7 +354,7 @@ HANDBILL_TOKEN=<PUBLISH_TOKEN>  handbill list    # the operator's own pages, and
 - A hosted key gets the token rejected. Expected, and the cost of the window.
 - The operator's listing shows `owner = self` pages only. Strangers' pages are invisible in `list` while still being served — and `handbill remove` cannot touch them either, because ownership is read from R2. `handbill admin takedown` still works: `ADMIN_TOKEN` is not part of accounts.
 
-**Result:** —
+**Result:** run 1 — every line passed at 17:50:41Z, but not immediately: **the flip propagates for ~30 seconds, during which old and new isolates serve simultaneously.** At 17:50:18Z health still said `accounts` and the junk-token probe answered 401 — the "mistake reporting itself" line firing for propagation rather than a failed deploy, which is a third reading that line now needs (issue filed). Both pages served 200 throughout the window. Once settled: `secret`, both pages 200 with `immutable`, keys 404, hosted key rejected, operator token listed three `owner = self` pages and nothing else.
 
 ### D4 · Restore
 
@@ -370,8 +370,8 @@ git diff wrangler.jsonc                                          # identical to 
 
 **Expected.** A key minted before the flip authorises after it, the listing is unchanged, and the counter is the number you wrote down. Unbinding a namespace does not touch what is in it — that is why the kill switch is cheap.
 
-**Result:** —
-**Time:** — (D2 deploy → D4 verified: the true cost of the kill switch)
+**Result:** run 1 — all four: accounts mode back at 17:53:35Z, the pre-flip key listed the same pages, the counter read 1790 exactly, and the diff matched D1 byte for byte. One wrinkle: the first restore deploy hung and was killed after two minutes with nothing uploaded; the retry took five seconds. Transient, but it is the reason the honest number below is what it is — budget for a deploy that needs a second try.
+**Time:** 17:50:02 → 17:53:35Z (D2 deploy → D4 verified: **3m33s**, of which ~2m was the hung deploy; the clean path is about a minute)
 
 **If this fails:** `bunx wrangler deployments list` then `bunx wrangler rollback` puts the previous version back without needing the config file to be right. Then open an issue — and if the failure was pages *not* serving in D3, it is a release-blocker, not an issue for later.
 
