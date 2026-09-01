@@ -30,7 +30,7 @@ bunx wrangler kv namespace list    # note the ACCOUNTS id; every KV command belo
 
 You also need, in hand: the `ADMIN_TOKEN` value, the `PUBLISH_TOKEN` value, and **two GitHub accounts** — a *publisher* to be taken down and a *bystander* whose key must survive it. One account cannot prove tenant isolation.
 
-**Rate limits apply to you too.** WAF rule 1 blocks a client that exceeds 2 requests in 10 seconds against `PUT`/`POST` on `api.handbill.dev` — and `handbill login` (POST `/v1/keys`) and `handbill <file>` (PUT `/v1/pages/…`) are both in that count. Leave six seconds between writes. When the edge blocks one, the CLI has no JSON to read and says *"The endpoint answered with something this CLI does not understand"*: that sentence means WAF, not a bug.
+**Rate limits apply to you too.** WAF rule 1 blocks a client that exceeds 2 requests in 10 seconds against `PUT`/`POST` on `api.handbill.dev` — and `handbill login` (POST `/v1/keys`) and `handbill <file>` (PUT `/v1/pages/…`) are both in that count. Leave six seconds between writes. A blocked request is answered by Cloudflare's HTML error page rather than the Worker's JSON, so the CLI has nothing it recognises to report — on a publish it says *"The endpoint answered with something this CLI does not understand"*. Throughout the drill: an **HTML** 429 is the WAF, a **JSON** `QuotaExceeded` is the Worker.
 
 ---
 
