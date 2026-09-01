@@ -68,9 +68,9 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
         const existing = yield* storage.head(hash)
         if (Option.isSome(existing)) return { hash, url: pageUrl(zone, hash), created: false }
         // Checked before the write, counted after it (§04's order): a spent quota
-        // costs no R2 request, a crash between the two undercounts rather than
-        // charging for a page that is not there, and the republish above spends
-        // nothing at all.
+        // costs no R2 write (it still pays for the `head` above, which has to run
+        // first so a republish spends nothing), and a crash between the two
+        // undercounts rather than charging for a page that is not there.
         const quotas = yield* Quotas
         yield* quotas.check(owner, yield* CurrentTier, payload.length)
         const now = yield* DateTime.now

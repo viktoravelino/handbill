@@ -144,7 +144,7 @@ Binding `ACCOUNTS` brings three things at once, all in that one namespace: the k
 
 **Quotas.** A hosted account may publish **25 pages a day** and keep **250 MB stored**; the page-size cap (`MAX_BYTES`, 5 MB) applies as always. Over either, publishing answers `429 {"_tag":"QuotaExceeded", ...}` naming the limit, what it allows, and — for the daily one — when it resets (the next UTC midnight). Unpublishing gives the stored bytes back; the day's page count is not refunded. The numbers are per *tier* and the only tier is `free`; they live in one table in `apps/worker/src/quotas.ts`. Without the `ACCOUNTS` binding nothing is counted at all: the operator pays their own bill.
 
-Quotas are a cost ceiling, not a flood defence. The per-IP rate limits that stop a flood are WAF rules, which are configuration rather than code — see [WAF.md](WAF.md), which also has the abuse drill.
+**These are ceilings, not exact numbers.** The counters live in Workers KV, which is eventually consistent, so a burst of parallel publishes can read the same stale count and go past 25 before it catches up — by roughly whatever rate the caller can sustain. The per-IP WAF rate limit is what bounds that rate, which is why [WAF.md](WAF.md)'s rule 1 is **required** rather than recommended before a zone hosts strangers, and why quotas alone are a cost ceiling rather than a flood defence. Exact counters would mean Durable Objects, which 0.3 deliberately does not have. WAF.md also carries the abuse runbook, the KV write budget a hosted publish now costs, and how to reset a counter that has drifted.
 
 **Takedown.** `ADMIN_TOKEN` is an optional second secret, and the only thing that can kill a published link:
 

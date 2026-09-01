@@ -4,19 +4,17 @@ import { Context, DateTime, Effect, Layer } from "effect"
 
 /**
  * The quota numbers, and the one place they live (§05): how often a key
- * publishes, and how much it keeps stored. The tier is read off the key record,
- * so 0.4's paid tier is a row here plus a webhook that writes the field — not a
- * migration, and no handler that knows about money (decision 11). A tier the
- * contract adds without a row here fails to compile where `check` indexes this.
+ * publishes, and how much it keeps stored. The tier is read off the key record, so 0.4's
+ * paid tier is a row here plus a webhook that writes the field — not a migration, and no
+ * handler that knows about money (decision 11). A tier with no row fails to compile.
  */
 export const TIER_LIMITS = { free: { pagesPerDay: 25, storedBytes: 250 * 1024 * 1024 } } as const
 
 /**
- * The per-owner cost ceiling. `check` runs before the R2 write and fails with
- * the limit that tripped; `record` and `release` move the counters after it, in
- * §04's write order. Counters are best-effort — a KV race can let publish n+1
- * through — because this is a cost ceiling rather than a billing system, and the
- * per-IP WAF rules (docs/WAF.md) are what stop an actual flood.
+ * The per-owner cost ceiling. `check` runs before the R2 write and fails with the limit
+ * that tripped; `record` and `release` move the counters after it (§04's order). Counters
+ * are eventually consistent: parallel requests all read one stale count and overshoot by a
+ * publish rate rather than by one, so WAF rule 1 is required rather than advisory.
  */
 export interface QuotasShape {
   readonly check: (owner: Owner, tier: Tier, bytes: number) => Effect.Effect<void, QuotaExceeded>
@@ -55,9 +53,8 @@ const dayKey = (owner: Owner, now: DateTime.Utc): string =>
 const bytesKey = (owner: Owner): string => `q:${owner}:bytes`
 
 /**
- * Read, add, write: KV has no atomic increment, so a lost race miscounts by one
- * page or one document, which a ceiling can afford. Floored at zero, so a
- * counter that drifted below what is stored cannot hand out free storage.
+ * Read, add, write: KV has no atomic increment. Floored at zero, so a counter
+ * that drifted below what is stored cannot hand out free storage.
  */
 const bump = (store: CounterStore, key: string, by: number, ttl?: number) =>
   Effect.promise(async () => store.write(key, Math.max(0, (await store.read(key)) + by), ttl))
@@ -69,7 +66,7 @@ const bump = (store: CounterStore, key: string, by: number, ttl?: number) =>
  * count says when it frees up on its own; stored bytes only unpublishing frees,
  * so that one names no time.
  */
-const quotasOn = (store: CounterStore): Layer.Layer<Quotas> =>
+export const quotasOn = (store: CounterStore): Layer.Layer<Quotas> =>
   Layer.succeed(Quotas, {
     check: (owner, tier, bytes) =>
       Effect.gen(function* () {
@@ -93,9 +90,11 @@ const quotasOn = (store: CounterStore): Layer.Layer<Quotas> =>
         yield* bump(store, dayKey(owner, yield* DateTime.now), 1, DAY_TTL)
         yield* bump(store, bytesKey(owner), bytes)
       }),
-    // Unpublishing gives the bytes back; the day's page count is not refunded,
-    // because that limit caps writes rather than what is kept.
-    release: (owner, bytes) => bump(store, bytesKey(owner), -bytes)
+    // Unpublishing gives the bytes back; the day's count is not refunded, because that
+    // limit caps writes rather than what is kept. Swallowed, not fatal: the object is
+    // already gone, so a 500 here misreports a removal that worked, and the retry finds
+    // nothing to release and leaves the counter high for good (#118 review).
+    release: (owner, bytes) => Effect.ignoreCause(bump(store, bytesKey(owner), -bytes))
   })
 
 /**

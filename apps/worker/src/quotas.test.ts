@@ -5,7 +5,7 @@ import { AliasesMemory } from "./aliases"
 import { makeApp } from "./app"
 import { AuthAccounts, type Identify, type KeyStore } from "./auth"
 import { hashBytes } from "./hash"
-import { QuotaMemory, TIER_LIMITS } from "./quotas"
+import { QuotaMemory, Quotas, type QuotasShape, quotasOn, TIER_LIMITS } from "./quotas"
 import { IndexMemory, StorageMemory } from "./storage"
 
 /**
@@ -238,5 +238,46 @@ test("without an ADMIN_TOKEN the takedown route is absent", async () => {
   const response = await takedown(deployment, hash, ADMIN)
   expect(response.status).toBe(404)
   expect(await response.json()).toEqual({ _tag: "NotFound" })
+  expect((await servePage(deployment, hash)).status).toBe(200)
+})
+
+// #118 review, MEDIUM 1: the two counter writes are deliberately not alike. A
+// release runs after the object is already deleted, so failing it would report a
+// removal that worked as a 500 — and the retry would find nothing to release and
+// leave the owner charged for storage they no longer have, for good. `record`
+// stays fatal: its retry is the harmless same-bytes early return.
+test("a counter write that fails is fatal on publish and swallowed on release", async () => {
+  const broken = quotasOn({
+    read: () => Promise.resolve(0),
+    write: () => Promise.reject(new Error("kv is down"))
+  })
+  const run = (use: (quotas: QuotasShape) => Effect.Effect<void>) =>
+    Effect.runPromise(Effect.provide(Effect.flatMap(Quotas, use), broken))
+
+  await expect(run((quotas) => quotas.release(OWNER, 4096))).resolves.toBeUndefined()
+  await expect(run((quotas) => quotas.record(OWNER, 4096))).rejects.toThrow(/kv is down/u)
+})
+
+// A tripwire for the `|| adminToken === ""` clause, which is the highest-
+// consequence line in M16: `presentedKey` reads a missing `Authorization` header
+// as `""`, so an empty secret — a `wrangler secret put` fed empty stdin, a var
+// set to "" — would make `secretEquals("", "")` true and let anyone with no
+// credential at all take down any page. Delete that clause and the request below
+// gets a 204. #118 review, MEDIUM 2.
+test("an empty ADMIN_TOKEN is no ADMIN_TOKEN, even to a caller sending nothing", async () => {
+  const deployment = hosted({ admin: "" })
+  const key = await keyFor(deployment)
+  const page = doc(1)
+  await publish(deployment, key, page)
+  const hash = await hashOf(page)
+
+  const unauthenticated = await deployment.app.fetch(
+    new Request(`https://api.${ZONE}/v1/admin/pages/${hash}`, { method: "DELETE" })
+  )
+  expect(unauthenticated.status).toBe(404)
+  expect(await unauthenticated.json()).toEqual({ _tag: "NotFound" })
+  expect((await servePage(deployment, hash)).status).toBe(200)
+  // And an empty bearer, which is the other way to present nothing.
+  expect((await takedown(deployment, hash, "")).status).toBe(404)
   expect((await servePage(deployment, hash)).status).toBe(200)
 })
