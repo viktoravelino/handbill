@@ -149,4 +149,4 @@ Zeroing it under-counts rather than over-counts, which is the direction this cod
 
 ### 5. Write it down
 
-Time from report to 404, and time from report to revoked key. [DRILL.md](DRILL.md) is where those two numbers go: it walks this runbook end to end on production with a blank slot at every step. Run 1 is pending — the numbers land there in a follow-up commit, and until they do this section is a plan rather than a record. Abuse tooling that has never been exercised is decoration.
+Time from report to 404, and time from report to revoked key. [DRILL.md](DRILL.md) is where those two numbers go: it walks this runbook end to end on production with a slot at every step, and run 1's numbers are on record there.

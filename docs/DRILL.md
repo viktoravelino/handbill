@@ -243,7 +243,7 @@ handbill login    # on the publisher's account, if you want to confirm it
 
 ## C · The daily quota refuses a publish
 
-The 429 the code promises, observed on production rather than in a test. Pending like the rest of this file: the refusal has not been seen on `handbill.dev` yet — WAF rule 1 has been confirmed working, which is a different control — so run 1 is the first sighting, and what it says goes in the slot at the end of this scenario, verbatim. The loop is here so it can also be re-run after any change to `quotas.ts`.
+The 429 the code promises, observed on production rather than in a test. The loop is here so it can be re-run after any change to `quotas.ts`; run 1's sighting is recorded at the end of this scenario, verbatim.
 
 **Pre-conditions.** An account you are willing to spend a day's quota on — the day's page count is not refunded by unpublishing, so this account cannot publish again until the next UTC midnight. `sleep 6` holds the loop at WAF rule 1's allowance rather than over it, so nothing else may write to the zone while it runs.
 
@@ -388,5 +388,3 @@ Watch these; none of them page you, so they only exist if someone looks.
 - **`abuse@handbill.dev`** — check it even when it is empty, weekly. B2 is the only proof it works, and it was true once, on one day.
 
 Findings become issues. That is the rule for the drill and it stays the rule afterwards.
-
-This file was written before 0.3.0 shipped, so the roadmap row and the PRD's status line still say *releasing*; [RELEASING.md](RELEASING.md) is where flipping them belongs, at the `bump`.
