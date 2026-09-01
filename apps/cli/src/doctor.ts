@@ -75,10 +75,19 @@ const refusedFix = (mode: Option.Option<Mode>): string => {
 /** Does the endpoint take the key? Nothing to try when there is none. */
 const accepts = Effect.fn(function* (
   client: Client.Client,
-  hasToken: boolean,
+  settings: Config.Settings,
   mode: Option.Option<Mode>
 ) {
-  if (!hasToken) return check("auth", "skip", "Skipped: there is no key to send.")
+  if (Option.isNone(settings.token))
+    return check("auth", "skip", "Skipped: there is no key to send.")
+  // `doctor` is the command someone runs *because* publishing just refused
+  // them, so it is squarely on the path the refusal creates — and it must
+  // report that state rather than reproduce the leak by probing with the token.
+  // The same rule `connect` stops on, inverted into a check.
+  const allowed = yield* Effect.result(Config.sendable(settings, settings.token.value.value))
+  if (Result.isFailure(allowed)) {
+    return check("auth", "FAIL", Output.describe(allowed.failure).message)
+  }
   const pages = yield* Effect.result(client.pages.list({}))
   if (Result.isSuccess(pages)) {
     return check(
@@ -115,9 +124,8 @@ const wildcard = Effect.fn(function* (zone: string) {
  * endpoint runs — accounts or one shared secret — so they can name the fix.
  */
 const reachable = Effect.fn(function* (settings: Config.Settings) {
-  // A missing key still probes health, which needs none; `auth` is the check
-  // that reports the key, and it is skipped when there is nothing to send.
-  const hasToken = Option.isSome(settings.token)
+  // A missing key still probes health, which needs none — the contract puts no
+  // middleware on `meta`, so nothing below sends a bearer until `accepts` does.
   const client = yield* Client.make({
     endpoint: settings.endpoint.value,
     token: Option.match(settings.token, {
@@ -138,7 +146,7 @@ const reachable = Effect.fn(function* (settings: Config.Settings) {
       check("health", "FAIL", `GET /v1/health failed: ${described.message}`),
       unreachable
         ? check("auth", "skip", "Skipped: the endpoint could not be reached.")
-        : yield* accepts(client, hasToken, Option.none()),
+        : yield* accepts(client, settings, Option.none()),
       check("tls", "skip", "Skipped: the zone is only known from /v1/health.")
     ]
   }
@@ -148,7 +156,7 @@ const reachable = Effect.fn(function* (settings: Config.Settings) {
       "ok",
       `GET /v1/health answered: mode ${health.success.mode}, zone ${health.success.zone}.`
     ),
-    yield* accepts(client, hasToken, Option.some(health.success.mode)),
+    yield* accepts(client, settings, Option.some(health.success.mode)),
     yield* wildcard(health.success.zone)
   ]
 })

@@ -2,7 +2,7 @@ import { Console, Data, Effect, Match, type PlatformError, Runtime, type Schema 
 import type { HttpClientError } from "effect/unstable/http"
 import type { HashMismatch, NotFound, TooLarge, Unauthorized } from "@handbill/contract"
 import type { CannotOpen } from "./browser"
-import type { BadConfigFile, MissingToken } from "./config"
+import type { BadConfigFile, MissingToken, UnnamedEndpoint } from "./config"
 import type { LoginFailed } from "./github"
 
 /** stdout carries the result and nothing else: one line, or one JSON object. */
@@ -47,15 +47,6 @@ export class ChecksFailed extends Data.TaggedError("ChecksFailed")<{
 
 /** `login` reached an endpoint that runs on one shared token and has no keys to mint. */
 export class NoAccounts extends Data.TaggedError("NoAccounts")<{
-  readonly endpoint: string
-}> {}
-
-/**
- * A token that no deployment minted, and no endpoint to send it to but the
- * built-in default. Raised before the request rather than after the 401, so an
- * operator's shared secret never reaches a host they did not name.
- */
-export class UnnamedEndpoint extends Data.TaggedError("UnnamedEndpoint")<{
   readonly endpoint: string
 }> {}
 

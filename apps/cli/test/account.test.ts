@@ -14,11 +14,10 @@ import {
 } from "./server"
 
 /**
- * Everything the CLI does against a deployment in accounts mode: `login` and
- * `logout` from `src/account.ts`, what `doctor` makes of the hosted tier, and
- * the one page error that only exists there — a hash another account owns.
- * They share a file because they share the setup: a Worker with keys instead of
- * one shared token, and two GitHub accounts to be.
+ * Everything the CLI does against a deployment in accounts mode — `login` and
+ * `logout`, what `doctor` makes of the hosted tier, and the one page error that
+ * only exists there. They share a file because they share the setup: a Worker
+ * with keys instead of one shared token, and two GitHub accounts to be.
  */
 
 let server = makeServer({ accounts: true })
@@ -155,6 +154,20 @@ describe("logout and the key it is actually holding", () => {
     // The one that was left behind is still usable, so signing out again
     // without the variable reaches it.
     expect((await cli([plan.path])).ok).toBe(true)
+  })
+
+  // The nastiest shape of the unnamed-endpoint hazard, because the 404 reading
+  // below cannot save it: a hosted deployment answers 204 for a key it has
+  // never seen, so an operator's token sent here would come back "revoked" and
+  // take the config file with it. Refused before the request, so the token
+  // never leaves and the file is untouched.
+  test("will not send a token that is not a key to the default endpoint", async () => {
+    home = configHome(JSON.stringify({ token: TOKEN }))
+    const outcome = await cli(["logout"], { env: { HANDBILL_ENDPOINT: undefined } })
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stderr.join("\n")).toContain("no endpoint was named")
+    expect(configFile().token).toBe(TOKEN)
+    expect(server.requests()).toEqual([])
   })
 
   // A key a deployment minted meeting a 404 means "this is not where it came

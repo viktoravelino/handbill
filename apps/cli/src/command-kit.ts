@@ -28,16 +28,11 @@ export const handler =
 export const connect = Effect.fn(function* (endpoint: Option.Option<string>) {
   const settings = yield* Config.resolve({ endpoint })
   const credentials = yield* Config.credentials(settings)
-  // Nobody named a deployment and this is not a key a deployment minted, so it
-  // is an operator's `PUBLISH_TOKEN` about to be sent to a host the user never
-  // chose. Refused rather than warned about: a warning here would also fire on
-  // the hosted path, where the default endpoint is exactly right, and one that
-  // fires for everyone flags nothing. An `hb_` key takes the default in
-  // silence, which is what keeps `HANDBILL_TOKEN=hb_… handbill plan.html`
-  // working with no configuration at all.
-  if (settings.endpoint.source === "default" && !Config.isMintedKey(credentials.token)) {
-    return yield* Effect.fail(new Output.UnnamedEndpoint({ endpoint: settings.endpoint.value }))
-  }
+  // Before the client exists, so nothing can put the token on the wire by
+  // accident. `credentials` runs first, so a machine with nothing configured is
+  // told to run `handbill login` rather than lectured about endpoints it has no
+  // token for.
+  yield* Config.sendable(settings, credentials.token)
   return yield* Client.make(credentials)
 })
 

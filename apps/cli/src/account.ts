@@ -1,4 +1,4 @@
-import { Effect, Option, Redacted } from "effect"
+import { Effect, Option, Redacted, Result } from "effect"
 import { Command } from "effect/unstable/cli"
 import type { Key } from "@handbill/contract"
 import { Browser } from "./browser"
@@ -66,15 +66,21 @@ const store = Effect.fn(function* (settings: Config.Settings, minted: Key) {
     ...(settings.endpoint.source === "default" ? {} : { endpoint: settings.endpoint.value })
   }).pipe(
     // Minting is the one moment the key exists in readable form, so a file that
-    // cannot be written must not simply swallow it. Printing it would put a
+    // cannot be written must not simply swallow it — and printing it would put a
     // live credential in shell scrollback and CI logs, where it outlives the
-    // failure and the user least able to act on it — a read-only `$HOME`, a
-    // container — is the one who gets it. Giving it back leaks nothing and
-    // orphans nothing.
+    // failure. Giving it back leaks nothing. Whether that worked is the
+    // difference between "nothing is left live" and its opposite, and the
+    // likeliest cause of an unwritable config is also a decent way to be
+    // offline, so the sentence is chosen rather than assumed: keys never expire.
     Effect.tapError(() =>
-      Effect.andThen(
-        Effect.ignore(revokeKey(settings.endpoint.value, Redacted.make(minted.key))),
-        Output.note("The key could not be stored, so it was given back; nothing is left live.")
+      Effect.flatMap(
+        Effect.result(revokeKey(settings.endpoint.value, Redacted.make(minted.key))),
+        (given) =>
+          Output.note(
+            Result.isSuccess(given)
+              ? "The key could not be stored, so it was given back; nothing is left live."
+              : `The key could not be stored and could not be given back either: a key now exists on ${settings.endpoint.value} that nothing holds.`
+          )
       )
     )
   )
@@ -154,6 +160,25 @@ export const login = Command.make(
 )
 
 /**
+ * Drops the key that was just revoked from wherever it actually lives, and says
+ * so when that is somewhere `logout` cannot reach. The environment beats the
+ * file, so a machine holding a key in both would otherwise have the file's key
+ * deleted while the environment's was the one revoked — leaving it live and
+ * unrevokable, since `DELETE /v1/keys/current` needs the key itself and the
+ * file was the only thing holding it. Answers whether anything was cleared.
+ */
+const clearLocal = Effect.fn(function* (settings: Config.Settings, source: Config.Source) {
+  if (source === "file") {
+    yield* Config.save(settings, { token: undefined })
+    return true
+  }
+  yield* Output.note(
+    `HANDBILL_TOKEN is set, so that is the key that was revoked. ${settings.path} was left alone: unset the variable and run \`handbill logout\` again to give back a key stored there.`
+  )
+  return false
+})
+
+/**
  * `logout`: the key revokes itself server-side, then leaves the config file.
  * The revocation goes first, so a failure there cannot leave a live key nobody
  * holds — and only the key that was actually revoked is cleared, which is why
@@ -169,6 +194,10 @@ export const logout = Command.make(
         settings.token,
         () => new Config.MissingToken({ path: settings.path })
       )
+      // Before the revocation, not after its answer: a hosted deployment
+      // answers 204 for a key it has never seen, so an operator's token sent
+      // here would come back "revoked" and take the config file with it.
+      yield* Config.sendable(settings, current.value)
       const revoked = yield* revokeKey(settings.endpoint.value, current.value).pipe(
         Effect.as(true),
         Effect.catchTag("NotFound", () =>
@@ -188,18 +217,7 @@ export const logout = Command.make(
               )
         )
       )
-      // Clear only where the revoked key actually lives. The environment beats
-      // the file, so a machine holding a key in both would otherwise have the
-      // file's key deleted while the environment's was the one revoked —
-      // leaving it live and unrevokable, since `DELETE /v1/keys/current` needs
-      // the key itself and the file was the only thing holding it.
-      const cleared = current.source === "file"
-      if (cleared) yield* Config.save(settings, { token: undefined })
-      else {
-        yield* Output.note(
-          `HANDBILL_TOKEN is set, so that is the key that was revoked. ${settings.path} was left alone: unset the variable and run \`handbill logout\` again to give back a key stored there.`
-        )
-      }
+      const cleared = yield* clearLocal(settings, current.source)
       yield* json
         ? Output.json({ revoked, cleared, endpoint: settings.endpoint.value })
         : Output.line(settings.endpoint.value)

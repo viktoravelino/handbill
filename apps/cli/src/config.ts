@@ -33,6 +33,15 @@ export class MissingToken extends Data.TaggedError("MissingToken")<{
   readonly path: string
 }> {}
 
+/**
+ * A token that no deployment minted, and no endpoint to send it to but the
+ * built-in default. Raised by {@link sendable} before any request, so an
+ * operator's shared secret never reaches a host they did not name.
+ */
+export class UnnamedEndpoint extends Data.TaggedError("UnnamedEndpoint")<{
+  readonly endpoint: string
+}> {}
+
 /** Where a value came from, in precedence order. */
 export type Source = "flag" | "env" | "file" | "default"
 
@@ -191,7 +200,9 @@ export const save = Effect.fn(function* (
   const existing = yield* readJson(settings.path)
   const base = Option.filter(existing, isRecord).pipe(Option.getOrElse(() => ({})))
   const merged = Object.entries({ ...base, ...changes }).filter(([, value]) => value !== undefined)
-  const pending = `${settings.path}.pending`
+  // Named after this process, so two `handbill` commands writing at once cannot
+  // publish each other's half-written content through the rename.
+  const pending = `${settings.path}.${process.pid}.pending`
   yield* fs.makeDirectory(path.dirname(settings.path), { recursive: true, mode: 0o700 }).pipe(
     Effect.andThen(
       fs.writeFileString(pending, `${JSON.stringify(Object.fromEntries(merged), null, 2)}\n`, {
@@ -199,6 +210,10 @@ export const save = Effect.fn(function* (
       })
     ),
     Effect.andThen(fs.rename(pending, settings.path)),
+    // A rename that never happened leaves the sibling holding the key. It is
+    // `0600`, so this is litter rather than disclosure, but litter that holds a
+    // credential is worth sweeping up.
+    Effect.onError(() => Effect.ignore(fs.remove(pending))),
     Effect.mapError(
       ({ reason: { _tag: cause } }) =>
         new BadConfigFile({
@@ -221,3 +236,23 @@ export const save = Effect.fn(function* (
  */
 export const isMintedKey = (token: Redacted.Redacted<string>): boolean =>
   Redacted.value(token).startsWith("hb_")
+
+/**
+ * The one rule about where a credential may go, in the one place that states
+ * it: a token no deployment minted is not sent to an endpoint nobody named.
+ * That pairing — an operator's `PUBLISH_TOKEN` and a `handbill` that fell back
+ * to {@link DEFAULT_ENDPOINT} — is the only case where a secret would reach a
+ * host the user did not choose, and it is worth a failure rather than a
+ * warning. A minted key takes the default in silence, which is what lets
+ * `HANDBILL_TOKEN=hb_… handbill plan.html` work with nothing configured.
+ *
+ * Every path that puts a token on the wire goes through this: `connect` for the
+ * publishing commands, `logout` before it revokes, and `doctor` inverted into a
+ * check. It lives here rather than at those three call sites because the first
+ * time the rule was written it was written once — and `logout` and `doctor`
+ * quietly went on leaking.
+ */
+export const sendable = (settings: Settings, token: Redacted.Redacted<string>) =>
+  settings.endpoint.source === "default" && !isMintedKey(token)
+    ? Effect.fail(new UnnamedEndpoint({ endpoint: settings.endpoint.value }))
+    : Effect.void
