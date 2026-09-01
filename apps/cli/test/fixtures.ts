@@ -5,7 +5,7 @@ import { afterAll, beforeEach } from "bun:test"
 import { hashDocument } from "../src/hash"
 import { render } from "../src/markdown"
 import { configHome, run, type RunOptions } from "./harness"
-import { makeServer, TOKEN, ZONE } from "./server"
+import { makeServer, type ServerOptions, TOKEN, ZONE } from "./server"
 
 /**
  * What every round-trip test file starts from: the documents on disk, and a
@@ -45,15 +45,17 @@ export const notes = markdown("notes.md", "# Weekly notes\n\nShipped the CLI.\n"
  * A fresh server for each test in the calling file, and the CLI as a configured
  * user runs it, talking to that server. Called at the top of a test file so the
  * hooks belong to that file's suite; `server()` is the current one, because
- * every test gets a new store and a new clock.
+ * every test gets a new store and a new clock. `options` is the deployment that
+ * file is about — accounts, aliases, an admin token — and is the same for all of
+ * its tests, since it is what the server is rebuilt from.
  */
-export const session = () => {
-  let server = makeServer()
+export const session = (deployment: ServerOptions = {}) => {
+  let server = makeServer(deployment)
   afterAll(() => server.dispose())
 
   beforeEach(() => {
     server.dispose()
-    server = makeServer()
+    server = makeServer(deployment)
   })
 
   const cli = (

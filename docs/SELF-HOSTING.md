@@ -140,7 +140,22 @@ The page is *served* at the name, not redirected to the hash — the reader's ad
 
 Everything above runs on one shared `PUBLISH_TOKEN`: one operator, one owner. Binding an `ACCOUNTS` KV namespace (`EDIT 5` in `wrangler.jsonc`) switches the Worker to per-account keys instead — `POST /v1/keys` mints one per GitHub account, `/v1/health` reports `"mode":"accounts"`, and pages are owned by `gh:<id>` rather than by the operator. Without the binding none of that exists and this section does not apply.
 
-**Do not bind `ACCOUNTS` on a production zone yet.** As of this milestone (M13) the key lifecycle is done but tenant isolation is not: `DELETE /v1/pages/<hash>` does not yet check that the caller owns the page, and minting has no allowlist — so any GitHub account can mint a key, and any key can unpublish any page whose 12-character hash it knows (hashes are meant to be shared, so that is not a high bar). Owner-scoped removal is M14; a mint allowlist and per-owner quotas are M16. Until those ship, `ACCOUNTS` is for **local `wrangler dev` and verification only** — a single-operator machine where "any account" is still just you. Aliases are already closed off to hosted keys (operator-only, so a stranger cannot re-point or enumerate names), but page removal is the open door, and it is open until M14.
+Binding `ACCOUNTS` brings three things at once, all in that one namespace: the key records, the per-owner page index that makes `list` and `remove` account-scoped, and the quota counters below. Aliases stay operator-only, so a hosted key cannot set, read or enumerate names.
+
+**Quotas.** A hosted account may publish **25 pages a day** and keep **250 MB stored**; the page-size cap (`MAX_BYTES`, 5 MB) applies as always. Over either, publishing answers `429 {"_tag":"QuotaExceeded", ...}` naming the limit, what it allows, and — for the daily one — when it resets (the next UTC midnight). Unpublishing gives the stored bytes back; the day's page count is not refunded. The numbers are per *tier* and the only tier is `free`; they live in one table in `apps/worker/src/quotas.ts`. Without the `ACCOUNTS` binding nothing is counted at all: the operator pays their own bill.
+
+Quotas are a cost ceiling, not a flood defence. The per-IP rate limits that stop a flood are WAF rules, which are configuration rather than code — see [WAF.md](WAF.md), which also has the abuse drill.
+
+**Takedown.** `ADMIN_TOKEN` is an optional second secret, and the only thing that can kill a published link:
+
+```sh
+printf '%s' "$(openssl rand -hex 32)" | bunx wrangler secret put ADMIN_TOKEN
+HANDBILL_ADMIN_TOKEN=<that token> handbill admin takedown https://<hash>.<zone>
+```
+
+It is never a publishing key: a user key gets `401` here, and this token cannot publish. Without the secret the route is not there at all (`404`), like the alias routes without their binding. The page stops being served, leaves its owner's list, and its bytes go back to that owner's quota; a taken-down hash then 404s exactly like one that was never published. Taking a page down does not touch the key that published it — revoking that is a separate act, described in [WAF.md](WAF.md).
+
+**Before a production zone.** Tenant isolation and quotas ship as of M16, but hosting strangers is more than code: the terms, the abuse address and the report process are M17, and the drill that proves takedown and revocation actually work end to end is M18. Until those, `ACCOUNTS` is for a deployment whose users you know.
 
 The kill switch is symmetrical: remove the `ACCOUNTS` binding and redeploy, and the Worker is back on `PUBLISH_TOKEN` with every published page still serving — accounts were never on the read path.
 
@@ -172,6 +187,8 @@ The button in the README clones the repo into your account and provisions the Wo
 | `handbill` exits with `401` | Token mismatch: what is in `config.json` is not what `wrangler secret put` stored. |
 | `400 hash_mismatch` | The file changed between hashing and upload, or something rewrote the bytes in transit. Publish again. |
 | `413` | Over `MAX_BYTES`. Inline less, or raise the var. |
+| `429 QuotaExceeded` | A hosted account's daily page count or stored bytes. Wait for the reset it names, or unpublish something. Self-hosted deployments never see it. |
+| `handbill admin takedown` says the endpoint has no takedown route | No `ADMIN_TOKEN` secret on that deployment: `wrangler secret put ADMIN_TOKEN` and deploy again. |
 | `handbill alias` says "Aliases are off on this deployment" | No `ALIASES` binding: create the namespace, uncomment `kv_namespaces`, deploy again. |
 | `<name>.<zone>` says "Nothing here" | No `ALIASES` binding, the name is not set, or it points at a hash you have unpublished. |
 | Certificate error on `https://<hash>.<zone>` | Universal SSL for the wildcard can take a few minutes after the `*` record is created. |
