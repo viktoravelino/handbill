@@ -96,7 +96,7 @@ apps/worker         Effect on Cloudflare Workers; deploy with wrangler
 apps/cli            the npm package; bun build → dist/cli.js
 apps/web            handbill.dev: Astro + Starlight, this README and docs/ rendered; deployed from main
 skills/handbill     the agent skill
-docs/               PRD, self-hosting, releasing
+docs/               PRD, self-hosting, releasing, the WAF and abuse runbook, the drill
 ```
 
 Effect 4 end to end, pinned to an exact release candidate. Conventions and invariants are in [`AGENTS.md`](AGENTS.md); the product definition, user stories, and roadmap in [`docs/2026-08-28-prd.html`](docs/2026-08-28-prd.html). Work is tracked in the issues and the project board.
