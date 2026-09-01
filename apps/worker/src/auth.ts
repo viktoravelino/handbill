@@ -1,11 +1,11 @@
-import type { Key, Mode } from "@handbill/contract"
-import { NotFound, Owner, Unauthorized } from "@handbill/contract"
+import type { Key, Mode, Tier } from "@handbill/contract"
+import { NotFound, Owner, Tier as TierSchema, Unauthorized } from "@handbill/contract"
 import type { KVNamespace } from "@cloudflare/workers-types"
 import { Context, DateTime, Effect, Layer, Redacted, Schema } from "effect"
 import { sha256Hex } from "./hash"
 
 /**
- * Turns a bearer token into the owner it belongs to, and mints and revokes the
+ * Turns a bearer token into the caller it belongs to, and mints and revokes the
  * keys that make one. `AuthSecret` is the self-hosted layer (one
  * `PUBLISH_TOKEN`, owner `"self"`, no keys to mint); `AuthAccounts` is the
  * hosted one. `mode` is what `/v1/health` reports so `handbill doctor` can say
@@ -13,15 +13,21 @@ import { sha256Hex } from "./hash"
  */
 export interface AuthShape {
   readonly mode: Mode
-  readonly authorize: (token: Redacted.Redacted) => Effect.Effect<Owner, Unauthorized>
+  /** Who the token belongs to and what it may spend: the quota check needs both. */
+  readonly authorize: (
+    token: Redacted.Redacted
+  ) => Effect.Effect<{ owner: Owner; tier: Tier }, Unauthorized>
   readonly mint: (githubToken: string) => Effect.Effect<Key, Unauthorized | NotFound>
   readonly revoke: (token: Redacted.Redacted) => Effect.Effect<void, NotFound>
 }
 
 export class Auth extends Context.Service<Auth, AuthShape>()("handbill/Auth") {}
 
-/** Length-independent comparison, so a wrong token leaks nothing through timing. */
-const secretEquals = (a: string, b: string): boolean => {
+/**
+ * Length-independent comparison, so a wrong token leaks nothing through timing.
+ * Shared with the admin route, which checks a different secret the same way.
+ */
+export const secretEquals = (a: string, b: string): boolean => {
   let difference = a.length ^ b.length
   const length = Math.max(a.length, b.length)
   for (let index = 0; index < length; index++) {
@@ -49,9 +55,11 @@ export const OPERATOR = Owner.make("self")
 export const AuthSecret = (token: string): Layer.Layer<Auth> =>
   Layer.succeed(Auth, {
     mode: "secret",
+    // The tier is reported for shape's sake: the same deployment runs
+    // `QuotaUnlimited`, so nothing ever reads a limit for the operator.
     authorize: (candidate) =>
       token.length > 0 && secretEquals(token, Redacted.value(candidate))
-        ? Effect.succeed(OPERATOR)
+        ? Effect.succeed({ owner: OPERATOR, tier: "free" as const })
         : Effect.fail(new Unauthorized()),
     mint: () => Effect.fail(new NotFound()),
     revoke: () => Effect.fail(new NotFound())
@@ -74,16 +82,16 @@ export const keyStore = (kv: KVNamespace): KeyStore => ({
 })
 
 /**
- * What `k:<sha256(key)>` holds. `tier` is written from the first key and read by
- * nobody in 0.3 — 0.4's paid tier reads it, and carrying the field now spares
- * that version a KV migration (architecture decision 11). Anything else in the
- * namespace, from another prefix or an older shape, is simply not a key.
+ * What `k:<sha256(key)>` holds. `tier` is the quota table's key (decision 11):
+ * only `free` exists in 0.3, and 0.4's paid tier is a webhook that rewrites the
+ * field rather than a KV migration. Anything else in the namespace, from another
+ * prefix or an older shape, is simply not a key.
  */
 const KeyRecord = Schema.Struct({
   owner: Owner,
   created: Schema.String,
   revoked: Schema.optional(Schema.String),
-  tier: Schema.Literals(["free"])
+  tier: TierSchema
 })
 
 const isKeyRecord = Schema.is(KeyRecord)
@@ -158,7 +166,9 @@ export const AuthAccounts = (
     mode: "accounts",
     authorize: (candidate) =>
       Effect.flatMap(readKey(store, candidate), ({ record }) =>
-        record === undefined ? Effect.fail(new Unauthorized()) : Effect.succeed(record.owner)
+        record === undefined
+          ? Effect.fail(new Unauthorized())
+          : Effect.succeed({ owner: record.owner, tier: record.tier })
       ),
     mint: (githubToken) =>
       Effect.gen(function* () {
@@ -167,7 +177,15 @@ export const AuthAccounts = (
         const digest = yield* sha256Hex(new TextEncoder().encode(key))
         const created = DateTime.formatIso(yield* DateTime.now)
         const record = JSON.stringify({ owner, created, tier: "free" })
-        yield* Effect.promise(() => store.put(`k:${digest}`, record))
+        // Two writes: the record, and an `o:<owner>:<digest>` back-reference, so
+        // the operator can get from an abuse report to every key one account
+        // holds and revoke them (docs/WAF.md). A record is only reachable by
+        // digest, so without this an owner's keys cannot be enumerated at all
+        // (#111 review, deferred here). It is a pointer, not a copy: the value is
+        // empty and `k:` stays the one truth about a key.
+        yield* Effect.promise(() =>
+          Promise.all([store.put(`k:${digest}`, record), store.put(`o:${owner}:${digest}`, "")])
+        )
         // The one moment the key exists in readable form: it is the response.
         return { key, owner }
       }),

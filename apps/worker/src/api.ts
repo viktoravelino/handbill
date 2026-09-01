@@ -1,18 +1,21 @@
 import {
   Authorization,
   CurrentOwner,
+  CurrentTier,
   HandbillApi,
   HashMismatch,
   NotFound,
-  TooLarge
+  TooLarge,
+  Unauthorized
 } from "@handbill/contract"
 import { DateTime, Effect, Layer, Option, Redacted } from "effect"
 import { Headers, HttpServerRequest } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { extractTitle, hashBytes } from "./hash"
 import { Aliases } from "./aliases"
-import { Auth, OPERATOR } from "./auth"
+import { Auth, OPERATOR, secretEquals } from "./auth"
 import { Config } from "./config"
+import { Quotas } from "./quotas"
 import { Index, Storage } from "./storage"
 
 /**
@@ -30,15 +33,19 @@ export const pageUrl = (zone: string, label: string): string => `https://${label
 
 /**
  * Bearer auth for the `pages` group. It resolves the token through whichever
- * `Auth` layer is installed and provides the resulting `CurrentOwner` to the
- * handlers, which is the single place `secret` and `accounts` mode differ.
+ * `Auth` layer is installed and provides the resulting owner and tier to the
+ * handlers, which is the single place `secret` and `accounts` mode differ. The
+ * tier rides along with the owner because the quota check needs both and only
+ * this layer has read the key record (decision 11).
  */
 export const AuthorizationLive = Layer.effect(
   Authorization,
   Effect.map(Auth, (auth) => ({
     bearer: (httpEffect, { credential }) =>
-      Effect.flatMap(auth.authorize(credential), (owner) =>
-        Effect.provideService(httpEffect, CurrentOwner, owner)
+      Effect.flatMap(auth.authorize(credential), ({ owner, tier }) =>
+        Effect.provideService(httpEffect, CurrentOwner, owner).pipe(
+          Effect.provideService(CurrentTier, tier)
+        )
       )
   }))
 )
@@ -60,6 +67,12 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
         // no ownership: the first writer keeps `owner` (architecture decision 05).
         const existing = yield* storage.head(hash)
         if (Option.isSome(existing)) return { hash, url: pageUrl(zone, hash), created: false }
+        // Checked before the write, counted after it (§04's order): a spent quota
+        // costs no R2 request, a crash between the two undercounts rather than
+        // charging for a page that is not there, and the republish above spends
+        // nothing at all.
+        const quotas = yield* Quotas
+        yield* quotas.check(owner, yield* CurrentTier, payload.length)
         const now = yield* DateTime.now
         const meta = {
           hash,
@@ -73,6 +86,7 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
         // until it is republished — never a listed page that is not there.
         yield* storage.put({ ...meta, body: payload })
         yield* (yield* Index).add(meta)
+        yield* quotas.record(owner, payload.length)
         return { hash, url: pageUrl(zone, hash), created: true }
       })
     )
@@ -110,6 +124,9 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
         }
         yield* storage.remove(params.hash)
         yield* (yield* Index).remove(owner, params.hash)
+        // The bytes go back, at R2's own size for the object that was there, so
+        // the counter follows the bucket. Removing nothing releases nothing.
+        if (Option.isSome(existing)) yield* (yield* Quotas).release(owner, existing.value.size)
       })
     )
 )
@@ -203,6 +220,38 @@ export const KeysLive = HttpApiBuilder.group(HandbillApi, "keys", (handlers) =>
         yield* auth.revoke(presentedKey(request.headers))
       })
     )
+)
+
+/**
+ * Takedown: the operator's one route, and the only thing that can kill a
+ * published link. It is gated on `ADMIN_TOKEN` rather than on `CurrentOwner`,
+ * because the operator of a hosted deployment is not one of its accounts and no
+ * user key — not even a self-hosted `PUBLISH_TOKEN` — may reach it; what is
+ * presented here never touches the `Auth` layer. No secret (unset, or empty, which
+ * would otherwise match a request carrying no header at all) means no operator
+ * surface, a 404 like the alias routes without their binding; a wrong one is 401.
+ * The owner comes from R2 rather than the caller, so the index entry and the
+ * released bytes land on the account that published it. Idempotent, and no
+ * tombstone (§07): an absent hash is a 204 that writes nothing, and a page taken
+ * down 404s exactly like one that was never published.
+ */
+export const AdminLive = HttpApiBuilder.group(HandbillApi, "admin", (handlers) =>
+  handlers.handle("takedown", ({ params }) =>
+    Effect.gen(function* () {
+      const { adminToken } = yield* Config
+      const request = yield* HttpServerRequest.HttpServerRequest
+      if (adminToken === undefined || adminToken === "") return yield* Effect.fail(new NotFound())
+      const presented = Redacted.value(presentedKey(request.headers))
+      if (!secretEquals(adminToken, presented)) return yield* Effect.fail(new Unauthorized())
+      const storage = yield* Storage
+      const existing = yield* storage.head(params.hash)
+      if (Option.isNone(existing)) return
+      const { owner, size } = existing.value
+      yield* storage.remove(params.hash)
+      yield* (yield* Index).remove(owner, params.hash)
+      yield* (yield* Quotas).release(owner, size)
+    })
+  )
 )
 
 /** The one endpoint that needs no token: what `handbill doctor` probes. */
