@@ -552,16 +552,6 @@ exports[`spec matches the published spec 1`] = `
           "204": {
             "description": "<No Content>",
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded",
-                },
-              },
-            },
-            "description": "Unauthorized",
-          },
           "404": {
             "content": {
               "application/json": {
@@ -573,11 +563,7 @@ exports[`spec matches the published spec 1`] = `
             "description": "NotFound",
           },
         },
-        "security": [
-          {
-            "bearer": [],
-          },
-        ],
+        "security": [],
         "tags": [
           "Keys",
         ],

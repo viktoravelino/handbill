@@ -130,9 +130,12 @@ export class AliasesGroup extends HttpApiGroup.make("aliases")
  * alias group is: a deployment running on one shared `PUBLISH_TOKEN` has no
  * accounts to mint keys for and answers `404 NotFound` on both routes.
  *
- * `mint` is the one endpoint outside the bearer token that is not public: the
- * GitHub access token in its body is the credential, which is why it carries
- * `Unauthorized` itself rather than inheriting it from the middleware.
+ * Neither route is behind the bearer middleware, because for both the credential
+ * *is* the body or header rather than a bearer the middleware would resolve:
+ * `mint` carries the GitHub token in its body, and `revoke` reads the key to
+ * kill from its own `Authorization` header. Keeping `revoke` off the middleware
+ * is also what makes it idempotent — a key that is already revoked must reach
+ * the handler and get its 204, not be rejected as `Unauthorized` first.
  */
 export class KeysGroup extends HttpApiGroup.make("keys")
   .add(
@@ -141,12 +144,14 @@ export class KeysGroup extends HttpApiGroup.make("keys")
       success: Key,
       error: [Unauthorized, NotFound]
     }),
-    // The presenting key revokes itself, so logging out needs nothing but the
-    // key already in hand. Idempotent: 204 whether or not it was still live.
+    // The key in the `Authorization` header revokes itself, so logging out needs
+    // nothing but the key already in hand, and the only thing it can revoke is
+    // that key. Idempotent: 204 whether or not the key was still live, and 404
+    // only where accounts are off. (`NotFound`, not the middleware's 401.)
     HttpApiEndpoint.delete("revoke", "/keys/current", {
       success: HttpApiSchema.NoContent,
       error: NotFound
-    }).middleware(Authorization)
+    })
   )
   .annotateMerge(
     OpenApi.annotations({

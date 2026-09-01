@@ -116,22 +116,25 @@ describe("spec", () => {
     expect(errorStatuses(spec.paths, "/v1/aliases/{name}", "put")).toEqual(["401", "404"])
     expect(errorStatuses(spec.paths, "/v1/aliases/{name}", "delete")).toEqual(["401", "404"])
     // Both key routes 404 where accounts are off. `mint` carries its own 401
-    // because the credential it checks is the GitHub token in its body, not a
-    // bearer token the middleware would have rejected first.
+    // because the credential it checks is the GitHub token in its body; `revoke`
+    // has no 401 at all — it is idempotent, so an already-revoked or unknown key
+    // is a 204, and 404 is only the accounts-off case.
     expect(errorStatuses(spec.paths, "/v1/keys", "post")).toEqual(["401", "404"])
-    expect(errorStatuses(spec.paths, "/v1/keys/current", "delete")).toEqual(["401", "404"])
+    expect(errorStatuses(spec.paths, "/v1/keys/current", "delete")).toEqual(["404"])
     // health needs no token, so it has nothing to fail with.
     expect(errorStatuses(spec.paths, "/v1/health", "get")).toEqual([])
   })
 
-  test("only the meta group and the key mint are outside the bearer token", () => {
+  test("both key routes are outside the bearer middleware", () => {
     expect(spec.paths["/v1/pages"]?.get?.security).toEqual([{ bearer: [] }])
     expect(spec.paths["/v1/aliases"]?.get?.security).toEqual([{ bearer: [] }])
     expect(spec.paths["/v1/health"]?.get?.security).toEqual([])
-    // Minting is how a caller gets a bearer token, so it cannot require one;
-    // revoking is done by the key itself, so it must.
+    // For both key routes the credential is the request itself, not a bearer the
+    // middleware resolves: mint carries the GitHub token in its body, revoke the
+    // key to kill in its own header. Revoke off the middleware is also what lets
+    // it stay idempotent — a revoked key reaches the handler instead of 401ing.
     expect(spec.paths["/v1/keys"]?.post?.security).toEqual([])
-    expect(spec.paths["/v1/keys/current"]?.delete?.security).toEqual([{ bearer: [] }])
+    expect(spec.paths["/v1/keys/current"]?.delete?.security).toEqual([])
   })
 
   // The whole spec, so M3 and M4 notice if the contract moves under them.

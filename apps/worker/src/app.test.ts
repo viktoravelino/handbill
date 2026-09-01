@@ -218,8 +218,7 @@ test.each(["api", "a3f9c1d4e2b8", "-plan", "plan.v2"])(
   }
 )
 
-// The route #95 asked for: what a name points at, read by key rather than out
-// of the listing, which is an index and lags.
+// The route #95 asked for: a name read by key, not out of the lagging listing.
 test("an alias can be read by name, and an unset name is a 404", async () => {
   const hash = await hashOf(DOC)
   await publish(hash, DOC)
@@ -261,8 +260,8 @@ test("without a KV binding the whole alias feature is absent", async () => {
   expect((await off.fetch(new Request(`https://plan.${ZONE}/`))).status).toBe(404)
 })
 
-// Accounts are the opt-in aliases are: no binding, no keys. The other half of
-// this pair — a Worker that does have one — is `accounts.test.ts`.
+// Accounts are the opt-in aliases are: no binding, no keys. The Worker that
+// does have one is `accounts.test.ts`.
 test("without an ACCOUNTS binding there are no keys to mint or revoke", async () => {
   const minted = await api("/v1/keys", {
     method: "POST",

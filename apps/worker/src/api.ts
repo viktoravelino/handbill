@@ -11,7 +11,7 @@ import { Headers, HttpServerRequest } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { extractTitle, hashBytes } from "./hash"
 import { Aliases } from "./aliases"
-import { Auth } from "./auth"
+import { Auth, OPERATOR } from "./auth"
 import { Config } from "./config"
 import { Storage } from "./storage"
 
@@ -94,14 +94,29 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
 )
 
 /**
- * Living names. Nothing here checks whether aliases are enabled: `AliasesDisabled`
- * fails these three with `NotFound`, so a deployment without a KV binding serves
- * a 404 on every route in the group.
+ * Living names. Two things stay out of the handlers: whether the feature is on
+ * (`AliasesDisabled` fails every route with `NotFound`, so no KV binding is a
+ * 404 without anyone asking) and who may use it — `operatorOnly` below.
+ *
+ * Decision 08: aliases stay operator-only in 0.3. `OPERATOR` is the one owner a
+ * self-hosted deployment issues and the one `AuthAccounts` never does, so this
+ * gate is a no-op in secret mode and shuts the whole writable/readable alias
+ * surface to hosted keys in accounts mode — with the same `NotFound` an absent
+ * binding gives, so a hosted caller cannot even tell a name exists. Enforcing
+ * decision 08 in code was a gap the #111 review caught: any key could set or
+ * remove names and read another owner's hash by name. `list` needs no gate — it
+ * is already filtered to the caller's own owner, which is empty for a hosted
+ * key.
  */
+const operatorOnly = Effect.flatMap(CurrentOwner, (owner) =>
+  owner === OPERATOR ? Effect.void : Effect.fail(new NotFound())
+)
+
 export const AliasesLive = HttpApiBuilder.group(HandbillApi, "aliases", (handlers) =>
   handlers
     .handle("set", ({ params, payload }) =>
       Effect.gen(function* () {
+        yield* operatorOnly
         const { zone } = yield* Config
         const aliases = yield* Aliases
         const owner = yield* CurrentOwner
@@ -122,6 +137,7 @@ export const AliasesLive = HttpApiBuilder.group(HandbillApi, "aliases", (handler
     )
     .handle("read", ({ params }) =>
       Effect.gen(function* () {
+        yield* operatorOnly
         const { zone } = yield* Config
         const aliases = yield* Aliases
         // `resolve` is the page path's own lookup — one read by key, so this
@@ -133,14 +149,18 @@ export const AliasesLive = HttpApiBuilder.group(HandbillApi, "aliases", (handler
       })
     )
     .handle("remove", ({ params }) =>
-      Effect.flatMap(Aliases, (aliases) => aliases.remove(params.name))
+      Effect.andThen(
+        operatorOnly,
+        Effect.flatMap(Aliases, (aliases) => aliases.remove(params.name))
+      )
     )
 )
 
 /**
  * The bearer token exactly as presented. `revoke` acts on the key itself, not on
- * the owner behind it, so it reads back the header the middleware has already
- * accepted rather than carrying a second identity through the contract.
+ * the owner behind it, and is off the authorize middleware (so a revoked key can
+ * still reach it), so it reads the `Authorization` header straight rather than
+ * taking a `CurrentOwner` the middleware would have resolved.
  */
 const presentedKey = (headers: Headers.Headers): Redacted.Redacted =>
   Redacted.make(
@@ -148,9 +168,9 @@ const presentedKey = (headers: Headers.Headers): Redacted.Redacted =>
   )
 
 /**
- * Keys. Nothing here asks whether accounts are on either: `AuthSecret` fails
- * both with `NotFound`, so a deployment on one shared token 404s these two the
- * way it 404s the alias routes when there is no KV binding.
+ * Keys. Nothing here asks whether accounts are on: `AuthSecret` fails both `mint`
+ * and `revoke` with `NotFound`, so a deployment on one shared token 404s these
+ * two the way it 404s the alias routes when there is no KV binding.
  */
 export const KeysLive = HttpApiBuilder.group(HandbillApi, "keys", (handlers) =>
   handlers

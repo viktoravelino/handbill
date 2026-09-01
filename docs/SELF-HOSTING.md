@@ -29,7 +29,7 @@ CLOUDFLARE_ACCOUNT_ID=<account id>   # Workers & Pages overview, right-hand colu
 
 ## 2. Three edits in `wrangler.jsonc`
 
-`apps/worker/wrangler.jsonc` ships pointing at the maintainer's deployment. Change the three lines marked `EDIT`; the fourth is optional and belongs to [living names](#living-names-optional):
+`apps/worker/wrangler.jsonc` ships pointing at the maintainer's deployment. Change the three lines marked `EDIT`; the fourth and fifth are optional and belong to [living names](#living-names-optional) and [hosted accounts](#hosted-accounts-optional-not-for-production):
 
 ```jsonc
 "vars": { "ZONE": "<zone>" },
@@ -135,6 +135,14 @@ handbill alias remove plan
 The same calls by hand are `PUT` and `DELETE /v1/aliases/plan` (body `{"hash":"<hash>"}`), `GET /v1/aliases` for all of them and `GET /v1/aliases/plan` for one, with the bearer token, as the spec at `/v1/openapi.json` describes them.
 
 The page is *served* at the name, not redirected to the hash — the reader's address bar keeps the name. It is cached for a minute rather than a year, so re-pointing an alias is visible almost immediately; a hash page is unaffected either way. One KV habit to know: a name answers the moment it is set, but `handbill alias list` can take up to a minute to show a fresh one, because KV's key listing is eventually consistent while a read by key is not. "No aliases set." right after `handbill alias plan …` printed a URL is that lag, not a failure — ask again. Names are one DNS label: lowercase letters, digits and inner hyphens, up to 63 characters, and neither `api` nor anything shaped like a hash (nor `list` or `remove`, which the CLI takes as subcommands). Without the binding, every `/v1/aliases` route answers `404 {"_tag":"NotFound"}`, `handbill alias` says "Aliases are off on this deployment", and `<name>.<zone>` serves "Nothing here".
+
+## Hosted accounts (optional, not for production)
+
+Everything above runs on one shared `PUBLISH_TOKEN`: one operator, one owner. Binding an `ACCOUNTS` KV namespace (`EDIT 5` in `wrangler.jsonc`) switches the Worker to per-account keys instead — `POST /v1/keys` mints one per GitHub account, `/v1/health` reports `"mode":"accounts"`, and pages are owned by `gh:<id>` rather than by the operator. Without the binding none of that exists and this section does not apply.
+
+**Do not bind `ACCOUNTS` on a production zone yet.** As of this milestone (M13) the key lifecycle is done but tenant isolation is not: `DELETE /v1/pages/<hash>` does not yet check that the caller owns the page, and minting has no allowlist — so any GitHub account can mint a key, and any key can unpublish any page whose 12-character hash it knows (hashes are meant to be shared, so that is not a high bar). Owner-scoped removal is M14; a mint allowlist and per-owner quotas are M16. Until those ship, `ACCOUNTS` is for **local `wrangler dev` and verification only** — a single-operator machine where "any account" is still just you. Aliases are already closed off to hosted keys (operator-only, so a stranger cannot re-point or enumerate names), but page removal is the open door, and it is open until M14.
+
+The kill switch is symmetrical: remove the `ACCOUNTS` binding and redeploy, and the Worker is back on `PUBLISH_TOKEN` with every published page still serving — accounts were never on the read path.
 
 ## Scripting against it
 

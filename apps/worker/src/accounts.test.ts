@@ -1,9 +1,9 @@
-import { expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { Key, Owner, Unauthorized } from "@handbill/contract"
 import { Effect, Layer, Schema } from "effect"
 import { AliasesMemory } from "./aliases"
 import { makeApp } from "./app"
-import { AuthAccounts, type Identify, type KeyStore } from "./auth"
+import { AuthAccounts, githubOwner, type Identify, type KeyStore } from "./auth"
 import { hashBytes } from "./hash"
 import { StorageMemory } from "./storage"
 
@@ -70,6 +70,26 @@ const publishAs = (app: App, key: string, hash: string) =>
     })
   )
 
+/** Runs the real `githubOwner` with `globalThis.fetch` stubbed, then restores it. */
+const withFetch = async (
+  stub: () => Promise<Response>,
+  run: (probe: typeof githubOwner) => Promise<unknown>
+) => {
+  const original = globalThis.fetch
+  globalThis.fetch = Object.assign(stub, { preconnect: () => Promise.resolve() })
+  try {
+    return await run(githubOwner)
+  } finally {
+    globalThis.fetch = original
+  }
+}
+
+/** A one-shot `fetch` that answers every call with this status and JSON body. */
+const reply =
+  (status: number, body: unknown = {}) =>
+  () =>
+    Promise.resolve(new Response(JSON.stringify(body), { status }))
+
 test("a minted key publishes as its GitHub owner, and health says accounts", async () => {
   const app = hosted()
   const response = await mint(app, GITHUB_TOKEN)
@@ -106,18 +126,86 @@ test("a GitHub token GitHub refuses, and a key nobody minted, are both 401", asy
 test("a key can revoke itself, and then it is not a key any more", async () => {
   const app = hosted()
   const { key } = await minted(await mint(app, GITHUB_TOKEN))
-  const revoke = () =>
+  const revoke = (bearer: string) =>
     app.fetch(
       new Request(`https://api.${ZONE}/v1/keys/current`, {
         method: "DELETE",
-        headers: { authorization: `Bearer ${key}` }
+        headers: { authorization: `Bearer ${bearer}` }
       })
     )
 
-  expect((await revoke()).status).toBe(204)
+  expect((await revoke(key)).status).toBe(204)
   expect((await publishAs(app, key, await hashOf(DOC))).status).toBe(401)
-  // Revoking twice is a 401, not a second 204: the key it names stopped being
-  // one at the first call. What is idempotent is the record — the revocation is
-  // written once and never fails on a key that already carries it.
-  expect((await revoke()).status).toBe(401)
+  // Idempotent, like every other DELETE in the contract: revoking a key that is
+  // already revoked, or one that was never minted, is a 204 too. The route is
+  // deliberately off the authorize middleware so a revoked key reaches the
+  // handler instead of being turned away as 401 before it.
+  expect((await revoke(key)).status).toBe(204)
+  expect((await revoke("hb_never-minted")).status).toBe(204)
+})
+
+// #111 review, MEDIUM: GitHub being down or rate-limiting must not be reported
+// to the user as a bad token. Only a 401 from GitHub is `Unauthorized`; a 5xx,
+// a 429 or the 403 of a secondary rate limit is a defect that fails the mint
+// loudly (500) and tells the caller nothing false about their token. This drives
+// the real `githubOwner`, the one thing `accountsApp` swaps out, with `fetch`
+// stubbed.
+describe("githubOwner", () => {
+  test("a 200 resolves to gh:<id>", async () => {
+    const owner = await withFetch(reply(200, { id: 4242 }), (probe) =>
+      Effect.runPromise(probe("gho_valid"))
+    )
+    expect(owner).toBe("gh:4242")
+  })
+
+  test("a 401 is Unauthorized, but a 503, 429 or 403 is a defect, not a verdict", async () => {
+    const unauthorized = await withFetch(reply(401), (probe) =>
+      Effect.runPromise(Effect.flip(probe("gho_bad")))
+    )
+    expect(unauthorized).toBeInstanceOf(Unauthorized)
+
+    for (const status of [503, 500, 429, 403]) {
+      // A defect, not a tagged failure: `Effect.flip` would surface an
+      // `Unauthorized`, so if the promise resolves rather than rejecting the
+      // outage has been miscast as a bad token.
+      await expect(
+        withFetch(reply(status), (probe) => Effect.runPromise(Effect.flip(probe("gho_ok"))))
+      ).rejects.toThrow(/github unavailable/u)
+    }
+  })
+})
+
+// #111 review, HIGH (part b): decision 08 keeps aliases operator-only in 0.3,
+// and a hosted key is not the operator. Every writable or readable alias route
+// answers a hosted key the same 404 an absent binding gives — it cannot set a
+// name, remove one, or read another owner's hash by name. `list` is already
+// owner-filtered, so it is a truthful empty rather than a leak.
+test("a hosted key gets no alias surface at all", async () => {
+  const app = hosted()
+  const { key } = await minted(await mint(app, GITHUB_TOKEN))
+  const hash = await hashOf(DOC)
+  await publishAs(app, key, hash)
+  const alias = (name: string, init?: RequestInit) =>
+    app.fetch(
+      new Request(`https://api.${ZONE}/v1/aliases/${name}`, {
+        ...init,
+        headers: { authorization: `Bearer ${key}`, ...init?.headers }
+      })
+    )
+
+  const set = await alias("plan", {
+    method: "PUT",
+    body: JSON.stringify({ hash }),
+    headers: { "content-type": "application/json" }
+  })
+  expect(set.status).toBe(404)
+  expect(await set.json()).toEqual({ _tag: "NotFound" })
+  expect((await alias("plan")).status).toBe(404)
+  expect((await alias("plan", { method: "DELETE" })).status).toBe(404)
+  // The one alias route a hosted key may reach answers with its own empty set.
+  const list = await app.fetch(
+    new Request(`https://api.${ZONE}/v1/aliases`, { headers: { authorization: `Bearer ${key}` } })
+  )
+  expect(list.status).toBe(200)
+  expect(await list.json()).toEqual({ aliases: [] })
 })
