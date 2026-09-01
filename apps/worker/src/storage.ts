@@ -1,6 +1,6 @@
 import { type Hash, Owner } from "@handbill/contract"
-import type { R2Bucket, R2Object } from "@cloudflare/workers-types"
-import { Context, Effect, Layer, Option } from "effect"
+import type { KVNamespace, R2Bucket, R2Object } from "@cloudflare/workers-types"
+import { Context, Effect, Layer, Option, Schema } from "effect"
 import { isHash } from "./hash"
 
 /** Everything about a stored document except its bytes — i.e. its `customMetadata` plus the object size. */
@@ -113,6 +113,114 @@ export const StorageR2 = (bucket: R2Bucket): Layer.Layer<Storage> =>
             if (meta.owner === owner) found.push(meta)
           }
           if (!page.truncated) return found.toSorted(byNewest)
+          cursor = page.cursor
+        }
+      })
+  })
+
+/**
+ * The per-owner page index: a derived view of the bucket that lets `list` answer
+ * from one KV read instead of a whole-bucket scan. `add`/`remove` keep it in step
+ * on publish and unpublish; `list` returns an owner's pages newest first.
+ *
+ * R2 is the source of truth and the bucket wins on any disagreement — there is
+ * deliberately no reconcile job in 0.3 (architecture §04, decision 04). A publish
+ * writes the object first and the index second, so a crash between them leaves an
+ * object with no entry: invisible in `list`, yet still served and still removable
+ * by its owner (which is why `remove` reads ownership from R2, never from here).
+ * An entry with no object serves 404 like any unknown hash. Both states are
+ * harmless, but only the owner's `remove` heals them — a same-hash republish
+ * returns early on the existing object (publish `head` check) and never re-runs
+ * `add`, so it does not re-file a missing entry.
+ */
+export interface IndexShape {
+  readonly add: (meta: StoredMeta) => Effect.Effect<void>
+  readonly remove: (owner: Owner, hash: Hash) => Effect.Effect<void>
+  /** Every page the owner published, newest first. */
+  readonly list: (owner: Owner) => Effect.Effect<ReadonlyArray<StoredMeta>>
+}
+
+export class Index extends Context.Service<Index, IndexShape>()("handbill/Index") {}
+
+/**
+ * The `i:` prefix a listing scans and the key one page is filed under. `owner`
+ * can itself contain `:` (a hosted owner is `gh:<id>`), so the hash is never
+ * recovered by splitting on `:` — it is whatever follows the owner prefix.
+ */
+const indexPrefix = (owner: Owner): string => `i:${owner}:`
+const indexKey = (owner: Owner, hash: Hash): string => `${indexPrefix(owner)}${hash}`
+
+/** One index entry as KV holds it, in `customMetadata` so `list` needs no per-key read. */
+const IndexEntry = Schema.Struct({
+  title: Schema.String,
+  publishedAt: Schema.String,
+  bytes: Schema.Number
+})
+const isIndexEntry = Schema.is(IndexEntry)
+
+/**
+ * Self-hosted index: no `ACCOUNTS` namespace, so the bucket is the index. `list`
+ * defers to `Storage.list` — the owner-filtered bucket walk — and the two writes
+ * are no-ops, because the object write already recorded the page. In secret mode
+ * the operator owns every object, so this is the whole listing.
+ */
+export const IndexBucket: Layer.Layer<Index, never, Storage> = Layer.effect(
+  Index,
+  Effect.map(Storage, (storage) => ({
+    add: () => Effect.void,
+    remove: () => Effect.void,
+    list: (owner) => storage.list(owner)
+  }))
+)
+
+/** In-memory index for tests: same semantics as `IndexKV`, no account, no network. */
+export const IndexMemory: Layer.Layer<Index> = Layer.sync(Index, () => {
+  const entries = new Map<string, StoredMeta>()
+  return {
+    add: (meta) => Effect.sync(() => void entries.set(indexKey(meta.owner, meta.hash), meta)),
+    remove: (owner, hash) => Effect.sync(() => void entries.delete(indexKey(owner, hash))),
+    list: (owner) =>
+      Effect.sync(() =>
+        Array.from(entries.values())
+          .filter((meta) => meta.owner === owner)
+          .toSorted(byNewest)
+      )
+  }
+})
+
+/**
+ * Hosted index: one `i:<owner>:<hash>` key per page in the `ACCOUNTS` namespace,
+ * the `{ title, publishedAt, bytes }` entry carried as KV metadata so `list` is a
+ * single prefix scan. The namespace is shared with `AuthAccounts`' `k:` keys;
+ * anything that is not a well-formed entry under a hash is skipped.
+ */
+export const IndexKV = (kv: KVNamespace): Layer.Layer<Index> =>
+  Layer.succeed(Index, {
+    add: ({ hash, owner, title, publishedAt, size }) =>
+      Effect.promise(() =>
+        kv.put(indexKey(owner, hash), "", { metadata: { title, publishedAt, bytes: size } })
+      ),
+    remove: (owner, hash) => Effect.promise(() => kv.delete(indexKey(owner, hash))),
+    list: (owner) =>
+      Effect.promise(async () => {
+        const prefix = indexPrefix(owner)
+        const found: Array<StoredMeta> = []
+        let cursor: string | undefined
+        for (;;) {
+          const page = await kv.list({ prefix, ...(cursor ? { cursor } : {}) })
+          for (const key of page.keys) {
+            const hash = key.name.slice(prefix.length)
+            const meta = key.metadata
+            if (!isIndexEntry(meta) || !isHash(hash)) continue
+            found.push({
+              hash,
+              owner,
+              title: meta.title,
+              publishedAt: meta.publishedAt,
+              size: meta.bytes
+            })
+          }
+          if (page.list_complete) return found.toSorted(byNewest)
           cursor = page.cursor
         }
       })

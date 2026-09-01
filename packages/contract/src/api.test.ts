@@ -108,7 +108,9 @@ describe("spec", () => {
   test("documents the error responses each endpoint can return", () => {
     expect(errorStatuses(spec.paths, "/v1/pages/{hash}", "put")).toEqual(["400", "401", "413"])
     expect(errorStatuses(spec.paths, "/v1/pages", "get")).toEqual(["401"])
-    expect(errorStatuses(spec.paths, "/v1/pages/{hash}", "delete")).toEqual(["401"])
+    // DELETE stays idempotent for an absent page, but a hash owned by another
+    // account is a 404: cross-owner remove discloses nothing (decision 05).
+    expect(errorStatuses(spec.paths, "/v1/pages/{hash}", "delete")).toEqual(["401", "404"])
     // Every alias route can 404: a deployment without a KV binding has no
     // aliases to speak of, not an empty list of them.
     expect(errorStatuses(spec.paths, "/v1/aliases", "get")).toEqual(["401", "404"])

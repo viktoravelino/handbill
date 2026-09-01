@@ -13,7 +13,7 @@ import { extractTitle, hashBytes } from "./hash"
 import { Aliases } from "./aliases"
 import { Auth, OPERATOR } from "./auth"
 import { Config } from "./config"
-import { Storage } from "./storage"
+import { Index, Storage } from "./storage"
 
 /**
  * `publishedAt` as the contract wants it. Objects written before the field
@@ -55,27 +55,32 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
         const hash = yield* hashBytes(payload)
         if (hash !== params.hash) return yield* Effect.fail(new HashMismatch({ expected: hash }))
         // Same bytes, same address: publishing twice stores nothing new and
-        // reports the URL that already exists.
+        // reports the URL that already exists. On a hash collision this is the
+        // second publisher — they get the same public URL but no index entry and
+        // no ownership: the first writer keeps `owner` (architecture decision 05).
         const existing = yield* storage.head(hash)
         if (Option.isSome(existing)) return { hash, url: pageUrl(zone, hash), created: false }
         const now = yield* DateTime.now
-        yield* storage.put({
+        const meta = {
           hash,
           owner,
           title: extractTitle(payload),
           publishedAt: DateTime.formatIso(now),
-          size: payload.length,
-          body: payload
-        })
+          size: payload.length
+        }
+        // Object first, then the index: the bucket is the source of truth, so a
+        // crash after the object write leaves a page that simply is not listed
+        // until it is republished — never a listed page that is not there.
+        yield* storage.put({ ...meta, body: payload })
+        yield* (yield* Index).add(meta)
         return { hash, url: pageUrl(zone, hash), created: true }
       })
     )
     .handle("list", () =>
       Effect.gen(function* () {
         const { zone } = yield* Config
-        const storage = yield* Storage
         const owner = yield* CurrentOwner
-        const stored = yield* storage.list(owner)
+        const stored = yield* (yield* Index).list(owner)
         return {
           pages: stored.map((page) => ({
             hash: page.hash,
@@ -87,9 +92,25 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
         }
       })
     )
-    // Idempotent by design: 204 whether or not the page was there.
+    // Idempotent for a page that is not there (204), but ownership-checked:
+    // a hash owned by someone else answers 404, deletes nothing, and never 403.
+    // Decision 05's bar is that a non-owner learns no *ownership* — 404 is the
+    // "not yours" answer, not a "forbidden" that would confirm another account
+    // holds it. (Existence itself is already public: the page serves 200 on its
+    // hash host to anyone with the hash.) Ownership is read from R2 (`head`),
+    // never the index, so a crashed publish that left an object with no entry is
+    // still removable by its owner.
     .handle("remove", ({ params }) =>
-      Effect.flatMap(Storage, (storage) => storage.remove(params.hash))
+      Effect.gen(function* () {
+        const storage = yield* Storage
+        const owner = yield* CurrentOwner
+        const existing = yield* storage.head(params.hash)
+        if (Option.isSome(existing) && existing.value.owner !== owner) {
+          return yield* Effect.fail(new NotFound())
+        }
+        yield* storage.remove(params.hash)
+        yield* (yield* Index).remove(owner, params.hash)
+      })
     )
 )
 

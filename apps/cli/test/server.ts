@@ -5,7 +5,7 @@ import { Owner } from "@handbill/contract"
 import { AliasesDisabled, AliasesMemory } from "@handbill/worker/src/aliases"
 import { makeApp } from "@handbill/worker/src/app"
 import { AuthSecret } from "@handbill/worker/src/auth"
-import { Storage, StorageMemory } from "@handbill/worker/src/storage"
+import { IndexBucket, Storage, StorageMemory } from "@handbill/worker/src/storage"
 
 export const TOKEN = "publish-me"
 export const ZONE = "example.dev"
@@ -78,10 +78,13 @@ export const makeServer = (options: { readonly aliases?: boolean } = {}) => {
   const storage = Context.get(Effect.runSync(Effect.scoped(Layer.build(StorageMemory))), Storage)
   const time = controlledClock(CLOCK_START)
 
+  const storageLayer = Layer.succeed(Storage, storage)
   const app = makeApp(
     { zone: ZONE, maxBytes: MAX_BYTES },
     Layer.mergeAll(
-      Layer.succeed(Storage, storage),
+      storageLayer,
+      // Self-hosted mode: the bucket is the index, reading this same instance.
+      IndexBucket.pipe(Layer.provide(storageLayer)),
       AuthSecret(TOKEN),
       options.aliases === false ? AliasesDisabled : AliasesMemory,
       // `Clock` is a reference, so this only replaces the default the Worker's

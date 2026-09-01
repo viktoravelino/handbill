@@ -7,7 +7,7 @@ import { canonical, classifyHost, nothingHere, serveAlias, servePage } from "./p
 import type { Aliases } from "./aliases"
 import type { Auth } from "./auth"
 import { Config, type WorkerConfig } from "./config"
-import type { Storage } from "./storage"
+import type { Index, Storage } from "./storage"
 
 /**
  * `HttpApiBuilder` asks for the platform services that back `HttpServerResponse.file`,
@@ -18,8 +18,8 @@ const PlatformLive = Layer.mergeAll(Etag.layer, Path.layer, HttpPlatform.layer).
   Layer.provideMerge(FileSystem.layerNoop({}))
 )
 
-/** Everything the handlers need beyond the platform: config, storage, auth, aliases. */
-export type AppServices = Storage | Auth | Aliases
+/** Everything the handlers need beyond the platform: config, storage, the per-owner index, auth, aliases. */
+export type AppServices = Storage | Index | Auth | Aliases
 
 /** The spec generated from the contract, and the Scalar page that renders it. Neither needs a token. */
 const OPENAPI_PATH = "/v1/openapi.json"

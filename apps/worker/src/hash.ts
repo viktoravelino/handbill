@@ -38,17 +38,48 @@ const TITLE = /<title[^>]*>([\s\S]*?)<\/title>/iu
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" }
 
 /**
+ * How many UTF-8 bytes of `<title>` are kept. The title travels in two metadata
+ * budgets: R2 `customMetadata` (~2 KiB for the whole `{ owner, title,
+ * publishedAt }`) and, in hosted mode, the index entry `IndexKV` files as KV
+ * metadata (1024 bytes serialised). `JSON.stringify` leaves printable non-ASCII
+ * as UTF-8 — only quotes, backslashes and control characters grow — so the
+ * serialised size tracks the byte length here. 256 keeps the index entry far
+ * under 1024 with room for M16's per-owner quota fields on the same namespace,
+ * while being longer than any display title needs (browsers truncate near 60).
+ * Without the cap a title between the two limits would let the R2 write succeed
+ * and the KV write reject, a 500 that leaves a served-but-unlisted page.
+ */
+const TITLE_MAX_BYTES = 256
+
+/** Truncate to `TITLE_MAX_BYTES`, never splitting a multi-byte character. */
+const clampTitle = (title: string): string => {
+  const encoder = new TextEncoder()
+  if (encoder.encode(title).length <= TITLE_MAX_BYTES) return title
+  let kept = ""
+  let bytes = 0
+  for (const char of title) {
+    bytes += encoder.encode(char).length
+    if (bytes > TITLE_MAX_BYTES) break
+    kept += char
+  }
+  return kept
+}
+
+/**
  * The document's `<title>`, stored as `customMetadata.title` so `handbill list`
  * can label a link without downloading it. `""` when the document has none —
  * callers render their own placeholder. Only the head of the document is
- * decoded; a `<title>` never lives past the first 64 KiB.
+ * decoded; a `<title>` never lives past the first 64 KiB. The result is clamped
+ * so it always fits the metadata budgets it is written into.
  */
 export const extractTitle = (bytes: Uint8Array): string => {
   const head = new TextDecoder().decode(bytes.subarray(0, 64 * 1024))
   const matched = TITLE.exec(head)?.[1]
   if (matched === undefined) return ""
-  return matched
-    .replaceAll(/&(amp|lt|gt|quot|#39);/gu, (_, name: string) => ENTITIES[name]!)
-    .replaceAll(/\s+/gu, " ")
-    .trim()
+  return clampTitle(
+    matched
+      .replaceAll(/&(amp|lt|gt|quot|#39);/gu, (_, name: string) => ENTITIES[name]!)
+      .replaceAll(/\s+/gu, " ")
+      .trim()
+  )
 }

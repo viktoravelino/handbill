@@ -6,7 +6,7 @@ import { AliasesDisabled, AliasesMemory } from "./aliases"
 import { makeApp } from "./app"
 import { hashBytes } from "./hash"
 import { AuthSecret } from "./auth"
-import { StorageMemory } from "./storage"
+import { IndexBucket, StorageMemory } from "./storage"
 
 const ZONE = "example.dev"
 const TOKEN = "s3cret"
@@ -20,7 +20,11 @@ let app: ReturnType<typeof makeApp>
 beforeEach(() => {
   app = makeApp(
     { zone: ZONE, maxBytes: MAX_BYTES },
-    Layer.mergeAll(StorageMemory, AuthSecret(TOKEN), AliasesMemory)
+    Layer.mergeAll(
+      IndexBucket.pipe(Layer.provideMerge(StorageMemory)),
+      AuthSecret(TOKEN),
+      AliasesMemory
+    )
   )
 })
 
@@ -130,7 +134,11 @@ test("removing is idempotent and the page stops being served", async () => {
 test("a zone configured as a fully qualified name is canonical everywhere", async () => {
   const fq = makeApp(
     { zone: "Example.dev.", maxBytes: MAX_BYTES },
-    Layer.mergeAll(StorageMemory, AuthSecret(TOKEN), AliasesMemory)
+    Layer.mergeAll(
+      IndexBucket.pipe(Layer.provideMerge(StorageMemory)),
+      AuthSecret(TOKEN),
+      AliasesMemory
+    )
   )
   const hash = await hashOf(DOC)
   const published = await fq.fetch(
@@ -233,7 +241,11 @@ test("an alias can be read by name, and an unset name is a 404", async () => {
 test("without a KV binding the whole alias feature is absent", async () => {
   const off = makeApp(
     { zone: ZONE, maxBytes: MAX_BYTES },
-    Layer.mergeAll(StorageMemory, AuthSecret(TOKEN), AliasesDisabled)
+    Layer.mergeAll(
+      IndexBucket.pipe(Layer.provideMerge(StorageMemory)),
+      AuthSecret(TOKEN),
+      AliasesDisabled
+    )
   )
   const request = (path: string, init?: RequestInit) =>
     off.fetch(

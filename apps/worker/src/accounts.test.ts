@@ -5,7 +5,7 @@ import { AliasesMemory } from "./aliases"
 import { makeApp } from "./app"
 import { AuthAccounts, githubOwner, type Identify, type KeyStore } from "./auth"
 import { hashBytes } from "./hash"
-import { StorageMemory } from "./storage"
+import { IndexMemory, StorageMemory } from "./storage"
 
 /**
  * Accounts mode — the hosted tier's auth — on memory layers: a `Map` behind
@@ -29,16 +29,24 @@ const memoryKeys = (): KeyStore => {
   }
 }
 
-/** The one GitHub token these tests know. Anything else is a token GitHub refused. */
+/** Two GitHub tokens these tests know, each its own account; anything else is refused. */
 const GITHUB_TOKEN = "gho_from-the-device-flow"
 const OWNER = Owner.make("gh:4242")
+const OTHER_TOKEN = "gho_a-second-account"
+const OTHER = Owner.make("gh:9001")
 const identify: Identify = (githubToken) =>
-  githubToken === GITHUB_TOKEN ? Effect.succeed(OWNER) : Effect.fail(new Unauthorized())
+  githubToken === GITHUB_TOKEN
+    ? Effect.succeed(OWNER)
+    : githubToken === OTHER_TOKEN
+      ? Effect.succeed(OTHER)
+      : Effect.fail(new Unauthorized())
 
+// One `ACCOUNTS` namespace backs both the keys (`AuthAccounts`) and the per-owner
+// index (`IndexMemory`), the way one binding does in production.
 const hosted = () =>
   makeApp(
     { zone: ZONE, maxBytes: MAX_BYTES },
-    Layer.mergeAll(StorageMemory, AuthAccounts(memoryKeys(), identify), AliasesMemory)
+    Layer.mergeAll(StorageMemory, IndexMemory, AuthAccounts(memoryKeys(), identify), AliasesMemory)
   )
 
 type App = ReturnType<typeof makeApp>
@@ -61,14 +69,36 @@ const minted = async (response: Response) => {
   return body
 }
 
-const publishAs = (app: App, key: string, hash: string) =>
+const publishAs = (app: App, key: string, hash: string, body: string = DOC) =>
   app.fetch(
     new Request(`https://api.${ZONE}/v1/pages/${hash}`, {
       method: "PUT",
-      body: bytes(DOC),
+      body: bytes(body),
       headers: { "content-type": "text/html", authorization: `Bearer ${key}` }
     })
   )
+
+const listPages = (app: App, key: string) =>
+  app.fetch(
+    new Request(`https://api.${ZONE}/v1/pages`, { headers: { authorization: `Bearer ${key}` } })
+  )
+
+const removePage = (app: App, key: string, hash: string) =>
+  app.fetch(
+    new Request(`https://api.${ZONE}/v1/pages/${hash}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${key}` }
+    })
+  )
+
+const servePage = (app: App, hash: string) => app.fetch(new Request(`https://${hash}.${ZONE}/`))
+
+/** The hashes a `list` response reports, in order. */
+const pageHashes = async (response: Response): Promise<ReadonlyArray<string>> =>
+  ((await response.json()) as { pages: ReadonlyArray<{ hash: string }> }).pages.map((p) => p.hash)
+
+/** A second document, distinct bytes so it has its own hash, still under `MAX_BYTES`. */
+const DOC_B = "<html><title>Memo</title>hi</html>"
 
 /** Runs the real `githubOwner` with `globalThis.fetch` stubbed, then restores it. */
 const withFetch = async (
@@ -208,4 +238,97 @@ test("a hosted key gets no alias surface at all", async () => {
   )
   expect(list.status).toBe(200)
   expect(await list.json()).toEqual({ aliases: [] })
+})
+
+/** A minted key for a GitHub token, the two-step every M14 test starts from. */
+const keyFor = async (app: App, githubToken: string): Promise<string> =>
+  (await minted(await mint(app, githubToken))).key
+
+// M14 (§04, decision 05): the per-owner index makes `list` and `remove` scoped
+// to the caller. Two accounts share one bucket and one `ACCOUNTS` namespace, and
+// still see only their own pages.
+test("two owners each see only their own pages", async () => {
+  const app = hosted()
+  const a = await keyFor(app, GITHUB_TOKEN)
+  const b = await keyFor(app, OTHER_TOKEN)
+  const hashA = await hashOf(DOC)
+  const hashB = await hashOf(DOC_B)
+  await publishAs(app, a, hashA)
+  await publishAs(app, b, hashB, DOC_B)
+
+  expect(await pageHashes(await listPages(app, a))).toEqual([hashA])
+  expect(await pageHashes(await listPages(app, b))).toEqual([hashB])
+})
+
+// The gap M13's review flagged and M14 closes: one account cannot delete
+// another's page. Ownership is read from R2, and a hash owned by someone else is
+// a 404 that removes nothing — never a 403, so existence is not disclosed.
+test("cross-owner remove is a 404 that deletes nothing", async () => {
+  const app = hosted()
+  const a = await keyFor(app, GITHUB_TOKEN)
+  const b = await keyFor(app, OTHER_TOKEN)
+  const hash = await hashOf(DOC)
+  await publishAs(app, a, hash)
+
+  const denied = await removePage(app, b, hash)
+  expect(denied.status).toBe(404)
+  expect(await denied.json()).toEqual({ _tag: "NotFound" })
+
+  // Still served, still A's, still in A's listing.
+  expect((await servePage(app, hash)).status).toBe(200)
+  expect(await pageHashes(await listPages(app, a))).toEqual([hash])
+})
+
+test("an owner removes their own page: 204, gone from the listing and no longer served", async () => {
+  const app = hosted()
+  const a = await keyFor(app, GITHUB_TOKEN)
+  const hash = await hashOf(DOC)
+  await publishAs(app, a, hash)
+
+  expect((await removePage(app, a, hash)).status).toBe(204)
+  expect((await servePage(app, hash)).status).toBe(404)
+  expect(await pageHashes(await listPages(app, a))).toEqual([])
+})
+
+// Same bytes, same address (decision 05): the second publisher gets the public,
+// content-addressed URL but no ownership and no index entry — the first writer
+// keeps it, so the second's `remove` 404s and the page is untouched.
+test("a second owner publishing the same bytes gets the URL but not ownership", async () => {
+  const app = hosted()
+  const a = await keyFor(app, GITHUB_TOKEN)
+  const b = await keyFor(app, OTHER_TOKEN)
+  const hash = await hashOf(DOC)
+  await publishAs(app, a, hash)
+
+  const second = await publishAs(app, b, hash)
+  expect(second.status).toBe(200)
+  expect(await second.json()).toMatchObject({ hash, created: false })
+
+  // No second index entry for B, and B cannot remove what A owns.
+  expect(await pageHashes(await listPages(app, b))).toEqual([])
+  expect((await removePage(app, b, hash)).status).toBe(404)
+  expect((await servePage(app, hash)).status).toBe(200)
+  expect(await pageHashes(await listPages(app, a))).toEqual([hash])
+})
+
+// A title larger than KV's 1024-byte metadata cap once made the hosted index
+// write reject after the R2 write had landed — a 500 and a served-but-unlisted
+// page. `extractTitle` now clamps, so publish stays a 200 and the page lists
+// with a title that fits. (Needs a larger `maxBytes` than the shared apps do:
+// the document carries the oversized title.)
+test("a title over the KV metadata budget still publishes and lists, clamped", async () => {
+  const app = makeApp(
+    { zone: ZONE, maxBytes: 4096 },
+    Layer.mergeAll(StorageMemory, IndexMemory, AuthAccounts(memoryKeys(), identify), AliasesMemory)
+  )
+  const key = await keyFor(app, GITHUB_TOKEN)
+  const doc = `<html><head><title>${"T".repeat(1000)}</title></head><body>hi</body></html>`
+  const hash = await hashOf(doc)
+  expect((await publishAs(app, key, hash, doc)).status).toBe(200)
+
+  const listed = (await (await listPages(app, key)).json()) as {
+    pages: ReadonlyArray<{ hash: string; title: string }>
+  }
+  expect(listed.pages.map((p) => p.hash)).toEqual([hash])
+  expect(new TextEncoder().encode(listed.pages[0]!.title).length).toBeLessThanOrEqual(256)
 })
