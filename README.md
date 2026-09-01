@@ -57,6 +57,7 @@ The full walkthrough — token scopes, verification curls, limits, troubleshooti
 | `handbill remove <url\|hash>`           | Unpublish. Idempotent.                                                                         |
 | `handbill update <url\|hash> plan.html` | Republish: the new page up, its names moved, the old hash gone.                                |
 | `handbill alias plan <url\|hash>`       | Point a name at a page: `plan.yourdomain.dev` serves it. Opt-in; `alias list`, `alias remove`. |
+| `handbill login` / `logout`             | Sign in to a hosted deployment with GitHub and keep the key it mints; `logout` revokes it.     |
 | `handbill doctor`                       | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix.      |
 | `handbill completions zsh`              | Shell completions (bash, zsh, fish).                                                           |
 
@@ -104,7 +105,7 @@ Effect 4 end to end, pinned to an exact release candidate. Conventions and invar
 
 - **0.1** — self-host kit: Worker, CLI, skill (released)
 - **0.2** — markdown input rendered in the CLI, living names on KV with `alias` commands, `--open`, OpenAPI + `/docs`, the site at [handbill.dev](https://handbill.dev) (released)
-- **0.3** — hosted mode: the same Worker with accounts instead of a single token
+- **0.3** — hosted mode: the same Worker with accounts instead of a single token, `handbill login`, per-account quotas, operator takedown, and [handbill.dev](https://handbill.dev/docs/hosted/) as the default endpoint (releasing)
 - **0.4** — paid tier: a subscription that raises the hosted quotas, and nothing on the read path that knows about it
 - **0.5** — sheets and time: inline local assets at publish time, expiring pages
 - later — encrypted pages
