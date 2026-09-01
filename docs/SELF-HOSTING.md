@@ -155,7 +155,7 @@ HANDBILL_ADMIN_TOKEN=<that token> handbill admin takedown https://<hash>.<zone>
 
 It is never a publishing key: a user key gets `401` here, and this token cannot publish. Without the secret the route is not there at all (`404`), like the alias routes without their binding. The page stops being served, leaves its owner's list, and its bytes go back to that owner's quota; a taken-down hash then 404s exactly like one that was never published. Taking a page down does not touch the key that published it — revoking that is a separate act, described in [WAF.md](WAF.md).
 
-**Before a production zone.** Tenant isolation and quotas ship as of M16, but hosting strangers is more than code: the terms, the abuse address and the report process are M17, and the drill that proves takedown and revocation actually work end to end is M18. Until those, `ACCOUNTS` is for a deployment whose users you know.
+**Before a production zone.** Tenant isolation and quotas ship as of M16, but hosting strangers is more than code: you also need terms saying what may not be published and what you can see, and an address a report can arrive at. The maintainer's are [terms and acceptable use](https://handbill.dev/docs/terms/) and [reporting abuse](https://handbill.dev/docs/abuse/) — written for `handbill.dev`, so adapt rather than copy — and the drill that proves takedown and revocation work end to end is M18. Until you have your own, `ACCOUNTS` is for a deployment whose users you know.
 
 The kill switch is symmetrical: remove the `ACCOUNTS` binding and redeploy, and the Worker is back on `PUBLISH_TOKEN` with every published page still serving — accounts were never on the read path.
 

@@ -23,6 +23,9 @@ export default defineConfig({
         { icon: "npm", label: "npm", href: "https://www.npmjs.com/package/handbill" }
       ],
       customCss: ["./src/styles.css"],
+      // The only component override: Starlight's footer, plus a row of site-wide
+      // links (terms, abuse, security) that has to be on every page.
+      components: { Footer: "./src/components/Footer.astro" },
       // Cloudflare Web Analytics, on this site only — never on published pages.
       // The token is the zone's public beacon token, not a secret. The og:image
       // is public/og.png, rendered once by hand; scrapers need an absolute URL.

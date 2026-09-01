@@ -80,7 +80,7 @@ The first responses are the Worker's own (`400` for the deliberate hash mismatch
 
 ## The abuse runbook
 
-A report arrives naming a URL. Two acts, deliberately separate: take the **page** down, then decide about the **key**. A mistaken publish deserves the first and not the second.
+A report arrives naming a URL — on `handbill.dev` at `abuse@handbill.dev`, which is where [reporting abuse](https://handbill.dev/docs/abuse/) sends people and what it promises them. Two acts, deliberately separate: take the **page** down, then decide about the **key**. A mistaken publish deserves the first and not the second.
 
 ### 1. Take the page down
 
@@ -119,7 +119,7 @@ bunx wrangler kv key put --namespace-id "$NS" "k:<digest>" \
   '{"owner":"gh:4242","created":"<as it was>","tier":"free","revoked":"2026-09-01T12:00:00.000Z"}'
 ```
 
-That key stops authorizing immediately. It does not stop the account minting another one — `POST /v1/keys` is open to any GitHub account by design — so revocation buys time rather than closing a door. Repeat offenders are a policy problem (M17's terms), not a KV problem.
+That key stops authorizing immediately. It does not stop the account minting another one — `POST /v1/keys` is open to any GitHub account by design — so revocation buys time rather than closing a door. Repeat offenders are a policy problem — [terms and acceptable use](https://handbill.dev/docs/terms/) is what says the account ends — not a KV problem.
 
 ### 3. Sweep the account, if it comes to that
 

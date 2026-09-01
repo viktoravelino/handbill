@@ -14,7 +14,7 @@ export const GET: APIRoute = ({ site }) => {
 
 > ${summary}
 
-The URL is the content hash of the file, so a link is immutable and unguessable, and it lives on a Cloudflare Worker and an R2 bucket in your own account. The CLI is \`npm i -g handbill\`; it ships an agent skill so a coding agent can end a task with a link instead of a file.
+The URL is the content hash of the file, so a link is immutable and unguessable. It lives on a Cloudflare Worker and an R2 bucket in your own account, or — after \`handbill login\` signs you in with GitHub — on the hosted deployment at handbill.dev, free and quota-limited. The CLI is \`npm i -g handbill\`; it ships an agent skill so a coding agent can end a task with a link instead of a file.
 
 ## Docs
 

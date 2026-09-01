@@ -15,12 +15,16 @@ A published page is public to anyone holding its link; the link is unguessable (
 
 - Anyone with a link can read the page and share the link. There is no reader authentication and no private mode.
 - An alias is enumerable. `<name>.<zone>` answers for any name you have set, so a stranger can find aliased pages by guessing; hash links stay unguessable. Aliases are opt-in and documented as such in [`docs/SELF-HOSTING.md`](docs/SELF-HOSTING.md).
-- The operator can read every page in the bucket.
+- The operator can read every page in the bucket. On the hosted deployment that operator is the maintainer, and [the terms](https://handbill.dev/docs/terms/) enumerate what they can see and what is deliberately not kept.
 - A page's own JavaScript is the page author's responsibility. Origin isolation stops it reading other pages and the API; it does not stop it making cross-origin requests or phishing the reader.
 
 ## Reporting a vulnerability
 
 Use GitHub's private vulnerability reporting on this repository (_Security_ → _Report a vulnerability_). Please do not open a public issue for security problems. You will get an acknowledgement within a few days; fixes ship as a patch release of the affected package.
+
+## Reporting a page
+
+A flaw in handbill is not the same thing as a page someone published with it. To report a page on `handbill.dev` — phishing, malware, spam, doxxing — mail `abuse@handbill.dev` with the URL and what is wrong with it: [how the report is handled](https://handbill.dev/docs/abuse/). Pages on someone else's deployment are that operator's to remove.
 
 ## Supported versions
 
