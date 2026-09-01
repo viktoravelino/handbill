@@ -8,12 +8,14 @@ export const summary =
 /**
  * The docs section: one page per markdown file the repository already has, so
  * the site and GitHub cannot disagree. `path` is the file, relative to the
- * repository root; `slug` is where it is served, `/docs/<slug>/`. Two of the
+ * repository root; `slug` is where it is served, `/docs/<slug>/`. Four of the
  * files are the site's own: `api.md`, `hosted.md`, `terms.md` and `abuse.md`
  * are written here — the last three describe the service on this domain rather
  * than the software, so a self-hoster's clone has no business carrying them —
  * and `cli.md` is generated from `handbill --help` by scripts/cli-reference.ts
- * before every build.
+ * before every build. The operator runbooks (`docs/WAF.md`, `docs/DRILL.md`)
+ * are deliberately absent: they are for whoever runs a deployment, not for
+ * whoever reads about one.
  * `description` becomes the page's meta description — its search snippet.
  */
 export const docs = [

@@ -76,6 +76,7 @@ An alias is a living name: the reader's link keeps showing the latest version wh
 - `handbill doctor` checks, in order: config present, token present, endpoint reachable, token accepted, wildcard TLS valid — each with a one-line fix. Run it first when a command fails for a reason that is not the file.
 - `command not found: handbill` → the CLI is not installed. `npm i -g handbill`, or from a checkout of the repository: `bun run --cwd apps/cli build && npm i -g ./apps/cli`.
 - A `5xx` from the endpoint is the deployment's problem (`apps/worker` in the repository), not the file's. Tell the user and stop.
+- "You have published 25 pages today…" or "This account is storing its full … bytes" is a hosted account's quota, not a bug. Report it with the reset time it names and stop; the daily count only frees itself, and `handbill remove` is what gives stored bytes back. A self-hosted deployment never says either.
 
 ## Installing this skill
 
