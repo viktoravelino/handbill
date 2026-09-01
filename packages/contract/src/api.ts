@@ -16,6 +16,8 @@ import {
   AliasTarget,
   Hash,
   Health,
+  Key,
+  KeyRequest,
   Owner,
   PageList,
   PublishResult
@@ -100,6 +102,14 @@ export class AliasesGroup extends HttpApiGroup.make("aliases")
       success: AliasList,
       error: NotFound
     }),
+    // One name, read by key rather than out of the listing. The listing is a
+    // lagging index; this is what the name points at now. `NotFound` covers
+    // both "nobody set it" and "this deployment has no aliases at all".
+    HttpApiEndpoint.get("read", "/aliases/:name", {
+      params: { name: AliasName },
+      success: Alias,
+      error: NotFound
+    }),
     // Idempotent like unpublishing: 204 whether or not the name was in use.
     HttpApiEndpoint.delete("remove", "/aliases/:name", {
       params: { name: AliasName },
@@ -112,6 +122,41 @@ export class AliasesGroup extends HttpApiGroup.make("aliases")
     OpenApi.annotations({
       title: "Aliases",
       description: "Point a readable name at a hash. Absent unless the deployment enables it."
+    })
+  ) {}
+
+/**
+ * Keys, the hosted tier's identity. The whole group is optional the way the
+ * alias group is: a deployment running on one shared `PUBLISH_TOKEN` has no
+ * accounts to mint keys for and answers `404 NotFound` on both routes.
+ *
+ * Neither route is behind the bearer middleware, because for both the credential
+ * *is* the body or header rather than a bearer the middleware would resolve:
+ * `mint` carries the GitHub token in its body, and `revoke` reads the key to
+ * kill from its own `Authorization` header. Keeping `revoke` off the middleware
+ * is also what makes it idempotent — a key that is already revoked must reach
+ * the handler and get its 204, not be rejected as `Unauthorized` first.
+ */
+export class KeysGroup extends HttpApiGroup.make("keys")
+  .add(
+    HttpApiEndpoint.post("mint", "/keys", {
+      payload: KeyRequest,
+      success: Key,
+      error: [Unauthorized, NotFound]
+    }),
+    // The key in the `Authorization` header revokes itself, so logging out needs
+    // nothing but the key already in hand, and the only thing it can revoke is
+    // that key. Idempotent: 204 whether or not the key was still live, and 404
+    // only where accounts are off. (`NotFound`, not the middleware's 401.)
+    HttpApiEndpoint.delete("revoke", "/keys/current", {
+      success: HttpApiSchema.NoContent,
+      error: NotFound
+    })
+  )
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Keys",
+      description: "Mint and revoke API keys. Absent unless the deployment runs accounts."
     })
   ) {}
 
@@ -137,6 +182,7 @@ export class MetaGroup extends HttpApiGroup.make("meta")
 export class HandbillApi extends HttpApi.make("handbill")
   .add(PagesGroup)
   .add(AliasesGroup)
+  .add(KeysGroup)
   .add(MetaGroup)
   .prefix("/v1")
   .annotateMerge(

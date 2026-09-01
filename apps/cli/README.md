@@ -63,7 +63,7 @@ handbill update https://a3f9c1d4e2b8.yourdomain.dev plan.html
 
 One command for the whole rotation: publish the new file, re-point every name that pointed at the old page, then unpublish the old hash — in that order, so a reader following a name is not left on a 404. It prints the new URL and nothing else; `--json` adds what it did (`{ "hash", "url", "created", "removed", "aliases" }`), and the names it moved are reported on stderr. Update a page to bytes it already has and nothing happens.
 
-The names it moves are the ones `alias list` reports, so the lag above applies here too: a name set in the last minute may not be listed yet, and `update` would then unpublish the page it still points at. Give a fresh name a minute before updating the page under it. Nothing else in the rotation is at risk — if any step fails, the new URL is still printed on stderr and the old page is left alone.
+The names it moves are the ones `alias list` reports, and it re-reads each of them by name before it moves anything, so a listing that reports a name against a stale hash no longer misleads it. What the listing does not report at all, it still cannot move: a name **created** in the last minute may be missing from the listing entirely, and `update` would then unpublish the page it points at. Give a brand-new name a minute before updating the page under it. Nothing else in the rotation is at risk — if any step fails, the new URL is still printed on stderr and the old page is left alone.
 
 ## Markdown
 

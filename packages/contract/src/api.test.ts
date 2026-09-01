@@ -11,7 +11,7 @@ const spec = OpenApi.fromApi(HandbillApi)
 const errorStatuses = (
   paths: OpenApi.OpenAPISpecPaths,
   path: string,
-  method: "get" | "put" | "delete"
+  method: "get" | "post" | "put" | "delete"
 ) => {
   const operation = paths[path]?.[method]
   if (operation === undefined) throw new Error(`${method.toUpperCase()} ${path} is not in the spec`)
@@ -112,16 +112,29 @@ describe("spec", () => {
     // Every alias route can 404: a deployment without a KV binding has no
     // aliases to speak of, not an empty list of them.
     expect(errorStatuses(spec.paths, "/v1/aliases", "get")).toEqual(["401", "404"])
+    expect(errorStatuses(spec.paths, "/v1/aliases/{name}", "get")).toEqual(["401", "404"])
     expect(errorStatuses(spec.paths, "/v1/aliases/{name}", "put")).toEqual(["401", "404"])
     expect(errorStatuses(spec.paths, "/v1/aliases/{name}", "delete")).toEqual(["401", "404"])
+    // Both key routes 404 where accounts are off. `mint` carries its own 401
+    // because the credential it checks is the GitHub token in its body; `revoke`
+    // has no 401 at all — it is idempotent, so an already-revoked or unknown key
+    // is a 204, and 404 is only the accounts-off case.
+    expect(errorStatuses(spec.paths, "/v1/keys", "post")).toEqual(["401", "404"])
+    expect(errorStatuses(spec.paths, "/v1/keys/current", "delete")).toEqual(["404"])
     // health needs no token, so it has nothing to fail with.
     expect(errorStatuses(spec.paths, "/v1/health", "get")).toEqual([])
   })
 
-  test("only the meta group is outside the bearer token", () => {
+  test("both key routes are outside the bearer middleware", () => {
     expect(spec.paths["/v1/pages"]?.get?.security).toEqual([{ bearer: [] }])
     expect(spec.paths["/v1/aliases"]?.get?.security).toEqual([{ bearer: [] }])
     expect(spec.paths["/v1/health"]?.get?.security).toEqual([])
+    // For both key routes the credential is the request itself, not a bearer the
+    // middleware resolves: mint carries the GitHub token in its body, revoke the
+    // key to kill in its own header. Revoke off the middleware is also what lets
+    // it stay idempotent — a revoked key reaches the handler instead of 401ing.
+    expect(spec.paths["/v1/keys"]?.post?.security).toEqual([])
+    expect(spec.paths["/v1/keys/current"]?.delete?.security).toEqual([])
   })
 
   // The whole spec, so M3 and M4 notice if the contract moves under them.

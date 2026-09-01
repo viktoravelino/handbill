@@ -48,7 +48,10 @@ describe("update", () => {
     expect(outcome.stdout).toEqual([retro.url])
     expect(server().requests().slice(from)).toEqual([
       `PUT /v1/pages/${retro.hash}`,
+      // The listing finds the names; the read by key is what each one actually
+      // points at, since the listing's own hashes lag (#95).
       "GET /v1/aliases",
+      "GET /v1/aliases/plan",
       "PUT /v1/aliases/plan",
       `DELETE /v1/pages/${hash}`
     ])
@@ -79,6 +82,24 @@ describe("update", () => {
     expect(await (await server().fetch(`${planUrl}/`)).text()).toBe(plan.html)
   })
 })
+
+/**
+ * `GET /v1/aliases` as KV can answer it: both names present, both hashes out of
+ * date, and wrong in opposite directions — `plan` really points at the page
+ * being replaced and `kickoff` really points at its own.
+ */
+const staleListing = () =>
+  Promise.resolve(
+    new Response(
+      JSON.stringify({
+        aliases: [
+          { name: "plan", hash: kickoff.hash, url: `https://plan.${ZONE}` },
+          { name: "kickoff", hash, url: `https://kickoff.${ZONE}` }
+        ]
+      }),
+      { headers: { "content-type": "application/json" } }
+    )
+  )
 
 describe("update and the names", () => {
   // Only the aliases that named the old page move; the rest stay where they are.
@@ -114,6 +135,27 @@ describe("update and the names", () => {
     } finally {
       await off.dispose()
     }
+  })
+})
+
+describe("update and a lagging listing", () => {
+  // #95: the listing is an eventually consistent index of both the names and
+  // the hashes they carry, so `update` re-reads each name by key before it
+  // judges it. Here the listing has both hashes wrong in opposite directions —
+  // without the read `plan` would lose its page and `kickoff` would be dragged
+  // back off the page it was pointed at since.
+  test("trusts the name read by key over the hash the listing reports", async () => {
+    await cli([plan.path])
+    await cli([kickoff.path])
+    await cli(["alias", "plan", hash])
+    await cli(["alias", "kickoff", kickoff.hash])
+
+    const outcome = await cli(["update", hash, retro.path, "--json"], {
+      http: broken((request) => new URL(request.url).pathname === "/v1/aliases", staleListing)
+    })
+    expect(JSON.parse(outcome.stdout[0] ?? "")).toMatchObject({ aliases: ["plan"] })
+    expect(await (await server().fetch(`${planUrl}/`)).text()).toBe(retro.html)
+    expect(await (await server().fetch(`https://kickoff.${ZONE}/`)).text()).toBe(kickoff.html)
   })
 })
 

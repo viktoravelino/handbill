@@ -2,7 +2,7 @@ import { HandbillApi } from "@handbill/contract"
 import { Effect, FileSystem, Layer, ManagedRuntime, Path } from "effect"
 import { Etag, HttpPlatform, HttpRouter, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
-import { AliasesLive, AuthorizationLive, MetaLive, PagesLive } from "./api"
+import { AliasesLive, AuthorizationLive, KeysLive, MetaLive, PagesLive } from "./api"
 import { canonical, classifyHost, nothingHere, serveAlias, servePage } from "./pages"
 import type { Aliases } from "./aliases"
 import type { Auth } from "./auth"
@@ -81,7 +81,7 @@ export const makeApp = (config: WorkerConfig, services: Layer.Layer<AppServices>
   const memoMap = Layer.makeMemoMapUnsafe()
   const api = HttpRouter.toWebHandler(
     Layer.mergeAll(HttpApiBuilder.layer(HandbillApi, { openapiPath: OPENAPI_PATH }), DocsLive).pipe(
-      Layer.provide([PagesLive, AliasesLive, MetaLive]),
+      Layer.provide([PagesLive, AliasesLive, KeysLive, MetaLive]),
       Layer.provide(AuthorizationLive),
       // Handler requirements are per-request in Effect 4's router; the same
       // layer also satisfies the middleware's build-time need for `Auth`.

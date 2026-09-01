@@ -44,7 +44,7 @@ Use this, not a second `handbill <file>`, whenever the user asks to fix, revise 
 
 Three things to expect: the old link stops working, so hand the user the new URL and say the old one is gone; updating to bytes that are already published is a no-op that prints the same URL, which is the right answer, not a failure; and on a deployment with aliases switched off, `update` prints the one-sentence notice on stderr and finishes anyway.
 
-**Do not `update` a page within a minute of setting an alias on it.** `update` moves the names that `alias list` reports, and that listing lags a freshly set name by up to a minute (same lag as under "Name a page"). A name the listing has not caught up with is not moved, and `update` still unpublishes the old hash — leaving that name serving a 404. If you have just run `alias`, publish the revision with `handbill <file>` and re-point the name yourself with `alias`, or wait a minute.
+**Do not `update` a page within a minute of creating an alias on it.** `update` can only move the names that `alias list` reports, and that listing lags a _newly created_ name by up to a minute (same lag as under "Name a page"). A name missing from the listing is not moved, and `update` still unpublishes the old hash — leaving that name serving a 404. If you have just created a name with `alias`, publish the revision with `handbill <file>` and re-point the name yourself with `alias`, or wait a minute. Re-pointing an existing name is safe: `update` reads each listed name back by name before it decides, so the hashes the listing carries can be stale without stranding anyone.
 
 ## Unpublish
 
