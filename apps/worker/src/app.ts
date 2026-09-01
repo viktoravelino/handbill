@@ -6,8 +6,7 @@ import { AliasesLive, AuthorizationLive, MetaLive, PagesLive } from "./api"
 import { canonical, classifyHost, nothingHere, serveAlias, servePage } from "./pages"
 import type { Aliases } from "./aliases"
 import type { Auth } from "./auth"
-import type { WorkerConfig } from "./config"
-import { Config } from "./config"
+import { Config, type WorkerConfig } from "./config"
 import type { Storage } from "./storage"
 
 /**

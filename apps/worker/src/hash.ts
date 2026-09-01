@@ -1,7 +1,15 @@
 import { Hash } from "@handbill/contract"
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 
-const HEX = "0123456789abcdef"
+/**
+ * Is this string a page address? The one place the hash shape is decided: the
+ * hostname classifier, R2 and KV all ask this rather than each carrying a copy
+ * of the pattern, so a key written by something else is never mistaken for one
+ * of ours. Narrows to the branded `Hash`, so callers need no cast.
+ */
+export const isHash = Schema.is(Hash)
+
+const hex = (byte: number): string => byte.toString(16).padStart(2, "0")
 
 /**
  * `hex(sha256(bytes)).slice(0, 12)` — the content address a page is named by.
@@ -13,24 +21,13 @@ export const hashBytes = (bytes: Uint8Array): Effect.Effect<Hash> =>
     // `digest` wants an `ArrayBuffer`-backed view; a request body is never
     // backed by a `SharedArrayBuffer`.
     Effect.promise(() => crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>)),
-    (digest) => {
-      const view = new Uint8Array(digest, 0, 6)
-      let hex = ""
-      for (const byte of view) {
-        hex += HEX[byte >> 4]! + HEX[byte & 15]!
-      }
-      return Hash.make(hex)
-    }
+    // Six bytes of the digest is the whole twelve-character address.
+    (digest) => Hash.make(Array.from(new Uint8Array(digest, 0, 6), hex).join(""))
   )
 
 const TITLE = /<title[^>]*>([\s\S]*?)<\/title>/iu
-const ENTITIES: Record<string, string> = {
-  "&amp;": "&",
-  "&lt;": "<",
-  "&gt;": ">",
-  "&quot;": '"',
-  "&#39;": "'"
-}
+/** Keyed by the entity's name, which is what the regex below captures. */
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" }
 
 /**
  * The document's `<title>`, stored as `customMetadata.title` so `handbill list`
@@ -43,7 +40,7 @@ export const extractTitle = (bytes: Uint8Array): string => {
   const matched = TITLE.exec(head)?.[1]
   if (matched === undefined) return ""
   return matched
-    .replaceAll(/&(?:amp|lt|gt|quot|#39);/gu, (entity) => ENTITIES[entity]!)
+    .replaceAll(/&(amp|lt|gt|quot|#39);/gu, (_, name: string) => ENTITIES[name]!)
     .replaceAll(/\s+/gu, " ")
     .trim()
 }
