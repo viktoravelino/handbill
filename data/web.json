@@ -1,18 +1,22 @@
 {
   "2026-08-29": {
-    "pageviews": 50,
-    "visits": 50
+    "pageviews": 32,
+    "visits": 32
   },
   "2026-08-30": {
-    "pageviews": 50,
-    "visits": 50
+    "pageviews": 28,
+    "visits": 26
   },
   "2026-08-31": {
-    "pageviews": 20,
-    "visits": 10
+    "pageviews": 18,
+    "visits": 15
   },
   "2026-09-01": {
-    "pageviews": 10,
-    "visits": 10
+    "pageviews": 26,
+    "visits": 19
+  },
+  "2026-09-02": {
+    "pageviews": 39,
+    "visits": 39
   }
 }
