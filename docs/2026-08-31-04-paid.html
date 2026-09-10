@@ -154,10 +154,13 @@
       <tr><td>Pricing page</td><td>apps/web</td><td>static; states both tiers' numbers and links out to Polar checkout — no cookies, no scripts</td></tr>
       <tr><td>Checkout + portal</td><td>Polar's domain</td><td>payment, invoices, cancel/renew — none of it ours</td></tr>
       <tr><td><code>POST /v1/billing/webhook</code></td><td>apps/worker</td><td>verifies Polar's signature; flips <code>tier</code> on the owner's key records</td></tr>
-      <tr><td><code>handbill account</code></td><td>apps/cli</td><td>prints owner, tier, quota usage — the "did my upgrade land?" command</td></tr>
+      <tr><td><code>GET /v1/account</code></td><td>apps/worker</td><td>owner, tier, usage and limits for the key presented — what both the command and the page read</td></tr>
+      <tr><td><code>handbill account</code></td><td>apps/cli</td><td>prints owner, tier, quota usage — the "did my upgrade land?" command; <code>--upgrade</code> prints the checkout URL, <code>--web</code> opens the account page</td></tr>
+      <tr><td>Account page</td><td>apps/web</td><td>one static page: the same numbers as the command plus the page list and remove, for a person checking on what an agent published</td></tr>
     </tbody>
   </table></div>
   <p><b>The joining key.</b> Checkout must tell us <em>which owner</em> paid. The pricing page links to checkout with the owner's id (<code>gh:&lt;id&gt;</code>) attached as checkout metadata — Polar echoes metadata back in webhook events, so the webhook handler maps event → owner → tier flip without storing any Polar state beyond the subscription id on the owner record (for support lookups). The CLI can print the personalized checkout URL (<code>handbill account --upgrade</code>) so the flow works without ever visiting the site.</p>
+  <p><b>The account page, decided 2026-09-10.</b> The hosted page promises no browser session and no cookie on handbill.dev, and the account page keeps that promise rather than spending it. <code>handbill account --web</code> opens <code>handbill.dev/account/#key=…</code>: the key travels in the URL fragment, which never reaches a server, and the page reads it, clears it from the address bar, keeps it in memory, and calls <code>/v1/account</code> and <code>/v1/pages</code> directly. The site stores nothing and sets nothing. The Worker's whole share is CORS for that one origin. No framework — an Astro page with one script — no GitHub web flow, no session store; a short-lived read-only key for the browser is the upgrade path if the fragment ever proves a problem, not part of 0.4. What the page cannot show is decided by the non-goals: no views, no referrers, and no aliases (operator-only, 0.3 decision 08). It earns its place as the billing touchpoint — tier, usage, the portal link — which is why it lands here and not earlier.</p>
   <p><b>Flows, in prose.</b> <i>Upgrade:</i> checkout completes → webhook (subscription became active) → <code>tier: "paid"</code> → next publish sees the bigger table. <i>Lapse:</i> webhook (subscription ended/revoked) → <code>tier: "free"</code> → write path shrinks, read path never knew. <i>Webhook downtime:</i> events are retried by Polar; until one lands, the user has paid but sits on free quota — <code>handbill account</code> shows the mismatch, and a manual <code>handbill admin tier &lt;owner&gt; paid</code> is the operator's override (also the support tool). Reconciliation stays human-scale on purpose.</p>
   <p class="note">Worker budget estimate: webhook route with signature verification ~50–70 lines, tier table ~10, admin tier override ~10. The #88 headroom decision should assume roughly +90 for 0.4 on top of 0.3's needs.</p>
 </section>
@@ -170,13 +173,13 @@
     <tbody>
       <tr><td>Now, inside 0.3</td><td><code>tier</code> on the key record and the per-tier quota table (M13/M16); nothing else — no Polar account needed yet</td></tr>
       <tr><td>Business, before 0.4 code</td><td>Polar org + payout details + their KYC; the product and price; webhook endpoint + secret; a look at their sandbox for the integration tests; ToS gains a payments section (renewal, refund policy, what lapse means — §02's words)</td></tr>
-      <tr><td>Contract + Worker</td><td><code>POST /v1/billing/webhook</code> (signature-verified, no bearer auth); <code>handbill admin tier</code> route; <code>GET /v1/account</code> returning owner, tier, usage</td></tr>
-      <tr><td>CLI</td><td><code>handbill account</code> (+ <code>--upgrade</code> printing the checkout URL); no other command changes</td></tr>
-      <tr><td>Web</td><td>the pricing page; hosted page updated to mention the paid tier exists</td></tr>
+      <tr><td>Contract + Worker</td><td><code>POST /v1/billing/webhook</code> (signature-verified, no bearer auth); <code>handbill admin tier</code> route; <code>GET /v1/account</code> returning owner, tier, usage; CORS for <code>handbill.dev</code></td></tr>
+      <tr><td>CLI</td><td><code>handbill account</code> (+ <code>--upgrade</code> printing the checkout URL, <code>--web</code> opening the account page); no other command changes</td></tr>
+      <tr><td>Web</td><td>the pricing page; the account page; hosted page updated to mention the paid tier exists</td></tr>
       <tr><td>Ops</td><td>webhook delivery monitoring (Polar's dashboard + a weekly <code>account</code> spot-check); the drill gains a step: upgrade, verify, cancel, verify lapse</td></tr>
     </tbody>
   </table></div>
-  <p><b>Open until 0.4:</b> the price; annual-only vs monthly+annual; whether webhook event names are consumed via Polar's SDK or verified raw (decide against the SDK if it drags dependencies into the Worker — the signature check is small); whether <code>handbill account</code> belongs in 0.3's M15 already (leaning no — YAGNI until there is a tier to report).</p>
+  <p><b>Open until 0.4:</b> the price; annual-only vs monthly+annual; whether webhook event names are consumed via Polar's SDK or verified raw (decide against the SDK if it drags dependencies into the Worker — the signature check is small); whether <code>handbill account</code> belongs in 0.3's M15 already (leaning no — YAGNI until there is a tier to report). <i>Settled 2026-09-10 when the milestones were cut:</i> <code>account</code> was not in M15 and is M20; the signature is verified raw (M19); the price and the annual question stay open until the Polar product is created.</p>
 </section>
 
 <section id="roadmap">
@@ -202,7 +205,7 @@
   <ul>
     <li><b>0.3 architecture</b> (<a href="https://25e4f4d7789f.handbill.dev">25e4f4d7789f</a>): gains decision 11 — <i>tier on the key record and a per-tier quota table now; payments deferred to 0.4 on Polar; the read path never checks payment state.</i> Folded in and accepted 2026-09-01; #82 and #85 build the field from there.</li>
     <li><b>PRD versions table:</b> the 0.4/0.5 re-cut above, amended in <code>docs/2026-08-28-prd.html</code> and in the README's roadmap when both docs landed.</li>
-    <li><b>Board:</b> no 0.4 issues yet — milestones get cut when 0.4 opens; only the 0.4 milestone object exists, carrying this link.</li>
+    <li><b>Board:</b> cut 2026-09-10 — #130 (budget measurement first, the Worker being at 1308 of 1310), M19 #131 webhook and tier flips, M20 #132 account route and command, M21 #133 pricing and account pages, M22 #134 docs, drill scenario E, release. The budget estimate in §03 (+90) predates the account route and CORS; #130 re-measures.</li>
   </ul>
 </section>
 
