@@ -19,6 +19,8 @@ export interface AuthShape {
   ) => Effect.Effect<{ owner: Owner; tier: Tier }, Unauthorized>
   readonly mint: (githubToken: string) => Effect.Effect<Key, Unauthorized | NotFound>
   readonly revoke: (token: Redacted.Redacted) => Effect.Effect<void, NotFound>
+  /** What the owner's keys may spend from now on, and how many moved. No accounts, `NotFound`. */
+  readonly setTier: (owner: Owner, tier: Tier, sub?: string) => Effect.Effect<number, NotFound>
 }
 
 export class Auth extends Context.Service<Auth, AuthShape>()("handbill/Auth") {}
@@ -39,10 +41,9 @@ export const secretEquals = (a: string, b: string): boolean => {
 /**
  * The operator: the single owner a self-hosted deployment has, and the identity
  * `AuthSecret` resolves every token to. `AuthAccounts` never issues it — hosted
- * keys own `gh:<id>` — so a handler that gates an action on `owner === OPERATOR`
- * allows the operator in both modes and no hosted user in accounts mode, which
- * is how "operator-only" features (aliases, decision 08) stay operator-only
- * without any handler asking which mode is on.
+ * keys own `gh:<id>` — so a handler that gates on `owner === OPERATOR` allows
+ * the operator in both modes and no hosted user in accounts mode, which is how
+ * "operator-only" features (aliases, decision 08) need no handler to ask.
  */
 export const OPERATOR = Owner.make("self")
 
@@ -61,7 +62,9 @@ export const AuthSecret = (token: string): Layer.Layer<Auth> =>
         ? Effect.succeed({ owner: OPERATOR, tier: "free" as const })
         : Effect.fail(new Unauthorized()),
     mint: () => Effect.fail(new NotFound()),
-    revoke: () => Effect.fail(new NotFound())
+    revoke: () => Effect.fail(new NotFound()),
+    // No accounts, no record to carry a tier: 404 like the key routes.
+    setTier: () => Effect.fail(new NotFound())
   })
 
 /**
@@ -72,25 +75,29 @@ export const AuthSecret = (token: string): Layer.Layer<Auth> =>
 export interface KeyStore {
   readonly get: (key: string) => Promise<unknown>
   readonly put: (key: string, value: string) => Promise<void>
+  /** The key names under a prefix: one KV page (1000) of `o:<owner>:` is one owner's keys. */
+  readonly list: (prefix: string) => Promise<ReadonlyArray<string>>
 }
 
 /** The `ACCOUNTS` binding as `AuthAccounts` wants it. Every value is a JSON record. */
 export const keyStore = (kv: KVNamespace): KeyStore => ({
   get: (key) => kv.get(key, "json"),
-  put: (key, value) => kv.put(key, value)
+  put: (key, value) => kv.put(key, value),
+  list: async (prefix) => (await kv.list({ prefix })).keys.map(({ name }) => name)
 })
 
 /**
- * What `k:<sha256(key)>` holds. `tier` is the quota table's key (decision 11):
- * only `free` exists in 0.3, and 0.4's paid tier is a webhook that rewrites the
- * field rather than a KV migration. Anything else in the namespace, from another
- * prefix or an older shape, is simply not a key.
+ * What `k:<sha256(key)>` holds. `tier` is the quota table's key (decision 11),
+ * rewritten in place by `setTier` rather than migrated; `subscriptionId` names
+ * the subscription that paid for it, kept for good, so a lapsed account —
+ * `tier: "free"`, id intact — is still traceable. Anything else is not a key.
  */
 const KeyRecord = Schema.Struct({
   owner: Owner,
   created: Schema.String,
   revoked: Schema.optional(Schema.String),
-  tier: TierSchema
+  tier: TierSchema,
+  subscriptionId: Schema.optional(Schema.String)
 })
 
 const isKeyRecord = Schema.is(KeyRecord)
@@ -103,9 +110,8 @@ const mintKey = (): string => {
 
 /**
  * A presented key and what it names: the digest is the KV key, so the key itself
- * is never stored. A record that is missing, revoked, or some other tool's value
- * under the same name all come back `undefined` — one answer, which `authorize`
- * reads as "not a caller" and `revoke` as "nothing to do".
+ * is never stored. Missing, revoked, or another tool's value under the same name
+ * all come back `undefined` — which `authorize` reads as "not a caller".
  */
 const readKey = (store: KeyStore, presented: Redacted.Redacted) =>
   Effect.gen(function* () {
@@ -126,9 +132,9 @@ const isGitHubUser = Schema.is(Schema.Struct({ id: Schema.Number }))
  * renaming themselves.
  *
  * Only GitHub actively refusing the token — a `401` — is `Unauthorized`. A
- * `5xx`, a `429`, or the `403` of a secondary rate limit is GitHub unavailable,
- * not a verdict on the token: it throws, so the route dies as a `500` that mints
- * nothing and calls no token bad. An outage blocks new keys, not publishing.
+ * `5xx`, a `429`, or a secondary rate limit's `403` is GitHub unavailable, not a
+ * verdict: it throws, so the route dies as a `500` that mints nothing and calls
+ * no token bad. An outage blocks new keys, not publishing.
  */
 export const githubOwner: Identify = (githubToken) =>
   Effect.flatMap(
@@ -147,12 +153,21 @@ export const githubOwner: Identify = (githubToken) =>
         : Effect.fail(new Unauthorized())
   )
 
+/** The live keys an owner holds via `o:<owner>:`: what `mint` inherits and `setTier` rewrites. */
+const liveKeys = async (store: KeyStore, owner: Owner) => {
+  const prefix = `o:${owner}:`
+  const ids = (await store.list(prefix)).map((name) => `k:${name.slice(prefix.length)}`)
+  const read = await Promise.all(ids.map(async (id) => ({ id, record: await store.get(id) })))
+  return read.flatMap(({ id, record }) =>
+    isKeyRecord(record) && record.revoked === undefined ? [{ id, record }] : []
+  )
+}
+
 /**
  * Hosted auth: one record per key in the `ACCOUNTS` namespace, filed under the
  * key's digest. Nothing here can turn a record back into a key, so a leaked KV
  * dump mints nothing and a lost key is re-minted rather than recovered.
- * `identify` is the GitHub check, an argument so tests answer it without a
- * network.
+ * `identify` is the GitHub check, an argument so tests answer it with no network.
  */
 export const AuthAccounts = (
   store: KeyStore,
@@ -172,13 +187,15 @@ export const AuthAccounts = (
         const key = mintKey()
         const digest = yield* sha256Hex(new TextEncoder().encode(key))
         const created = DateTime.formatIso(yield* DateTime.now)
-        const record = JSON.stringify({ owner, created, tier: "free" })
-        // Two writes: the record, and an `o:<owner>:<digest>` back-reference, so
-        // the operator can get from an abuse report to every key one account
-        // holds and revoke them (docs/WAF.md). A record is only reachable by
-        // digest, so without this an owner's keys cannot be enumerated at all
-        // (#111 review, deferred here). It is a pointer, not a copy: the value is
-        // empty and `k:` stays the one truth about a key.
+        // A second machine joins the account it already belongs to, tier and
+        // subscription included, or a paying user's next login would be free.
+        const [kin] = yield* Effect.promise(() => liveKeys(store, owner))
+        const record = JSON.stringify({ tier: "free", ...kin?.record, owner, created })
+        // Two writes: the record, and an `o:<owner>:<digest>` back-reference —
+        // the only way to enumerate an account's keys, since a record is
+        // reachable by digest alone (#111). It is what `liveKeys` reads, for an
+        // abuse report (docs/WAF.md) and for a flip. A pointer, not a copy: the
+        // value is empty and `k:` stays the one truth about a key.
         yield* Effect.promise(() =>
           Promise.all([store.put(`k:${digest}`, record), store.put(`o:${owner}:${digest}`, "")])
         )
@@ -186,15 +203,33 @@ export const AuthAccounts = (
         return { key, owner }
       }),
     // Idempotent: a key already revoked, or never minted, returns without
-    // failing, so the route answers 204 either way (this is why `DELETE
-    // /v1/keys/current` is not behind the authorize middleware — a revoked key
-    // must reach here rather than 401 first). The record stays, so the
-    // revocation is on the books and already-served pages keep serving.
+    // failing, so the route answers 204 either way — which is why `DELETE
+    // /v1/keys/current` is off the authorize middleware, a revoked key having to
+    // reach here rather than 401 first. The record stays, on the books.
     revoke: (candidate) =>
       Effect.gen(function* () {
         const { id, record } = yield* readKey(store, candidate)
         if (record === undefined) return
         const revoked = DateTime.formatIso(yield* DateTime.now)
         yield* Effect.promise(() => store.put(id, JSON.stringify({ ...record, revoked })))
+      }),
+    // Every live key at once, so two machines move together, and an owner with
+    // no key yet is not an error — `mint` inherits. Scoped to the subscription
+    // that paid, because `metadata.owner` is filled in at checkout: otherwise a
+    // stranger could name a victim and later cancel to strip their tier. No
+    // `sub` is the operator's override, which writes anything.
+    setTier: (owner, tier, sub) =>
+      Effect.promise(async () => {
+        let moved = 0
+        for (const { id, record } of await liveKeys(store, owner)) {
+          const { subscriptionId: held, tier: spends } = record
+          // An upgrade claims any record not already paying — unclaimed, or
+          // lapsed and free to re-subscribe — and its own; a lapse, only its own.
+          const mine = sub === undefined || held === sub || (tier === "paid" && spends === "free")
+          if (!mine) continue
+          await store.put(id, JSON.stringify({ ...record, tier, subscriptionId: sub ?? held }))
+          moved += 1
+        }
+        return moved
       })
   })

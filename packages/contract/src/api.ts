@@ -21,7 +21,8 @@ import {
   Owner,
   PageList,
   PublishResult,
-  Tier
+  Tier,
+  TierChange
 } from "./schemas"
 
 /**
@@ -67,6 +68,23 @@ export class Authorization extends HttpApiMiddleware.Service<
 export const HtmlDocument = Schema.Uint8Array.pipe(
   HttpApiSchema.asUint8Array({ contentType: "text/html" })
 )
+
+/**
+ * The billing webhook's body: the provider's JSON, kept as the bytes that
+ * arrived rather than decoded into a struct. The signature is over the exact
+ * body, so anything that re-serialises it — even `JSON.parse` and back — breaks
+ * verification; this is `HtmlDocument`'s trick applied for the same reason.
+ */
+export const WebhookBody = Schema.Uint8Array.pipe(
+  HttpApiSchema.asUint8Array({ contentType: "application/json" })
+)
+
+/**
+ * How large a delivery may be before the route stops reading it (413). A Polar
+ * subscription event is a couple of kilobytes; anything near this is not one,
+ * and refusing it by length costs less than an HMAC over a megabyte.
+ */
+export const WEBHOOK_MAX_BYTES = 64 * 1024
 
 /** Everything behind the bearer token: publishing, listing and unpublishing pages. */
 export class PagesGroup extends HttpApiGroup.make("pages")
@@ -195,12 +213,65 @@ export class AdminGroup extends HttpApiGroup.make("admin")
       params: { hash: Hash },
       success: HttpApiSchema.NoContent,
       error: [Unauthorized, NotFound]
+    }),
+    // The manual override for a webhook that never landed, and the support tool
+    // (0.4 §03): it writes the same field the webhook does. Idempotent and
+    // absolute — the tier it names is the tier the owner ends on — so an owner
+    // with no keys is a 204 that writes nothing. `NotFound` is the two absences
+    // this route can have: no admin token, and no accounts to hold a tier.
+    HttpApiEndpoint.put("tier", "/admin/tier/:owner", {
+      params: { owner: Owner },
+      payload: TierChange,
+      success: HttpApiSchema.NoContent,
+      error: [Unauthorized, NotFound]
     })
   )
   .annotateMerge(
     OpenApi.annotations({
       title: "Admin",
-      description: "Operator takedown. Absent unless the deployment sets an admin token."
+      description:
+        "Operator takedown and the tier override. Absent unless the deployment sets an admin token."
+    })
+  ) {}
+
+/**
+ * The provider's side of the paid tier: one route, called by Polar rather than
+ * by anyone holding a handbill credential. It is outside the bearer middleware
+ * because the credential is the signature over the body — there is no token to
+ * resolve to an owner, and the owner is something the event carries.
+ *
+ * A deployment that configures no webhook secret is not selling anything and
+ * answers `404 NotFound`, the same additive rule the alias, key and admin
+ * routes follow. A body whose signature does not verify, or whose timestamp is
+ * outside the replay window, is `401 Unauthorized`.
+ *
+ * Everything that verifies is `202 Accepted`, including an event this Worker
+ * does nothing with — a status that decides nothing, an owner it cannot name:
+ * the provider retries on any other status, and there is nothing to retry when
+ * the answer would not change. A body over `WEBHOOK_MAX_BYTES` is `413`, read
+ * by length before anything reads it at all.
+ */
+export class BillingGroup extends HttpApiGroup.make("billing")
+  .add(
+    HttpApiEndpoint.post("webhook", "/billing/webhook", {
+      payload: WebhookBody,
+      // The Standard Webhooks headers, all three required: the signature is
+      // over `<id>.<timestamp>.<body>`, so a delivery missing any of them
+      // cannot be verified and is not a delivery.
+      headers: {
+        "webhook-id": Schema.String,
+        "webhook-timestamp": Schema.String,
+        "webhook-signature": Schema.String
+      },
+      success: HttpApiSchema.Accepted,
+      error: [Unauthorized, NotFound, TooLarge]
+    })
+  )
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Billing",
+      description:
+        "The payment provider's subscription webhook. Absent unless the deployment sets a webhook secret."
     })
   ) {}
 
@@ -228,6 +299,7 @@ export class HandbillApi extends HttpApi.make("handbill")
   .add(AliasesGroup)
   .add(KeysGroup)
   .add(AdminGroup)
+  .add(BillingGroup)
   .add(MetaGroup)
   .prefix("/v1")
   .annotateMerge(

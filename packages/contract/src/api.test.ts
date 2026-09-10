@@ -141,6 +141,17 @@ describe("spec", () => {
     expect(errorStatuses(spec.paths, "/v1/admin/pages/{hash}", "delete")).toEqual(["401", "404"])
   })
 
+  // The tier override carries one absence more than takedown: a deployment on
+  // one shared token has no account records, so there is nothing to write a
+  // tier on and the route 404s there too. The webhook's 404 is the third shape
+  // of the same rule — no endpoint secret, no billing surface — its 401 is a
+  // signature or a timestamp that does not hold up, and its 413 is a body it
+  // will not read, refused by length before anything else looks at it.
+  test("the tier and webhook routes document their absences", () => {
+    expect(errorStatuses(spec.paths, "/v1/admin/tier/{owner}", "put")).toEqual(["401", "404"])
+    expect(errorStatuses(spec.paths, "/v1/billing/webhook", "post")).toEqual(["401", "404", "413"])
+  })
+
   test("both key routes are outside the bearer middleware", () => {
     expect(spec.paths["/v1/pages"]?.get?.security).toEqual([{ bearer: [] }])
     expect(spec.paths["/v1/aliases"]?.get?.security).toEqual([{ bearer: [] }])
@@ -154,6 +165,11 @@ describe("spec", () => {
     // Takedown is outside it too, and for a stronger reason: the credential is a
     // different secret entirely, so no user key may resolve on this route.
     expect(spec.paths["/v1/admin/pages/{hash}"]?.delete?.security).toEqual([])
+    expect(spec.paths["/v1/admin/tier/{owner}"]?.put?.security).toEqual([])
+    // The webhook is outside it for a third reason: the caller is the payment
+    // provider, holding no handbill credential at all. Its credential is the
+    // signature over the body, and the owner is something the event carries.
+    expect(spec.paths["/v1/billing/webhook"]?.post?.security).toEqual([])
   })
 
   // The whole spec, so M3 and M4 notice if the contract moves under them.

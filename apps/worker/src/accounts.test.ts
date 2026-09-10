@@ -25,7 +25,9 @@ const hashOf = (text: string) => Effect.runPromise(hashBytes(bytes(text)))
 /** The map is a parameter so one test can look at the keys mint actually wrote. */
 const memoryKeys = (records = new Map<string, string>()): KeyStore => ({
   get: (key): Promise<unknown> => Promise.resolve(JSON.parse(records.get(key) ?? "null")),
-  put: (key, value): Promise<void> => Promise.resolve(void records.set(key, value))
+  put: (key, value): Promise<void> => Promise.resolve(void records.set(key, value)),
+  list: (prefix): Promise<ReadonlyArray<string>> =>
+    Promise.resolve([...records.keys()].filter((key) => key.startsWith(prefix)))
 })
 
 /** Two GitHub tokens these tests know, each its own account; anything else is refused. */

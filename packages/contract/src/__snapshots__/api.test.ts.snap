@@ -245,6 +245,22 @@ exports[`spec matches the published spec 1`] = `
         ],
         "type": "object",
       },
+      "TierChange": {
+        "additionalProperties": false,
+        "properties": {
+          "tier": {
+            "enum": [
+              "free",
+              "paid",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "tier",
+        ],
+        "type": "object",
+      },
       "TooLargeEncoded": {
         "additionalProperties": false,
         "properties": {
@@ -309,6 +325,60 @@ exports[`spec matches the published spec 1`] = `
             },
           },
         ],
+        "responses": {
+          "204": {
+            "description": "<No Content>",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded",
+                },
+              },
+            },
+            "description": "Unauthorized",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundEncoded",
+                },
+              },
+            },
+            "description": "NotFound",
+          },
+        },
+        "security": [],
+        "tags": [
+          "Admin",
+        ],
+      },
+    },
+    "/v1/admin/tier/{owner}": {
+      "put": {
+        "operationId": "admin.tier",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TierChange",
+              },
+            },
+          },
+          "required": true,
+        },
         "responses": {
           "204": {
             "description": "<No Content>",
@@ -550,6 +620,87 @@ exports[`spec matches the published spec 1`] = `
         ],
         "tags": [
           "Aliases",
+        ],
+      },
+    },
+    "/v1/billing/webhook": {
+      "post": {
+        "operationId": "billing.webhook",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "webhook-id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "header",
+            "name": "webhook-timestamp",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "header",
+            "name": "webhook-signature",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "format": "binary",
+                "type": "string",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "202": {
+            "description": "<No Content>",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded",
+                },
+              },
+            },
+            "description": "Unauthorized",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundEncoded",
+                },
+              },
+            },
+            "description": "NotFound",
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TooLargeEncoded",
+                },
+              },
+            },
+            "description": "TooLarge",
+          },
+        },
+        "security": [],
+        "tags": [
+          "Billing",
         ],
       },
     },
@@ -838,8 +989,12 @@ exports[`spec matches the published spec 1`] = `
       "name": "Keys",
     },
     {
-      "description": "Operator takedown. Absent unless the deployment sets an admin token.",
+      "description": "Operator takedown and the tier override. Absent unless the deployment sets an admin token.",
       "name": "Admin",
+    },
+    {
+      "description": "The payment provider's subscription webhook. Absent unless the deployment sets a webhook secret.",
+      "name": "Billing",
     },
     {
       "description": "Endpoints that need no token.",

@@ -51,7 +51,10 @@
 
   // `PUBLISH_TOKEN` is a secret, never a var:
   //   openssl rand -hex 32 | wrangler secret put PUBLISH_TOKEN
-  // `ADMIN_TOKEN` is a second, optional secret — the operator's takedown key,
-  // never a user key. Without it `DELETE /v1/admin/pages/:hash` answers 404.
+  // `ADMIN_TOKEN` is a second, optional secret — the operator's key, never a
+  // user key. Without it both `/v1/admin/*` routes, takedown and tier, are 404.
+  // `POLAR_WEBHOOK_SECRET` is a third, optional secret — the endpoint secret
+  // from the Polar dashboard, pasted whole, `whsec_` prefix included. Without
+  // it `POST /v1/billing/webhook` answers 404 and no tier is ever flipped.
   // `MAX_BYTES` is optional and defaults to 5 MB.
 }

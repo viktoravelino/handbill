@@ -83,8 +83,8 @@ export class NotYours extends Data.TaggedError("NotYours")<{
 }> {}
 
 /**
- * `admin takedown` was run without the operator token. It is a different secret
- * from the key that publishes, so having logged in does not supply it.
+ * An `admin` command was run without the operator token. It is a different
+ * secret from the key that publishes, so having logged in does not supply it.
  */
 export class MissingAdminToken extends Data.TaggedError("MissingAdminToken")<{
   readonly endpoint: string
@@ -97,6 +97,16 @@ export class MissingAdminToken extends Data.TaggedError("MissingAdminToken")<{
  * page, which is why the two API answers do not reach their usual sentences.
  */
 export class TakedownRefused extends Data.TaggedError("TakedownRefused")<{
+  readonly endpoint: string
+  readonly rejected?: boolean
+}> {}
+
+/**
+ * `admin tier` reached the endpoint and was turned away. Its 404 covers one
+ * absence more than takedown's: a deployment on one shared `PUBLISH_TOKEN` has
+ * no accounts, so there is no record anywhere to carry a tier.
+ */
+export class TierRefused extends Data.TaggedError("TierRefused")<{
   readonly endpoint: string
   readonly rejected?: boolean
 }> {}
@@ -124,6 +134,7 @@ export type Failure =
   | QuotaExceeded
   | Schema.SchemaError
   | TakedownRefused
+  | TierRefused
   | TooLarge
   | Unauthorized
   | UnnamedEndpoint
@@ -176,7 +187,7 @@ export const describe = Match.typeTags<Failure, Described>()({
   }),
   MissingAdminToken: (failure) => ({
     error: "MissingAdminToken",
-    message: `No admin token configured for ${failure.endpoint}. Takedown uses the deployment's ADMIN_TOKEN secret, not your key: set HANDBILL_ADMIN_TOKEN.`
+    message: `No admin token configured for ${failure.endpoint}. The admin commands use the deployment's ADMIN_TOKEN secret, not your key: set HANDBILL_ADMIN_TOKEN.`
   }),
   MissingToken: (failure) => ({
     error: "MissingToken",
@@ -211,7 +222,7 @@ export const describe = Match.typeTags<Failure, Described>()({
     message:
       failure.limit === "pagesPerDay"
         ? `You have published ${failure.allowed} pages today, which is this account's daily limit. It resets at ${failure.resetsAt === undefined ? "the next UTC midnight" : DateTime.formatIso(failure.resetsAt)}.`
-        : `This account is storing its full ${failure.allowed} bytes. Unpublish something with \`handbill remove\` to make room.`
+        : `This account is storing its full ${failure.allowed} bytes, so nothing was published — and nothing already published was removed. Unpublish with \`handbill remove\` until you are back under the limit.`
   }),
   SchemaError: (failure) => ({
     error: "SchemaError",
@@ -223,6 +234,13 @@ export const describe = Match.typeTags<Failure, Described>()({
       failure.rejected === true
         ? `${failure.endpoint} did not accept this admin token. HANDBILL_ADMIN_TOKEN has to match the deployment's ADMIN_TOKEN secret; a publishing key is not it.`
         : `${failure.endpoint} has no takedown route: it sets no ADMIN_TOKEN secret. Set one (\`wrangler secret put ADMIN_TOKEN\`) and redeploy.`
+  }),
+  TierRefused: (failure) => ({
+    error: "TierRefused",
+    message:
+      failure.rejected === true
+        ? `${failure.endpoint} did not accept this admin token. HANDBILL_ADMIN_TOKEN has to match the deployment's ADMIN_TOKEN secret; a publishing key is not it.`
+        : `${failure.endpoint} has no tier route: it sets no ADMIN_TOKEN secret, or it runs on one shared PUBLISH_TOKEN and has no accounts to carry a tier.`
   }),
   TooLarge: (failure) => ({
     error: "TooLarge",

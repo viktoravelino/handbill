@@ -35,7 +35,9 @@ const memoryKeys = (): KeyStore => {
   const records = new Map<string, string>()
   return {
     get: (key): Promise<unknown> => Promise.resolve(JSON.parse(records.get(key) ?? "null")),
-    put: (key, value): Promise<void> => Promise.resolve(void records.set(key, value))
+    put: (key, value): Promise<void> => Promise.resolve(void records.set(key, value)),
+    list: (prefix): Promise<ReadonlyArray<string>> =>
+      Promise.resolve([...records.keys()].filter((key) => key.startsWith(prefix)))
   }
 }
 
