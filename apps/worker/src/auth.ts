@@ -55,8 +55,7 @@ export const OPERATOR = Owner.make("self")
 export const AuthSecret = (token: string): Layer.Layer<Auth> =>
   Layer.succeed(Auth, {
     mode: "secret",
-    // The tier is reported for shape's sake: the same deployment runs
-    // `QuotaUnlimited`, so nothing ever reads a limit for the operator.
+    // Tier is shape only: `QuotaUnlimited` runs here, so no limit is ever read.
     authorize: (candidate) =>
       token.length > 0 && secretEquals(token, Redacted.value(candidate))
         ? Effect.succeed({ owner: OPERATOR, tier: "free" as const })
@@ -126,13 +125,10 @@ const isGitHubUser = Schema.is(Schema.Struct({ id: Schema.Number }))
  * GitHub access token becomes `gh:<numeric id>`, which survives its owner
  * renaming themselves.
  *
- * Only GitHub actively refusing the token — a `401` — is `Unauthorized`. A `5xx`,
- * a `429`, or the `403` GitHub returns for a secondary rate limit is GitHub
- * being unavailable, not a verdict on the token: it throws, so the route dies as
- * a `500` that does not tell the user their token is bad and mints nothing.
- * That is design §03's failure honesty and §11's "an outage blocks new keys and
- * nothing else" — publishing never calls this path, so it is untouched either
- * way.
+ * Only GitHub actively refusing the token — a `401` — is `Unauthorized`. A
+ * `5xx`, a `429`, or the `403` of a secondary rate limit is GitHub unavailable,
+ * not a verdict on the token: it throws, so the route dies as a `500` that mints
+ * nothing and calls no token bad. An outage blocks new keys, not publishing.
  */
 export const githubOwner: Identify = (githubToken) =>
   Effect.flatMap(

@@ -38,16 +38,12 @@ const TITLE = /<title[^>]*>([\s\S]*?)<\/title>/iu
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" }
 
 /**
- * How many UTF-8 bytes of `<title>` are kept. The title travels in two metadata
- * budgets: R2 `customMetadata` (~2 KiB for the whole `{ owner, title,
- * publishedAt }`) and, in hosted mode, the index entry `IndexKV` files as KV
- * metadata (1024 bytes serialised). `JSON.stringify` leaves printable non-ASCII
- * as UTF-8 — only quotes, backslashes and control characters grow — so the
- * serialised size tracks the byte length here. 256 keeps the index entry far
- * under 1024 with room for M16's per-owner quota fields on the same namespace,
- * while being longer than any display title needs (browsers truncate near 60).
- * Without the cap a title between the two limits would let the R2 write succeed
- * and the KV write reject, a 500 that leaves a served-but-unlisted page.
+ * How many UTF-8 bytes of `<title>` are kept. It travels in two metadata
+ * budgets: R2 `customMetadata` (~2 KiB for `{ owner, title, publishedAt }`) and
+ * the KV metadata on an `IndexKV` entry (1024 bytes serialised, printable
+ * non-ASCII kept as UTF-8 by `JSON.stringify`): 256 plus the entry's
+ * `publishedAt` and `bytes` stays under 400. Without the cap a title between the
+ * two limits would let R2 accept and KV reject — a 500 leaving an unlisted page.
  */
 const TITLE_MAX_BYTES = 256
 

@@ -1,7 +1,6 @@
 import type { AliasName, Hash } from "@handbill/contract"
-import { AliasName as AliasNameSchema } from "@handbill/contract"
-import { Effect, Option, Schema } from "effect"
-import { Aliases } from "./aliases"
+import { Effect, Option } from "effect"
+import { Aliases, isAliasName } from "./aliases"
 import { isHash } from "./hash"
 import { Storage } from "./storage"
 
@@ -15,8 +14,6 @@ export type HostKind =
   | { readonly kind: "page"; readonly hash: Hash }
   | { readonly kind: "alias"; readonly name: AliasName }
   | { readonly kind: "unknown" }
-
-const isAliasName = Schema.is(AliasNameSchema)
 
 /**
  * Lowercased and without the trailing dot a fully-qualified name carries. Both

@@ -11,11 +11,11 @@ import { fileURLToPath } from "node:url"
 const BUNDLE_LIMIT = 1024 * 1024
 /**
  * See AGENTS.md — `src/*.ts` minus tests, which grow freely. Raised from 750 to
- * 1125 for 0.3 in #88, and to 1310 ahead of M16 (#85) once M13/M14 had shown
- * what a hosted service actually costs. AGENTS.md carries the itemisation;
- * these two places move together.
+ * 1125 for 0.3 in #88, to 1310 ahead of M16 (#85), and to 1460 for 0.4 (#130)
+ * once 0.3's real code was there to measure against. AGENTS.md carries the
+ * itemisation; these two places move together.
  */
-const SOURCE_LINE_LIMIT = 1310
+const SOURCE_LINE_LIMIT = 1460
 // `fileURLToPath`, not `.pathname`: the latter keeps the URL escaping, so a
 // checkout under a path with a space in it would not resolve.
 const root = fileURLToPath(new URL("..", import.meta.url))
