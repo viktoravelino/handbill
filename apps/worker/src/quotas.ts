@@ -3,12 +3,15 @@ import type { KVNamespace } from "@cloudflare/workers-types"
 import { Context, DateTime, Effect, Layer } from "effect"
 
 /**
- * The quota numbers, and the one place they live (§05): how often a key
- * publishes, and how much it keeps stored. The tier is read off the key record, so 0.4's
- * paid tier is a row here plus a webhook that writes the field — not a migration, and no
- * handler that knows about money (decision 11). A tier with no row fails to compile.
+ * The quota numbers, and the one place they live (§05): how often a key publishes, and how much
+ * it keeps stored. The tier is read off the key record, so the paid tier is this second row plus
+ * a webhook that writes the field — no migration, no handler that knows about money (decision 11),
+ * and a tier with no row fails to compile. Page size is no row: 5 MB caps every tier (0.4 §02).
  */
-export const TIER_LIMITS = { free: { pagesPerDay: 25, storedBytes: 250 * 1024 * 1024 } } as const
+export const TIER_LIMITS = {
+  free: { pagesPerDay: 25, storedBytes: 250 * 1024 * 1024 },
+  paid: { pagesPerDay: 250, storedBytes: 5 * 1024 * 1024 * 1024 }
+} as const
 
 /**
  * The per-owner cost ceiling. `check` runs before the R2 write and fails with the limit

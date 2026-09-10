@@ -198,6 +198,28 @@ export const descriptor: Completions.CommandDescriptor = {
             }
           ],
           subcommands: []
+        },
+        {
+          name: "tier",
+          description: "Set what an account may spend",
+          flags: apiFlags,
+          arguments: [
+            {
+              name: "owner",
+              description: "The account, as gh:<id>",
+              required: true,
+              variadic: false,
+              type: { _tag: "String" }
+            },
+            {
+              name: "tier",
+              description: "free or paid",
+              required: true,
+              variadic: false,
+              type: { _tag: "Choice", values: ["free", "paid"] }
+            }
+          ],
+          subcommands: []
         }
       ]
     },

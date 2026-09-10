@@ -27,12 +27,13 @@ export const Mode = Schema.Literals(["secret", "accounts"])
 export type Mode = typeof Mode.Type
 
 /**
- * What an account is allowed to spend. It is on the key record from 0.3 and
- * only `free` exists there; the quota service reads its limits from a per-tier
- * table keyed by this, so 0.4's paid tier is a new row and a webhook that writes
- * the field rather than a migration (architecture decision 11).
+ * What an account is allowed to spend. It is on the key record from 0.3, and
+ * the quota service reads its limits from a per-tier table keyed by this, so
+ * 0.4's paid tier is one new row plus a webhook that writes the field rather
+ * than a migration (architecture decision 11). Nothing on the read path ever
+ * consults it: a lapsed card lowers a write quota and breaks no link.
  */
-export const Tier = Schema.Literals(["free"])
+export const Tier = Schema.Literals(["free", "paid"])
 export type Tier = typeof Tier.Type
 
 /**
@@ -101,6 +102,17 @@ export const Key = Schema.Struct({
   owner: Owner
 }).annotate({ identifier: "Key" })
 export type Key = typeof Key.Type
+
+/**
+ * The body of `PUT /v1/admin/tier/:owner`: what the operator is setting the
+ * account to. It is the same field the billing webhook writes, so the manual
+ * override and the automatic flip cannot drift apart — the override exists for
+ * a delivery that never landed, and for support.
+ */
+export const TierChange = Schema.Struct({
+  tier: Tier
+}).annotate({ identifier: "TierChange" })
+export type TierChange = typeof TierChange.Type
 
 /**
  * A living name for a page: one DNS label under the zone, so `plan` is served at

@@ -6,7 +6,8 @@ import {
   HashMismatch,
   NotFound,
   TooLarge,
-  Unauthorized
+  Unauthorized,
+  WEBHOOK_MAX_BYTES
 } from "@handbill/contract"
 import { DateTime, Effect, Layer, Option, Redacted } from "effect"
 import { Headers, HttpServerRequest } from "effect/unstable/http"
@@ -14,6 +15,7 @@ import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { extractTitle, hashBytes } from "./hash"
 import { Aliases } from "./aliases"
 import { Auth, OPERATOR, secretEquals } from "./auth"
+import { readFlip, verifySignature } from "./billing"
 import { Config } from "./config"
 import { Quotas } from "./quotas"
 import { Index, Storage } from "./storage"
@@ -33,10 +35,9 @@ export const pageUrl = (zone: string, label: string): string => `https://${label
 
 /**
  * Bearer auth for the `pages` group. It resolves the token through whichever
- * `Auth` layer is installed and provides the resulting owner and tier to the
- * handlers, which is the single place `secret` and `accounts` mode differ. The
- * tier rides along with the owner because the quota check needs both and only
- * this layer has read the key record (decision 11).
+ * `Auth` layer is installed and hands the owner and tier to the handlers, the
+ * single place `secret` and `accounts` mode differ. The tier rides along because
+ * the quota check needs it and only this layer read the key record (decision 11).
  */
 export const AuthorizationLive = Layer.effect(
   Authorization,
@@ -68,9 +69,9 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
         const existing = yield* storage.head(hash)
         if (Option.isSome(existing)) return { hash, url: pageUrl(zone, hash), created: false }
         // Checked before the write, counted after it (§04's order): a spent quota
-        // costs no R2 write (it still pays for the `head` above, which has to run
-        // first so a republish spends nothing), and a crash between the two
-        // undercounts rather than charging for a page that is not there.
+        // costs no R2 write beyond the `head` above, which has to run first so a
+        // republish spends nothing, and a crash between the two undercounts
+        // rather than charging for a page that is not there.
         const quotas = yield* Quotas
         yield* quotas.check(owner, yield* CurrentTier, payload.length)
         const now = yield* DateTime.now
@@ -106,14 +107,13 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
         }
       })
     )
-    // Idempotent for a page that is not there (204), but ownership-checked:
-    // a hash owned by someone else answers 404, deletes nothing, and never 403.
-    // Decision 05's bar is that a non-owner learns no *ownership* — 404 is the
-    // "not yours" answer, not a "forbidden" that would confirm another account
-    // holds it. (Existence itself is already public: the page serves 200 on its
-    // hash host to anyone with the hash.) Ownership is read from R2 (`head`),
-    // never the index, so a crashed publish that left an object with no entry is
-    // still removable by its owner.
+    // Idempotent for a page that is not there (204), but ownership-checked: a
+    // hash owned by someone else answers 404, deletes nothing, and never 403.
+    // Decision 05's bar is that a non-owner learns no *ownership*, so 404 is the
+    // "not yours" answer rather than a "forbidden" that would confirm another
+    // account holds it — existence itself is already public on the hash host.
+    // Ownership is read from R2 (`head`), never the index, so a crashed publish
+    // that left an object with no entry is still removable by its owner.
     .handle("remove", ({ params }) =>
       Effect.gen(function* () {
         const storage = yield* Storage
@@ -136,9 +136,8 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
  * (`AliasesDisabled` fails every route with `NotFound`, so no KV binding is a
  * 404 without anyone asking) and who may use it — this gate. Decision 08 keeps
  * aliases operator-only in 0.3: `OPERATOR` is the one owner a self-hosted
- * deployment issues and the one `AuthAccounts` never does, so the gate is a
- * no-op in secret mode and hides every alias route from hosted keys behind that
- * same `NotFound`. `list` needs none — already filtered to the caller's owner.
+ * deployment issues and the one `AuthAccounts` never does, so it is a no-op in
+ * secret mode and hides the routes from hosted keys. `list` needs none.
  */
 const operatorOnly = Effect.flatMap(CurrentOwner, (owner) =>
   owner === OPERATOR ? Effect.void : Effect.fail(new NotFound())
@@ -189,10 +188,9 @@ export const AliasesLive = HttpApiBuilder.group(HandbillApi, "aliases", (handler
 )
 
 /**
- * The bearer token exactly as presented. `revoke` acts on the key itself, not on
- * the owner behind it, and is off the authorize middleware (so a revoked key can
- * still reach it), so it reads the `Authorization` header straight rather than
- * taking a `CurrentOwner` the middleware would have resolved.
+ * The bearer token exactly as presented. `revoke` acts on the key itself, not the
+ * owner behind it, and is off the authorize middleware so a revoked key can still
+ * reach it — hence reading the header rather than taking a `CurrentOwner`.
  */
 const presentedKey = (headers: Headers.Headers): Redacted.Redacted =>
   Redacted.make(
@@ -217,33 +215,63 @@ export const KeysLive = HttpApiBuilder.group(HandbillApi, "keys", (handlers) =>
 )
 
 /**
- * Takedown: the operator's one route, and the only thing that can kill a
- * published link. It is gated on `ADMIN_TOKEN` rather than on `CurrentOwner`,
- * because the operator of a hosted deployment is not one of its accounts and no
- * user key — not even a self-hosted `PUBLISH_TOKEN` — may reach it; what is
- * presented here never touches the `Auth` layer. No secret (unset, or empty, which
- * would otherwise match a request carrying no header at all) means no operator
- * surface, a 404 like the alias routes without their binding; a wrong one is 401.
- * The owner comes from R2 rather than the caller, so the index entry and the
- * released bytes land on the account that published it. Idempotent, and no
- * tombstone (§07): an absent hash is a 204 that writes nothing, and a page taken
- * down 404s exactly like one that was never published.
+ * The gate on every admin route: `ADMIN_TOKEN`, not `CurrentOwner` — a hosted
+ * deployment's operator is not one of its accounts, so nothing here touches
+ * `Auth`. No secret (unset or empty) is a 404, no operator surface; wrong, 401.
+ */
+const adminOnly = Effect.gen(function* () {
+  const { adminToken } = yield* Config
+  const request = yield* HttpServerRequest.HttpServerRequest
+  if (adminToken === undefined || adminToken === "") return yield* Effect.fail(new NotFound())
+  const presented = Redacted.value(presentedKey(request.headers))
+  if (!secretEquals(adminToken, presented)) return yield* Effect.fail(new Unauthorized())
+})
+
+/**
+ * The operator's two routes. `takedown` is the only thing in the API that can
+ * kill a published link: the owner comes from R2, not the caller, so the freed
+ * bytes land on whoever published it, idempotently and with no tombstone (§07).
+ * `tier` writes the same field the webhook does (0.4 §03).
  */
 export const AdminLive = HttpApiBuilder.group(HandbillApi, "admin", (handlers) =>
-  handlers.handle("takedown", ({ params }) =>
+  handlers
+    .handle("takedown", ({ params }) =>
+      Effect.gen(function* () {
+        yield* adminOnly
+        const storage = yield* Storage
+        const existing = yield* storage.head(params.hash)
+        if (Option.isNone(existing)) return
+        const { owner, size } = existing.value
+        yield* storage.remove(params.hash)
+        yield* (yield* Index).remove(owner, params.hash)
+        yield* (yield* Quotas).release(owner, size)
+      })
+    )
+    .handle("tier", ({ params: { owner }, payload }) =>
+      Effect.flatMap(Effect.andThen(adminOnly, Auth), (auth) =>
+        Effect.asVoid(auth.setTier(owner, payload.tier))
+      )
+    )
+)
+
+/**
+ * The webhook wiring: the contract spells out the answers, `billing.ts` verifies
+ * and reads, and this decides between them. Logs carry the decision, not the body.
+ */
+export const BillingLive = HttpApiBuilder.group(HandbillApi, "billing", (handlers) =>
+  handlers.handle("webhook", ({ headers, payload }) =>
     Effect.gen(function* () {
-      const { adminToken } = yield* Config
-      const request = yield* HttpServerRequest.HttpServerRequest
-      if (adminToken === undefined || adminToken === "") return yield* Effect.fail(new NotFound())
-      const presented = Redacted.value(presentedKey(request.headers))
-      if (!secretEquals(adminToken, presented)) return yield* Effect.fail(new Unauthorized())
-      const storage = yield* Storage
-      const existing = yield* storage.head(params.hash)
-      if (Option.isNone(existing)) return
-      const { owner, size } = existing.value
-      yield* storage.remove(params.hash)
-      yield* (yield* Index).remove(owner, params.hash)
-      yield* (yield* Quotas).release(owner, size)
+      const secret = (yield* Config).webhookSecret
+      if (secret === undefined || secret === "") return yield* Effect.fail(new NotFound())
+      const maxBytes = WEBHOOK_MAX_BYTES
+      if (payload.length > maxBytes) return yield* Effect.fail(new TooLarge({ maxBytes }))
+      const verified = yield* verifySignature(secret, headers, payload)
+      if (!verified) return yield* Effect.fail(new Unauthorized())
+      const flip = readFlip(payload)
+      if (Option.isNone(flip)) return yield* Effect.log(`billing: no-op ${headers["webhook-id"]}`)
+      const { owner, subscriptionId, tier } = flip.value
+      const moved = yield* (yield* Auth).setTier(owner, tier, subscriptionId)
+      yield* Effect.log(`billing: ${subscriptionId} moved ${moved} keys of ${owner} to ${tier}`)
     })
   )
 )
@@ -258,3 +286,6 @@ export const MetaLive = HttpApiBuilder.group(HandbillApi, "meta", (handlers) =>
     })
   )
 )
+
+/** Every group's handlers, as the tuple `Layer.provide` wants; `makeApp` spreads it. */
+export const Groups = [PagesLive, AliasesLive, KeysLive, AdminLive, BillingLive, MetaLive] as const

@@ -17,13 +17,15 @@ import { IndexBucket, IndexKV, StorageR2 } from "./storage"
  * one shared `PUBLISH_TOKEN` — and unbinding it puts the Worker back on the
  * token without touching a page. `ADMIN_TOKEN` is an optional secret of its own
  * (`wrangler secret put ADMIN_TOKEN`): the operator's takedown key, never a user
- * key, and without it the takedown route is not there.
+ * key, and without it the takedown and tier routes are not there.
+ * `POLAR_WEBHOOK_SECRET` is a third: without it the billing webhook 404s too.
  */
 export interface Env {
   readonly ZONE: string
   readonly MAX_BYTES?: string
   readonly PUBLISH_TOKEN?: string
   readonly ADMIN_TOKEN?: string
+  readonly POLAR_WEBHOOK_SECRET?: string
   readonly BUCKET: R2Bucket
   readonly ALIASES?: KVNamespace
   readonly ACCOUNTS?: KVNamespace
@@ -47,8 +49,9 @@ let app: ReturnType<typeof makeApp> | undefined
 
 const appFor = (env: Env) => {
   const storage = StorageR2(env.BUCKET)
+  const { ADMIN_TOKEN: adminToken, POLAR_WEBHOOK_SECRET: webhookSecret, ZONE: zone } = env
   return (app ??= makeApp(
-    { zone: env.ZONE, maxBytes: maxBytesFrom(env.MAX_BYTES), adminToken: env.ADMIN_TOKEN },
+    { zone, maxBytes: maxBytesFrom(env.MAX_BYTES), adminToken, webhookSecret },
     Layer.mergeAll(
       storage,
       // Quotas ride the same binding: hosting strangers is what makes a ceiling
