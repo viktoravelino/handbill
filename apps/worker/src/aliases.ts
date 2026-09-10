@@ -55,11 +55,12 @@ export const AliasesMemory: Layer.Layer<Aliases> = Layer.sync(Aliases, () => {
 })
 
 /**
- * A KV namespace holds whatever was put in it, including keys from an older
+ * Shared with `classifyHost`, which uses it to tell an alias label from noise. A
+ * KV namespace also holds whatever was put in it, including keys from an older
  * deployment or another tool; anything that is not an alias pointing at a hash
  * is treated as absent rather than served or listed.
  */
-const isAliasName = Schema.is(AliasNameSchema)
+export const isAliasName = Schema.is(AliasNameSchema)
 
 /**
  * Aliases on KV: the name is the key and the hash is the value, so resolving one

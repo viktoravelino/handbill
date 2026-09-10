@@ -134,17 +134,11 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
 /**
  * Living names. Two things stay out of the handlers: whether the feature is on
  * (`AliasesDisabled` fails every route with `NotFound`, so no KV binding is a
- * 404 without anyone asking) and who may use it — `operatorOnly` below.
- *
- * Decision 08: aliases stay operator-only in 0.3. `OPERATOR` is the one owner a
- * self-hosted deployment issues and the one `AuthAccounts` never does, so this
- * gate is a no-op in secret mode and shuts the whole writable/readable alias
- * surface to hosted keys in accounts mode — with the same `NotFound` an absent
- * binding gives, so a hosted caller cannot even tell a name exists. Enforcing
- * decision 08 in code was a gap the #111 review caught: any key could set or
- * remove names and read another owner's hash by name. `list` needs no gate — it
- * is already filtered to the caller's own owner, which is empty for a hosted
- * key.
+ * 404 without anyone asking) and who may use it — this gate. Decision 08 keeps
+ * aliases operator-only in 0.3: `OPERATOR` is the one owner a self-hosted
+ * deployment issues and the one `AuthAccounts` never does, so the gate is a
+ * no-op in secret mode and hides every alias route from hosted keys behind that
+ * same `NotFound`. `list` needs none — already filtered to the caller's owner.
  */
 const operatorOnly = Effect.flatMap(CurrentOwner, (owner) =>
   owner === OPERATOR ? Effect.void : Effect.fail(new NotFound())
