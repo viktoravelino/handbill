@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "size": "bun run scripts/size.ts"
+    "size": "bun run scripts/size.ts",
+    "deploy:prod": "wrangler deploy --config wrangler.production.jsonc"
   },
   "dependencies": {
     "@handbill/contract": "workspace:*",
