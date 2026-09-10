@@ -291,16 +291,16 @@ Architecture §08's claim, tested: *remove the `ACCOUNTS` binding and deploy —
 **Pre-conditions**
 
 - `bunx wrangler secret list` shows `PUBLISH_TOKEN`. Without it, secret mode authorises nobody, and this stops being a backout and becomes an outage of all writing.
-- The `ACCOUNTS` namespace id written down. You are about to delete the line that holds it.
+- The `ACCOUNTS` namespace id written down. It is committed in `wrangler.production.jsonc`, but the line is what you are about to remove, and a rollback should not depend on git.
 - A quiet hour. Reads are unaffected throughout; hosted *writes* fail for the whole window. Target under five minutes.
-- `apps/worker/wrangler.jsonc` ships with `kv_namespaces` commented out and the production deployment runs with it uncommented — a local edit that is never committed. It stays uncommitted through this rehearsal too. Check with `git diff apps/worker/wrangler.jsonc` at the start and at the end: the diff you finish with must be the diff you started with.
+- Production deploys from `apps/worker/wrangler.production.jsonc` (`bun run deploy:prod`), never from the self-hosting template `wrangler.jsonc`, which ships with `kv_namespaces` commented out. The unbind is a local edit to the production file that is never committed. Check with `git diff apps/worker/wrangler.production.jsonc` at the start and at the end: both must be empty.
 
 ### D1 · Record the state to return to
 
 ```sh
 cd apps/worker
 NS=<the ACCOUNTS namespace id>
-git diff wrangler.jsonc                         # the ACCOUNTS + ALIASES bindings, uncommitted
+git diff wrangler.production.jsonc              # empty: production is exactly what is committed
 curl -s https://api.handbill.dev/v1/health      # {"ok":true,"mode":"accounts",…}
 bunx wrangler kv key get --remote --namespace-id "$NS" "q:<owner>:bytes"   # note the number
 ```
@@ -311,10 +311,10 @@ Pick two page URLs that must keep serving: one published by a hosted account, on
 
 ### D2 · Unbind and deploy
 
-Comment the `ACCOUNTS` entry out of `kv_namespaces` — leave `ALIASES` bound, and keep the namespace id in the comment, because putting it back is the next step.
+Comment the `ACCOUNTS` entry out of `kv_namespaces` in `wrangler.production.jsonc` — leave `ALIASES` bound, and keep the namespace id in the comment, because putting it back is the next step.
 
 ```sh
-bunx wrangler deploy
+bun run deploy:prod
 ```
 
 **Time:** run 1 — 17:50:02→17:50:11Z (9s).
@@ -358,14 +358,14 @@ HANDBILL_TOKEN=<PUBLISH_TOKEN>  handbill list    # the operator's own pages, and
 
 ### D4 · Restore
 
-Uncomment the `ACCOUNTS` binding with the id from D1, then:
+Put the `ACCOUNTS` binding back — `git checkout wrangler.production.jsonc` restores it — then:
 
 ```sh
-bunx wrangler deploy
+bun run deploy:prod
 curl -s https://api.handbill.dev/v1/health                       # mode: accounts
 HANDBILL_TOKEN=<the same hosted key> handbill list               # works, same pages as D1
 bunx wrangler kv key get --remote --namespace-id "$NS" "q:<owner>:bytes"  # the number from D1
-git diff wrangler.jsonc                                          # identical to D1
+git diff wrangler.production.jsonc                               # empty again
 ```
 
 **Expected.** A key minted before the flip authorises after it, the listing is unchanged, and the counter is the number you wrote down. Unbinding a namespace does not touch what is in it — that is why the kill switch is cheap.

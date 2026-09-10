@@ -1,0 +1,26 @@
+{
+  // The maintainer's deployment of handbill.dev — `wrangler.jsonc` with its two
+  // optional KV bindings filled in. It exists so that a deploy can never drop
+  // them by accident: a bare `wrangler deploy` reads `wrangler.jsonc`, which
+  // ships with `kv_namespaces` commented out for self-hosters, and would flip
+  // production back to secret mode. Deploy production with
+  //   bun run deploy:prod        (= wrangler deploy --config wrangler.production.jsonc)
+  // Namespace ids are not secrets; the secrets stay in `wrangler secret`.
+  // Self-hosting? Ignore this file and follow docs/SELF-HOSTING.md.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "handbill",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": false,
+  "observability": { "enabled": true },
+  "vars": { "ZONE": "handbill.dev" },
+  "routes": [
+    { "pattern": "api.handbill.dev/*", "zone_name": "handbill.dev" },
+    { "pattern": "*.handbill.dev/*", "zone_name": "handbill.dev" }
+  ],
+  "kv_namespaces": [
+    { "binding": "ALIASES", "id": "a1228742b3c7430b903fe63a1ca0317a" },
+    { "binding": "ACCOUNTS", "id": "f699f9f11efa481b86f00ab390706928" }
+  ],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "handbill" }]
+}

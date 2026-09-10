@@ -43,6 +43,9 @@
   // rate limit, terms, an abuse address, and a drill that has actually been run
   // — docs/SELF-HOSTING.md "Hosted accounts", docs/WAF.md and docs/DRILL.md.
   // "kv_namespaces": [{ "binding": "ACCOUNTS", "id": "<id>" }],
+  //
+  // The maintainer's own copy of this file, with both bindings filled in, is
+  // wrangler.production.jsonc (`bun run deploy:prod`). Self-hosters ignore it.
 
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "handbill" }]
 

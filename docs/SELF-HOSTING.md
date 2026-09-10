@@ -29,7 +29,7 @@ CLOUDFLARE_ACCOUNT_ID=<account id>   # Workers & Pages overview, right-hand colu
 
 ## 2. Three edits in `wrangler.jsonc`
 
-`apps/worker/wrangler.jsonc` ships pointing at the maintainer's deployment. Change the three lines marked `EDIT`; the fourth and fifth are optional and belong to [living names](#living-names-optional) and [hosted accounts](#hosted-accounts-optional):
+`apps/worker/wrangler.jsonc` ships pointing at the maintainer's deployment. Change the three lines marked `EDIT`; the fourth and fifth are optional and belong to [living names](#living-names-optional) and [hosted accounts](#hosted-accounts-optional). (`wrangler.production.jsonc` next to it is the maintainer's filled-in copy for deploying handbill.dev; it is not for you.)
 
 ```jsonc
 "vars": { "ZONE": "<zone>" },
