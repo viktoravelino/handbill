@@ -18,8 +18,10 @@ import { IndexMemory, StorageMemory } from "./storage"
 const ZONE = "example.dev"
 const MAX_BYTES = 64
 const ADMIN = "operator-only"
-/** Pasted the way Polar shows it: the `whsec_` prefix is part of the HMAC key. */
-const SECRET = "whsec_test-fixture-not-a-real-secret"
+/** Shaped like a current Polar secret — `whsec_` then base64 — of the word "fake". */
+const SECRET = "whsec_ZmFrZQ=="
+/** One from before Polar's Standard Webhooks cutoff, keyed on the string itself. */
+const LEGACY = "polar-endpoint-secret-of-the-older-kind"
 const GITHUB_TOKEN = "gho_from-the-device-flow"
 const OWNER = Owner.make("gh:4242")
 const SUBSCRIPTION = "sub_c444fc13"
@@ -129,13 +131,24 @@ const keyRecords = ({ records }: Hosted): ReadonlyArray<StoredKey> =>
     .map(([, value]) => JSON.parse(value) as StoredKey)
 
 /**
- * The same HMAC the Worker computes, derived the same way — UTF-8 bytes of the
- * whole secret, `whsec_` and all. A test that derived the key differently would
- * pass against a Worker that also did, and fail against Polar.
+ * The same HMAC the Worker computes, keyed the two ways Polar keys it: the base64
+ * after `whsec_`, or the bytes of a legacy secret's string. Deriving it any other
+ * way passes against a Worker that agrees and fails against Polar, which is how
+ * the first cut of this shipped a 401 against a real delivery.
  */
-const sign = async (id: string, timestamp: number, body: string): Promise<string> => {
+const keyBytes = (secret: string) =>
+  secret.startsWith("whsec_")
+    ? Uint8Array.from(atob(secret.slice(6)), (c) => c.codePointAt(0) ?? 0)
+    : bytes(secret)
+
+const sign = async (
+  id: string,
+  timestamp: number,
+  body: string,
+  secret: string = SECRET
+): Promise<string> => {
   const hmac = { name: "HMAC", hash: "SHA-256" }
-  const key = await crypto.subtle.importKey("raw", bytes(SECRET), hmac, false, ["sign"])
+  const key = await crypto.subtle.importKey("raw", keyBytes(secret), hmac, false, ["sign"])
   const mac = await crypto.subtle.sign("HMAC", key, bytes(`${id}.${timestamp}.${body}`))
   return `v1,${btoa(String.fromCodePoint(...new Uint8Array(mac)))}`
 }
@@ -144,7 +157,12 @@ const sign = async (id: string, timestamp: number, body: string): Promise<string
 const deliver = async (
   { app }: Hosted,
   event: unknown,
-  over: { readonly id?: string; readonly timestamp?: number; readonly signature?: string } = {}
+  over: {
+    readonly id?: string
+    readonly timestamp?: number
+    readonly signature?: string
+    readonly secret?: string
+  } = {}
 ) => {
   const body = JSON.stringify(event)
   const id = over.id ?? "msg_2451"
@@ -157,7 +175,7 @@ const deliver = async (
         "content-type": "application/json",
         "webhook-id": id,
         "webhook-timestamp": String(timestamp),
-        "webhook-signature": over.signature ?? (await sign(id, timestamp, body))
+        "webhook-signature": over.signature ?? (await sign(id, timestamp, body, over.secret))
       }
     })
   )
@@ -473,4 +491,29 @@ test("a cancellation that has not taken effect leaves the account paid", async (
   )
   expect(scheduled.status).toBe(202)
   expect(tierOf(deployment)).toBe("paid")
+})
+
+// Polar keyed webhooks on the bytes of the secret string before it moved to
+// Standard Webhooks, and still signs endpoints from back then that way. Both
+// derivations are live, so both are covered.
+test("a legacy secret with no whsec_ prefix verifies too", async () => {
+  const deployment = hosted({ admin: ADMIN, secret: LEGACY })
+  await mint(deployment)
+  const response = await deliver(deployment, subscription("subscription.active", "active"), {
+    secret: LEGACY
+  })
+  expect(response.status).toBe(202)
+  expect(tierOf(deployment)).toBe("paid")
+})
+
+// The other half: keyed the wrong way, a delivery is not a delivery. This is the
+// 401 a real `subscription.updated` got, and it is silent from the outside.
+test("the two derivations are not interchangeable", async () => {
+  const deployment = hosted()
+  await mint(deployment)
+  const event = subscription("subscription.active", "active")
+  const legacyKeyed = await sign("msg_2451", NOW, JSON.stringify(event), LEGACY)
+  const response = await deliver(deployment, event, { signature: legacyKeyed })
+  expect(response.status).toBe(401)
+  expect(tierOf(deployment)).toBe("free")
 })

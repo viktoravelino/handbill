@@ -8,15 +8,14 @@ const text = new TextDecoder()
 /**
  * Standard Webhooks verification on WebCrypto, which saves pulling Polar's SDK
  * into the Worker: HMAC-SHA256 over `<id>.<timestamp>.<body>` — hence the raw
- * body — matched against any `v1,<base64>` entry in the space-separated
- * `webhook-signature`, of which a rotation sends two.
+ * body — against any `v1,<base64>` in `webhook-signature`, two on a rotation.
  *
- * KEY DERIVATION — do not "fix" this. A Polar secret reads `whsec_<base64>`,
- * which looks strippable and decodable and is neither: `validateEvent` in
- * `@polar-sh/sdk` (`src/webhooks.ts`) hands `standardwebhooks` a base64
- * *encoding* of the whole secret, which it decodes straight back, its `whsec_`
- * strip never firing since base64 has no underscore. The key is the UTF-8 bytes
- * of the secret as Polar shows it. (Both sources read 2026-09-10.)
+ * KEY DERIVATION — do not "fix" this to a single rule. Polar hands the library
+ * the secret itself for a Standard Webhooks one and a base64 *encoding* of the
+ * string for a legacy one (`server/polar/webhook/tasks.py`, the
+ * `uses_standard_webhook_signature` branch), which the library then strips of
+ * `whsec_` and base64-decodes. So `whsec_<b64>` keys on the decoded suffix and
+ * anything else on the string's UTF-8 bytes; a real delivery proved it (#137).
  */
 export const verifySignature = (
   secret: string,
@@ -25,13 +24,16 @@ export const verifySignature = (
 ): Effect.Effect<boolean> =>
   Effect.flatMap(DateTime.now, (clock) => {
     const { "webhook-id": id, "webhook-signature": sigs, "webhook-timestamp": ts } = headers
-    // Standard Webhooks' window, checked before any HMAC: a signature that
-    // verifies is still a replay at five minutes old, and a bad number is `NaN`.
+    // Standard Webhooks' window, before any HMAC: a verified signature five
+    // minutes old is still a replay, and a timestamp that is not one is `NaN`.
     const skew = DateTime.toEpochMillis(clock) / 1000 - Number(ts)
     if (!Number.isFinite(skew) || Math.abs(skew) > 300) return Effect.succeed(false)
     return Effect.promise(async () => {
       const hmac = { name: "HMAC", hash: "SHA-256" }
-      const key = await crypto.subtle.importKey("raw", utf8.encode(secret), hmac, false, ["sign"])
+      const raw = secret.startsWith("whsec_")
+        ? Uint8Array.from(atob(secret.slice(6)), (c) => c.codePointAt(0) ?? 0)
+        : utf8.encode(secret)
+      const key = await crypto.subtle.importKey("raw", raw, hmac, false, ["sign"])
       const content = utf8.encode(`${id}.${ts}.${text.decode(body)}`)
       const mac = await crypto.subtle.sign("HMAC", key, content)
       const expected = btoa(String.fromCodePoint(...new Uint8Array(mac)))
@@ -39,7 +41,7 @@ export const verifySignature = (
     })
   })
 
-/** The slice of a Polar event this Worker reads: a field we do not name cannot break one. */
+/** The Polar fields this Worker reads, decoded as an `Option`: an unnamed field cannot break a delivery, and a body that is not JSON is a miss rather than a throw. */
 const SubscriptionEvent = Schema.Struct({
   type: Schema.String,
   data: Schema.Struct({
@@ -50,18 +52,16 @@ const SubscriptionEvent = Schema.Struct({
     customer: Schema.optional(Schema.Struct({ external_id: Schema.NullishOr(Schema.String) }))
   })
 })
-/** Parse and validate in one step, so a body that is not JSON is a `None`, not a throw. */
 const decodeEvent = Schema.decodeUnknownOption(Schema.fromJsonString(SubscriptionEvent))
 
-/** `gh:<numeric id>` is the only owner `AuthAccounts` issues; `self` and the rest are not owners. */
+/** `gh:<numeric id>` is the only owner `AuthAccounts` issues; `self` and the rest are not. */
 const asOwner = (id: unknown): Option.Option<Owner> =>
   typeof id === "string" && /^gh:\d+$/u.test(id) ? Option.some(Owner.make(id)) : Option.none()
 
 /**
  * Status, never event name: writing the state an event carries rather than a step
  * in a sequence is what makes a replay idempotent. Only a verdict is here, and a
- * free one is not final alone — Polar can set `canceled` when a cancellation is
- * *asked for*, so `ended_at` is what says access has actually gone.
+ * free one not final alone: Polar sets `canceled` on request, `ended_at` on end.
  */
 const TIER_FOR: Record<string, Tier> = {
   active: "paid",
@@ -73,10 +73,10 @@ const TIER_FOR: Record<string, Tier> = {
 
 /**
  * The tier flip a verified body asks for, or `None` when there is nothing to do
- * — not a subscription event, not decodable, a status or a pending cancellation
+ * — not a subscription event, not decodable, a status or pending cancellation
  * that decides nothing, an owner it cannot name — all 202, none different on a
- * retry. The owner is `metadata.owner`, set at checkout (0.4 §03), else
- * `external_id`. Accepted: Polar promises no order, so a stale `active` re-pays.
+ * retry. Owner: `metadata.owner` from checkout (0.4 §03), else `external_id`.
+ * Accepted: Polar promises no order, so a stale `active` re-pays.
  */
 export const readFlip = (body: Uint8Array) =>
   Option.flatMap(decodeEvent(text.decode(body)), ({ data, type }) => {
