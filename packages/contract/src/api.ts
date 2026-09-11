@@ -8,12 +8,21 @@ import {
   HttpApiSecurity,
   OpenApi
 } from "effect/unstable/httpapi"
-import { HashMismatch, NotFound, QuotaExceeded, TooLarge, Unauthorized } from "./errors"
 import {
+  AlreadyPaid,
+  HashMismatch,
+  NotFound,
+  QuotaExceeded,
+  TooLarge,
+  Unauthorized
+} from "./errors"
+import {
+  Account,
   Alias,
   AliasList,
   AliasName,
   AliasTarget,
+  Checkout,
   Hash,
   Health,
   Key,
@@ -192,6 +201,37 @@ export class KeysGroup extends HttpApiGroup.make("keys")
   ) {}
 
 /**
+ * The caller's own account: what `handbill account` prints and what the account
+ * page reads. Behind the bearer middleware, like the pages group — both answers
+ * are about the key presented, and nothing else here names an account.
+ *
+ * The checkout session is created by the Worker rather than linked to, which is
+ * the whole point of the route: the owner it is stamped with is the owner the
+ * key resolved to, so holding an account's key is the only way to a checkout
+ * that pays for that account. `NotFound` is a deployment with nothing to sell —
+ * no billing configured, or secret mode, whose one owner is the operator — and
+ * `AlreadyPaid` is an account that has nothing to buy, a second subscription
+ * being two things racing to set one tier rather than more quota.
+ */
+export class AccountGroup extends HttpApiGroup.make("account")
+  .add(
+    HttpApiEndpoint.get("read", "/account", {
+      success: Account
+    }),
+    HttpApiEndpoint.post("checkout", "/account/checkout", {
+      success: Checkout,
+      error: [NotFound, AlreadyPaid]
+    })
+  )
+  .middleware(Authorization)
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Account",
+      description: "Tier, usage and the upgrade link for the key presented."
+    })
+  ) {}
+
+/**
  * The operator's own surface: one route, and the only thing in the API that can
  * kill a published link (§01). It is outside the bearer middleware for the same
  * reason the key routes are — the credential is a different secret, the
@@ -298,6 +338,7 @@ export class HandbillApi extends HttpApi.make("handbill")
   .add(PagesGroup)
   .add(AliasesGroup)
   .add(KeysGroup)
+  .add(AccountGroup)
   .add(AdminGroup)
   .add(BillingGroup)
   .add(MetaGroup)

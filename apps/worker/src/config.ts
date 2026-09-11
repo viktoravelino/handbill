@@ -16,5 +16,8 @@ export interface WorkerConfig {
 
 export class Config extends Context.Service<Config, WorkerConfig>()("handbill/Config") {}
 
+/** Polar's own API, where a checkout session is created; the sandbox is a var away. */
+export const DEFAULT_POLAR_API = "https://api.polar.sh"
+
 /** 5 MB, the cap the CLI enforces before it uploads. */
 export const DEFAULT_MAX_BYTES = 5 * 1024 * 1024

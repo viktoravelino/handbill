@@ -1,4 +1,5 @@
-import { type Owner, QuotaExceeded, type Tier } from "@handbill/contract"
+import type { AccountLimits, AccountUsage, Owner, Tier } from "@handbill/contract"
+import { QuotaExceeded } from "@handbill/contract"
 import type { KVNamespace } from "@cloudflare/workers-types"
 import { Context, DateTime, Effect, Layer } from "effect"
 
@@ -23,6 +24,9 @@ export interface QuotasShape {
   readonly check: (owner: Owner, tier: Tier, bytes: number) => Effect.Effect<void, QuotaExceeded>
   readonly record: (owner: Owner, bytes: number) => Effect.Effect<void>
   readonly release: (owner: Owner, bytes: number) => Effect.Effect<void>
+  /** For the account route: the counters `check` reads, and the row it spends against. */
+  readonly usage: (owner: Owner) => Effect.Effect<AccountUsage>
+  readonly limits: (tier: Tier) => AccountLimits | null
 }
 
 export class Quotas extends Context.Service<Quotas, QuotasShape>()("handbill/Quotas") {}
@@ -35,7 +39,10 @@ export class Quotas extends Context.Service<Quotas, QuotasShape>()("handbill/Quo
 export const QuotaUnlimited: Layer.Layer<Quotas> = Layer.succeed(Quotas, {
   check: () => Effect.void,
   record: () => Effect.void,
-  release: () => Effect.void
+  release: () => Effect.void,
+  // `null` limits, never a zero ceiling, which would read as nothing left.
+  usage: () => Effect.succeed({ pagesToday: 0, storedBytes: 0 }),
+  limits: () => null
 })
 
 /**
@@ -62,6 +69,16 @@ const bytesKey = (owner: Owner): string => `q:${owner}:bytes`
 const bump = (store: CounterStore, key: string, by: number, ttl?: number) =>
   Effect.promise(async () => store.write(key, Math.max(0, (await store.read(key)) + by), ttl))
 
+/** Both counters at one instant, read together: `check` spends against them and `usage` reports them. */
+const read = (store: CounterStore, owner: Owner, now: DateTime.Utc) =>
+  Effect.promise(async () => {
+    const [pagesToday, storedBytes] = await Promise.all([
+      store.read(dayKey(owner, now)),
+      store.read(bytesKey(owner))
+    ])
+    return { pagesToday, storedBytes }
+  })
+
 /**
  * Quotas over any counter store — the enforcement written once, so the memory
  * layer and the KV layer cannot drift apart. `check` reads both counters and
@@ -75,9 +92,7 @@ export const quotasOn = (store: CounterStore): Layer.Layer<Quotas> =>
       Effect.gen(function* () {
         const { pagesPerDay, storedBytes } = TIER_LIMITS[tier]
         const now = yield* DateTime.now
-        const [today, stored] = yield* Effect.promise(() =>
-          Promise.all([store.read(dayKey(owner, now)), store.read(bytesKey(owner))])
-        )
+        const { pagesToday: today, storedBytes: stored } = yield* read(store, owner, now)
         if (today >= pagesPerDay) {
           const resetsAt = DateTime.startOf(DateTime.add(now, { days: 1 }), "day")
           const spent = { limit: "pagesPerDay", allowed: pagesPerDay, resetsAt } as const
@@ -97,7 +112,9 @@ export const quotasOn = (store: CounterStore): Layer.Layer<Quotas> =>
     // limit caps writes rather than what is kept. Swallowed, not fatal: the object is
     // already gone, so a 500 here misreports a removal that worked, and the retry finds
     // nothing to release and leaves the counter high for good (#118 review).
-    release: (owner, bytes) => Effect.ignoreCause(bump(store, bytesKey(owner), -bytes))
+    release: (owner, bytes) => Effect.ignoreCause(bump(store, bytesKey(owner), -bytes)),
+    usage: (owner) => Effect.flatMap(DateTime.now, (now) => read(store, owner, now)),
+    limits: (tier) => TIER_LIMITS[tier]
   })
 
 /**

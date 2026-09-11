@@ -46,6 +46,19 @@ export class TooLarge extends Schema.TaggedError<TooLarge>()(
 ) {}
 
 /**
+ * The account asking for a checkout is already on the paid tier. Buying a
+ * second subscription for one account would charge twice for the same quotas
+ * and leave two subscriptions racing to set the tier, so the route refuses
+ * rather than creating a session; changing or cancelling the one that exists is
+ * the provider's customer portal, not this API.
+ */
+export class AlreadyPaid extends Schema.TaggedError<AlreadyPaid>()(
+  "AlreadyPaid",
+  {},
+  { httpApiStatus: 409 }
+) {}
+
+/**
  * A hosted account has spent one of its quotas. It says which limit tripped and
  * what it allows, so a caller is told the rule rather than just refused.
  * `resetsAt` is the moment the counter frees up on its own — the next UTC

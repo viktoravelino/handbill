@@ -6,6 +6,7 @@ import { AliasesDisabled, AliasesMemory } from "./aliases"
 import { makeApp } from "./app"
 import { hashBytes } from "./hash"
 import { AuthSecret } from "./auth"
+import { BillingDisabled } from "./billing"
 import { QuotaUnlimited } from "./quotas"
 import { IndexBucket, StorageMemory } from "./storage"
 
@@ -25,7 +26,8 @@ beforeEach(() => {
       IndexBucket.pipe(Layer.provideMerge(StorageMemory)),
       AuthSecret(TOKEN),
       QuotaUnlimited,
-      AliasesMemory
+      AliasesMemory,
+      BillingDisabled
     )
   )
 })
@@ -140,7 +142,8 @@ test("a zone configured as a fully qualified name is canonical everywhere", asyn
       IndexBucket.pipe(Layer.provideMerge(StorageMemory)),
       AuthSecret(TOKEN),
       QuotaUnlimited,
-      AliasesMemory
+      AliasesMemory,
+      BillingDisabled
     )
   )
   const hash = await hashOf(DOC)
@@ -248,7 +251,8 @@ test("without a KV binding the whole alias feature is absent", async () => {
       IndexBucket.pipe(Layer.provideMerge(StorageMemory)),
       AuthSecret(TOKEN),
       QuotaUnlimited,
-      AliasesDisabled
+      AliasesDisabled,
+      BillingDisabled
     )
   )
   const request = (path: string, init?: RequestInit) =>

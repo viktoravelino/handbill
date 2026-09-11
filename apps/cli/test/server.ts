@@ -5,6 +5,7 @@ import { Owner, Unauthorized } from "@handbill/contract"
 import { AliasesDisabled, AliasesMemory } from "@handbill/worker/src/aliases"
 import { makeApp } from "@handbill/worker/src/app"
 import { AuthAccounts, AuthSecret, type Identify, type KeyStore } from "@handbill/worker/src/auth"
+import { Billing, BillingDisabled } from "@handbill/worker/src/billing"
 import { QuotaMemory, QuotaUnlimited } from "@handbill/worker/src/quotas"
 import { IndexBucket, IndexMemory, Storage, StorageMemory } from "@handbill/worker/src/storage"
 
@@ -119,7 +120,23 @@ export interface ServerOptions {
   readonly aliases?: boolean
   readonly accounts?: boolean
   readonly admin?: string
+  /**
+   * The checkout URL this deployment sells at, standing in for the Polar call
+   * `BillingPolar` makes. Absent is a deployment that sells nothing, which is
+   * what every other session gets.
+   */
+  readonly checkoutUrl?: string
 }
+
+/**
+ * What `BillingPolar` does in production, without Polar: one canned URL for
+ * whoever asks. That the owner on a session is the authenticated one is the
+ * Worker's own test (`account.test.ts`), which can see the request body.
+ */
+const sells = (url: string | undefined): Layer.Layer<Billing> =>
+  url === undefined
+    ? BillingDisabled
+    : Layer.succeed(Billing, { checkout: () => Effect.succeed({ url }) })
 
 export const makeServer = (options: ServerOptions = {}) => {
   // Built here rather than inside `makeApp` so the test can read the store
@@ -135,6 +152,7 @@ export const makeServer = (options: ServerOptions = {}) => {
       storageLayer,
       hostedLayers(options.accounts === true, storageLayer),
       options.aliases === false ? AliasesDisabled : AliasesMemory,
+      sells(options.checkoutUrl),
       // `Clock` is a reference, so this only replaces the default the Worker's
       // own runtime would have used; it adds nothing to `AppServices`.
       Layer.succeed(Clock.Clock, time.clock)

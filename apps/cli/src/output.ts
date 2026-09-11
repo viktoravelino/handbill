@@ -10,6 +10,7 @@ import {
 } from "effect"
 import type { HttpClientError } from "effect/unstable/http"
 import type {
+  AlreadyPaid,
   HashMismatch,
   NotFound,
   QuotaExceeded,
@@ -112,10 +113,29 @@ export class TierRefused extends Data.TaggedError("TierRefused")<{
 }> {}
 
 /**
+ * `account --upgrade` reached a deployment with nothing to sell: no billing
+ * configured, or one running on a shared `PUBLISH_TOKEN`, whose only owner is
+ * the operator and not a customer.
+ */
+export class NoBilling extends Data.TaggedError("NoBilling")<{
+  readonly endpoint: string
+}> {}
+
+/**
+ * `account --open` was run without `--upgrade`, which is the only thing that
+ * prints a URL: the flag would otherwise be a no-op, and a flag that quietly
+ * does nothing is worse than one that says why.
+ */
+export class NothingToOpen extends Data.TaggedError("NothingToOpen")<{
+  readonly command: string
+}> {}
+
+/**
  * Every failure a command can end on. Keeping it a closed union is what makes
  * {@link describe} exhaustive, so a new error cannot ship without a sentence.
  */
 export type Failure =
+  | AlreadyPaid
   | BadConfigFile
   | BadName
   | BadTarget
@@ -128,7 +148,9 @@ export type Failure =
   | MissingAdminToken
   | MissingToken
   | NoAccounts
+  | NoBilling
   | NotFound
+  | NothingToOpen
   | NotYours
   | PlatformError.PlatformError
   | QuotaExceeded
@@ -149,6 +171,11 @@ export interface Described {
 
 /** The tag and the sentence a user sees for every failure the CLI can produce. */
 export const describe = Match.typeTags<Failure, Described>()({
+  AlreadyPaid: () => ({
+    error: "AlreadyPaid",
+    message:
+      "This account is already on the paid tier, so there is nothing to buy. Manage or cancel the subscription from the customer portal Polar emailed a link to."
+  }),
   BadConfigFile: (failure) => ({
     error: "BadConfigFile",
     message: `Could not use ${failure.path}: ${failure.reason}.`
@@ -197,6 +224,10 @@ export const describe = Match.typeTags<Failure, Described>()({
     error: "NoAccounts",
     message: `${failure.endpoint} does not run accounts, so there is no key to mint. A self-hosted deployment publishes with its PUBLISH_TOKEN: set HANDBILL_TOKEN, or put it in the config file.`
   }),
+  NoBilling: (failure) => ({
+    error: "NoBilling",
+    message: `${failure.endpoint} has no paid tier to buy: it is configured with no payment provider, or it runs on one shared PUBLISH_TOKEN, where the only account is the operator's own.`
+  }),
   // Every caller that can reach a 404 on a route other than the alias ones maps
   // it to something that names what was not found — `NotYours` from `remove`,
   // `NoAccounts` from `login`, `CannotRepoint` from `update`, which has already
@@ -206,6 +237,10 @@ export const describe = Match.typeTags<Failure, Described>()({
     error: "NotFound",
     message:
       "Aliases are off on this deployment: it has no ALIASES KV binding. Create one (docs/SELF-HOSTING.md) and redeploy."
+  }),
+  NothingToOpen: (failure) => ({
+    error: "NothingToOpen",
+    message: `\`${failure.command}\` prints no URL, so --open has nothing to open. \`handbill account --upgrade --open\` opens a checkout.`
   }),
   NotYours: (failure) => ({
     error: "NotYours",
