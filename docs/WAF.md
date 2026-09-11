@@ -30,7 +30,7 @@ This is the rule the daily quota leans on (see above), so a zone that hosts stra
 | Action | Block |
 | Duration | 1 minute |
 
-`PUT` is `/v1/pages/<hash>` and `POST` is `/v1/keys`; both are on `api.<zone>` only, so nothing on a page hostname is touched. `DELETE` is deliberately out: unpublishing and revoking are how someone *stops* abusing, and rate-limiting the exit is the wrong trade.
+`PUT` is `/v1/pages/<hash>` and `POST` is `/v1/keys` and `/v1/account/checkout` (which also bounds the Worker's outbound calls to Polar); all are on `api.<zone>` only, so nothing on a page hostname is touched. `DELETE` is deliberately out: unpublishing and revoking are how someone *stops* abusing, and rate-limiting the exit is the wrong trade.
 
 ### 2. `handbill-read` — reads, 300 per minute per IP · recommended
 

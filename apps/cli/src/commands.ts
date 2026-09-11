@@ -1,5 +1,5 @@
 import { Command } from "effect/unstable/cli"
-import { login, logout } from "./account"
+import { account, login, logout } from "./account"
 import { admin } from "./admin"
 import { alias } from "./aliases"
 import { completions } from "./completions"
@@ -16,5 +16,16 @@ import { update } from "./update"
  * not for whoever publishes to it.
  */
 export const handbill = publish.pipe(
-  Command.withSubcommands([update, list, remove, alias, login, logout, doctor, admin, completions])
+  Command.withSubcommands([
+    update,
+    list,
+    remove,
+    alias,
+    login,
+    logout,
+    account,
+    doctor,
+    admin,
+    completions
+  ])
 )

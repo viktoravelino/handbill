@@ -115,6 +115,49 @@ export const TierChange = Schema.Struct({
 export type TierChange = typeof TierChange.Type
 
 /**
+ * What an account has spent: pages published today, and bytes kept stored. The
+ * two counters the quota check reads, reported as they stand.
+ */
+export const AccountUsage = Schema.Struct({
+  pagesToday: Schema.Natural,
+  storedBytes: Schema.Natural
+}).annotate({ identifier: "AccountUsage" })
+export type AccountUsage = typeof AccountUsage.Type
+
+/** What a tier allows, straight from the per-tier table the quota check reads. */
+export const AccountLimits = Schema.Struct({
+  pagesPerDay: Schema.Natural,
+  storedBytes: Schema.Natural
+}).annotate({ identifier: "AccountLimits" })
+export type AccountLimits = typeof AccountLimits.Type
+
+/**
+ * The body of `GET /v1/account`: who the presented key belongs to, what it may
+ * spend and what it has spent. `limits` is `null` where nothing is counted at
+ * all — a self-hosted deployment pays its own bill — which is a different thing
+ * from a limit of zero, so nothing rendering this has to guess which it met.
+ */
+export const Account = Schema.Struct({
+  owner: Owner,
+  tier: Tier,
+  usage: AccountUsage,
+  limits: Schema.NullOr(AccountLimits)
+}).annotate({ identifier: "Account" })
+export type Account = typeof Account.Type
+
+/**
+ * The body of `POST /v1/account/checkout`: where to go and pay. The session
+ * behind the URL is created by the Worker with the owner taken from the key, so
+ * a checkout can only ever pay for the account that asked for it. `https://` is
+ * checked rather than assumed — the CLI hands this to a browser with `--open`,
+ * and an endpoint is not trusted to have sent a URL scheme at all.
+ */
+export const Checkout = Schema.Struct({
+  url: Schema.String.check(Schema.isPattern(/^https:\/\//u))
+}).annotate({ identifier: "Checkout" })
+export type Checkout = typeof Checkout.Type
+
+/**
  * A living name for a page: one DNS label under the zone, so `plan` is served at
  * `https://plan.<zone>`. The pattern is a hostname label (1–63 characters,
  * alphanumeric ends, hyphens inside) minus the two labels the zone has already

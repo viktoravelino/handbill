@@ -3,17 +3,18 @@ import { Command } from "effect/unstable/cli"
 import type { Key } from "@handbill/contract"
 import { Browser } from "./browser"
 import * as Client from "./client"
-import { handler, required } from "./command-kit"
+import { clientFor, handler, openIf, required } from "./command-kit"
 import * as Config from "./config"
-import { endpointFlag, jsonFlag } from "./flags"
+import { endpointFlag, jsonFlag, openFlag, upgradeFlag } from "./flags"
 import { GitHubDevice, LoginFailed } from "./github"
 import * as Output from "./output"
 
 /**
- * The two commands that own the key in `~/.config/handbill/config.json`:
- * `login` mints one against a hosted deployment, `logout` gives it back. Both
- * say so plainly against a self-hosted deployment, which runs on one shared
- * `PUBLISH_TOKEN` and has no accounts to mint for.
+ * The three commands about the key rather than about a page: `login` mints one
+ * against a hosted deployment and `logout` gives it back — both say so plainly
+ * against a self-hosted deployment, which runs on one shared `PUBLISH_TOKEN`
+ * and has no accounts to mint for — and `account` reports what the key in hand
+ * is allowed to spend.
  */
 
 /**
@@ -227,4 +228,68 @@ export const logout = Command.make(
   Command.withDescription(
     "Revoke the key this machine uses and remove it from the config file. Idempotent: a key that is already revoked is not an error."
   )
+)
+
+/**
+ * `account`: who the key belongs to, what it may spend and what it has spent —
+ * the "did my upgrade land?" command, since the tier a publish is charged at is
+ * the one printed here. `--upgrade` asks the deployment for a checkout URL
+ * instead: the session is created server-side with the owner taken from the
+ * key, so a URL can only ever pay for the account that asked for it.
+ */
+export const account = Command.make(
+  "account",
+  { endpoint: endpointFlag, json: jsonFlag, open: openFlag, upgrade: upgradeFlag },
+  handler(({ endpoint, json, open, upgrade }) =>
+    Effect.gen(function* () {
+      // The URL is `--upgrade`'s: reading an account prints no URL at all, and
+      // a flag that silently does nothing reads as a flag that failed.
+      if (open && !upgrade) {
+        return yield* Effect.fail(new Output.NothingToOpen({ command: "handbill account" }))
+      }
+      const settings = yield* Config.resolve({ endpoint })
+      const client = yield* clientFor(settings)
+      if (upgrade) {
+        const { url } = yield* client.account.checkout({}).pipe(
+          // Nothing about the account: the 404 is a deployment with nothing to
+          // sell, which is its own sentence rather than the shared alias one.
+          Effect.catchTag("NotFound", () =>
+            Effect.fail(new Output.NoBilling({ endpoint: settings.endpoint.value }))
+          )
+        )
+        yield* json ? Output.json({ url }) : Output.line(url)
+        return yield* openIf(open, url)
+      }
+      const current = yield* client.account.read({})
+      if (json) return yield* Output.json(current)
+      yield* Output.line(`owner   ${current.owner}`)
+      yield* Output.line(`tier    ${current.tier}`)
+      // Counting nothing is not the same as having nothing left, so a
+      // deployment that pays its own bill says so instead of printing a zero.
+      if (current.limits === null) {
+        return yield* Output.line("quotas are not counted on this deployment.")
+      }
+      yield* Output.line(
+        `pages   ${current.usage.pagesToday} / ${current.limits.pagesPerDay} today`
+      )
+      yield* Output.line(
+        `stored  ${current.usage.storedBytes} / ${current.limits.storedBytes} bytes`
+      )
+    })
+  )
+).pipe(
+  Command.withDescription(
+    "Show what the key in hand is: its owner, its tier, and the quotas it has spent today. --upgrade prints a checkout URL for the paid tier instead, and is the only form --open applies to."
+  ),
+  Command.withExamples([
+    { command: "handbill account", description: "Owner, tier and quota usage" },
+    {
+      command: "handbill account --upgrade",
+      description: "Print a checkout URL that pays for this account"
+    },
+    {
+      command: "handbill account --upgrade --open",
+      description: "The same, opened in the browser after it is printed"
+    }
+  ])
 )

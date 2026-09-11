@@ -12,6 +12,14 @@
   "vars": {
     // EDIT 1 — your zone. Pages are served at https://<hash>.<ZONE>.
     "ZONE": "handbill.dev"
+
+    // EDIT 6 (optional) — selling a paid tier. The product to sell, and the
+    // Polar API it lives on (omit for production; the sandbox is the other
+    // one). With these and the POLAR_ACCESS_TOKEN secret below, the CLI's
+    // `handbill account --upgrade` gets a checkout URL; without them it 404s.
+    // Uncomment the lines you want and put a comma after "ZONE" above:
+    // "POLAR_PRODUCT_ID": "<uuid from the Polar dashboard>",
+    // "POLAR_API": "https://sandbox-api.polar.sh"
   },
 
   "routes": [
@@ -56,5 +64,8 @@
   // `POLAR_WEBHOOK_SECRET` is a third, optional secret — the endpoint secret
   // from the Polar dashboard, pasted whole, `whsec_` prefix included. Without
   // it `POST /v1/billing/webhook` answers 404 and no tier is ever flipped.
+  // `POLAR_ACCESS_TOKEN` is a fourth — the organisation access token the Worker
+  // creates checkout sessions with, so the owner on a session is the key that
+  // asked for it. Without it (or POLAR_PRODUCT_ID) the checkout route is 404.
   // `MAX_BYTES` is optional and defaults to 5 MB.
 }

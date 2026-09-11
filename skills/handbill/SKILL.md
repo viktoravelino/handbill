@@ -64,9 +64,20 @@ handbill alias remove plan          # the name stops answering; the page stays p
 
 An alias is a living name: the reader's link keeps showing the latest version while every hash link stays exactly what it was, and `handbill update` re-points it at each revision for you. Only use one when the user asks for a stable or readable link, and say two things when you do: **names are guessable** (a hash is unguessable; `plan` is a word anyone who knows the zone can try), and **the feature is opt-in** — a deployment without its KV binding answers every `alias` command with one sentence saying how to enable it. Report that sentence to the user; do not work around it. One more thing to expect: the name works the moment `alias` prints its URL, but `alias list` can take up to a minute to show a fresh name (the deployment's key listing is eventually consistent). "No aliases set." right after a successful `alias` is that lag — trust the printed URL, do not set the name again.
 
+## Check the account
+
+```bash
+handbill account           # owner, tier, pages published today and bytes stored, against their limits
+handbill account --json
+```
+
+Run it when a publish was refused for a quota, or when the user asks what their account is on — the tier printed here is the one the next publish is charged at. A self-hosted deployment counts nothing and says so instead of printing limits.
+
+`handbill account --upgrade` prints a checkout URL for the paid tier, created for the account whose key is in hand. Hand that URL to the user and stop: paying is theirs to do, never yours. A deployment with no paid tier says so in one sentence.
+
 ## Showing the page
 
-`--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the printed URL in the user's default browser after printing it. stdout is still exactly one line. Use it only when the user asked to see the page, not by default.
+`--open` on `handbill <file>`, `handbill update`, `handbill alias` and `handbill account --upgrade` opens the printed URL in the user's default browser after printing it. stdout is still exactly one line. Use it only when the user asked to see the page, not by default.
 
 `--qr` on `handbill <file>` and `handbill alias` also prints a scannable QR code for the URL — to stderr, so stdout is still exactly one line — for handing the page to someone physically present. When stderr is not a terminal the code is silently skipped, so the flag never breaks a pipe. Use it only when the user asks for a QR code or to share with a phone.
 
@@ -76,7 +87,7 @@ An alias is a living name: the reader's link keeps showing the latest version wh
 - `handbill doctor` checks, in order: config present, token present, endpoint reachable, token accepted, wildcard TLS valid — each with a one-line fix. Run it first when a command fails for a reason that is not the file.
 - `command not found: handbill` → the CLI is not installed. `npm i -g handbill`, or from a checkout of the repository: `bun run --cwd apps/cli build && npm i -g ./apps/cli`.
 - A `5xx` from the endpoint is the deployment's problem (`apps/worker` in the repository), not the file's. Tell the user and stop.
-- "You have published 25 pages today…" or "This account is storing its full … bytes" is a hosted account's quota, not a bug. Report it with the reset time it names and stop; the daily count only frees itself, and `handbill remove` is what gives stored bytes back. A self-hosted deployment never says either.
+- "You have published 25 pages today…" or "This account is storing its full … bytes" is a hosted account's quota, not a bug. Report it with the reset time it names and stop; the daily count only frees itself, and `handbill remove` is what gives stored bytes back (`handbill account` shows both numbers). A self-hosted deployment never says either.
 
 ## Installing this skill
 

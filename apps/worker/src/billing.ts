@@ -1,5 +1,5 @@
-import { Owner, type Tier } from "@handbill/contract"
-import { DateTime, Effect, Option, Schema } from "effect"
+import { Checkout, NotFound, Owner, type Tier } from "@handbill/contract"
+import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { secretEquals } from "./auth"
 
 const utf8 = new TextEncoder()
@@ -86,4 +86,48 @@ export const readFlip = (body: Uint8Array) =>
     if (tier === "free" && (ended === undefined || ended === null)) return Option.none()
     const named = Option.orElse(asOwner(metadata?.["owner"]), () => asOwner(customer?.external_id))
     return Option.map(named, (owner) => ({ owner, tier, subscriptionId: id }))
+  })
+
+/** Where an owner goes to pay, when the deployment sells anything at all. */
+export class Billing extends Context.Service<
+  Billing,
+  { readonly checkout: (owner: Owner) => Effect.Effect<Checkout, NotFound> }
+>()("handbill/Billing") {}
+
+/** Nothing to sell: the checkout route 404s the way the alias routes do with no KV binding. */
+export const BillingDisabled: Layer.Layer<Billing> = Layer.succeed(Billing, {
+  checkout: () => Effect.fail(new NotFound())
+})
+
+const isSession = Schema.is(Checkout)
+
+/**
+ * A checkout session per request, with both owner fields written: `metadata` is
+ * what `readFlip` reads back, and `external_customer_id` files it under one
+ * Polar customer per owner, which makes that fallback real. Failure honesty as
+ * on `githubOwner`: anything but a session throws, so the route 500s instead.
+ */
+export const BillingPolar = (config: {
+  readonly api: string
+  readonly token: string
+  readonly productId: string
+}): Layer.Layer<Billing> =>
+  Layer.succeed(Billing, {
+    checkout: (owner) =>
+      Effect.promise(async () => {
+        // The trailing slash is load-bearing: Polar 307s without it, and the
+        // redirected POST arrives with no body.
+        const response = await fetch(`${config.api}/v1/checkouts/`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${config.token}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            products: [config.productId],
+            metadata: { owner },
+            external_customer_id: owner
+          })
+        })
+        const session: unknown = response.ok ? await response.json() : null
+        if (!isSession(session)) throw new Error(`polar checkout failed: ${response.status}`)
+        return session
+      })
   })

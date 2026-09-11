@@ -28,6 +28,14 @@ const openDescriptor: Completions.FlagDescriptor = {
   type: { _tag: "Boolean" }
 }
 
+/** `--upgrade` is on `account` alone: it is the only command with anything to buy. */
+const upgradeDescriptor: Completions.FlagDescriptor = {
+  name: "upgrade",
+  aliases: [],
+  description: "Print a checkout URL for the paid tier instead of the account",
+  type: { _tag: "Boolean" }
+}
+
 /** `--qr` is on publish and `alias`, the two commands that print a shareable URL. */
 const qrDescriptor: Completions.FlagDescriptor = {
   name: "qr",
@@ -168,6 +176,13 @@ export const descriptor: Completions.CommandDescriptor = {
       name: "logout",
       description: "Revoke this machine's key and remove it from the config file",
       flags: apiFlags,
+      arguments: [],
+      subcommands: []
+    },
+    {
+      name: "account",
+      description: "Show the owner, tier and quota usage of the key in hand",
+      flags: [...apiFlags, openDescriptor, upgradeDescriptor],
       arguments: [],
       subcommands: []
     },

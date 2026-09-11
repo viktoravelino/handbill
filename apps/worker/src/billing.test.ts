@@ -4,6 +4,7 @@ import { Clock, Effect, Layer } from "effect"
 import { AliasesMemory } from "./aliases"
 import { makeApp } from "./app"
 import { AuthAccounts, type Identify, type KeyStore } from "./auth"
+import { BillingDisabled } from "./billing"
 import { hashBytes } from "./hash"
 import { QuotaMemory, TIER_LIMITS } from "./quotas"
 import { IndexMemory, StorageMemory } from "./storage"
@@ -78,6 +79,7 @@ const hosted = (
       AuthAccounts(memoryKeys(records), identify),
       AliasesMemory,
       QuotaMemory(counters),
+      BillingDisabled,
       Layer.succeed(Clock.Clock, frozen)
     )
   )
