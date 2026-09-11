@@ -1,0 +1,8 @@
+# No Content-Security-Policy: Starlight ships inline scripts and the Cloudflare
+# analytics beacon needs one too, and a CSP tight enough to matter needs testing
+# this pass is not doing.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
