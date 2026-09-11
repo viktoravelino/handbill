@@ -76,8 +76,7 @@ bunx wrangler deploy
 
 ```sh
 mkdir -p ~/.config/handbill
-printf '{ "endpoint": "https://api.<zone>", "token": "%s" }\n' "$TOKEN" > ~/.config/handbill/config.json
-chmod 600 ~/.config/handbill/config.json
+(umask 077 && printf '{ "endpoint": "https://api.<zone>", "token": "%s" }\n' "$TOKEN" > ~/.config/handbill/config.json)
 ```
 
 Environment variables work too and win over the file: `HANDBILL_ENDPOINT`, `HANDBILL_TOKEN`. Then:
