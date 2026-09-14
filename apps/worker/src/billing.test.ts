@@ -33,6 +33,15 @@ const NOW = Math.floor(NOW_MILLIS / 1000)
 const TODAY = `q:${OWNER}:d:20260115`
 /** Access is gone as of this instant; a lapse Polar has only scheduled has none. */
 const ENDED = { ended_at: "2026-01-15T11:00:00.000Z" }
+/**
+ * Event times, an hour before the frozen clock: Polar stamps an event when it
+ * happens, not when it is delivered, and a retry carries the original stamp.
+ */
+const EVENT_EPOCH = NOW_MILLIS - 3_600_000
+let events = 0
+/** One second later than the last, so deliveries are in order unless a test picks an offset. */
+const eventAt = (offset: number = ++events): string =>
+  new Date(EVENT_EPOCH + offset * 1000).toISOString()
 
 const bytes = (text: string) => new TextEncoder().encode(text)
 const hashOf = (text: string) => Effect.runPromise(hashBytes(bytes(text)))
@@ -183,9 +192,15 @@ const deliver = async (
   )
 }
 
-/** A Polar subscription event as the fields this Worker reads see it. */
-const subscription = (type: string, status: string, data: Record<string, unknown> = {}) => ({
+/** A Polar subscription event as the fields this Worker reads see it, stamped in order. */
+const subscription = (
+  type: string,
+  status: string,
+  data: Record<string, unknown> = {},
+  timestamp: string = eventAt()
+) => ({
   type,
+  timestamp,
   data: { id: SUBSCRIPTION, status, metadata: { owner: OWNER }, ...data }
 })
 
@@ -517,5 +532,74 @@ test("the two derivations are not interchangeable", async () => {
   const legacyKeyed = await sign("msg_2451", NOW, JSON.stringify(event), LEGACY)
   const response = await deliver(deployment, event, { signature: legacyKeyed })
   expect(response.status).toBe(401)
+  expect(tierOf(deployment)).toBe("free")
+})
+
+// Production, 2026-09-10: a revocation landed and flipped the owner to free,
+// and Polar then retried four older deliveries that had failed during a secret
+// outage. They verified, they carried `status: active`, and the account was
+// paid again with no subscription behind it. The event time tells them apart.
+test("a delivery retried after a revocation cannot re-pay the account", async () => {
+  const deployment = hosted()
+  await mint(deployment)
+  await deliver(deployment, subscription("subscription.active", "active", {}, eventAt(1)))
+  expect(tierOf(deployment)).toBe("paid")
+
+  const lapse = subscription("subscription.revoked", "revoked", ENDED, eventAt(3))
+  expect((await deliver(deployment, lapse, { id: "msg_lapse" })).status).toBe(202)
+  expect(tierOf(deployment)).toBe("free")
+
+  const replay = subscription("subscription.active", "active", {}, eventAt(2))
+  expect((await deliver(deployment, replay, { id: "msg_replay" })).status).toBe(202)
+  expect(tierOf(deployment)).toBe("free")
+})
+
+// The guard is order, not a freeze: an event that really is newer than the
+// lapse is someone subscribing again, and it lands like any other upgrade.
+test("an active newer than the lapse upgrades, on the old subscription or a new one", async () => {
+  const deployment = hosted()
+  await mint(deployment)
+  await deliver(deployment, subscription("subscription.active", "active", {}, eventAt(1)))
+  await deliver(deployment, subscription("subscription.revoked", "revoked", ENDED, eventAt(2)), {
+    id: "msg_lapse"
+  })
+  expect(tierOf(deployment)).toBe("free")
+
+  const again = subscription("subscription.active", "active", { id: "sub_second" }, eventAt(3))
+  expect((await deliver(deployment, again, { id: "msg_again" })).status).toBe(202)
+  expect(tierOf(deployment)).toBe("paid")
+  expect(keyRecords(deployment)[0]?.subscriptionId).toBe("sub_second")
+})
+
+// The override is stamped with `now`, later than any event time, so a support
+// fix holds against whatever is still queued for retry behind it.
+test("an operator override outlives a stale replay and a later one", async () => {
+  const deployment = hosted()
+  const key = await mint(deployment)
+  await deliver(deployment, subscription("subscription.active", "active", {}, eventAt(10)))
+  await deliver(deployment, subscription("subscription.revoked", "revoked", ENDED, eventAt(12)), {
+    id: "msg_lapse"
+  })
+  await deliver(deployment, subscription("subscription.active", "active", {}, eventAt(11)), {
+    id: "msg_replay"
+  })
+  expect(tierOf(deployment)).toBe("free")
+
+  expect((await setTier(deployment, "paid", ADMIN)).status).toBe(204)
+  expect(tierOf(deployment)).toBe("paid")
+
+  const late = subscription("subscription.revoked", "revoked", ENDED, eventAt(13))
+  expect((await deliver(deployment, late, { id: "msg_late" })).status).toBe(202)
+  expect(tierOf(deployment)).toBe("paid")
+  expect((await listPages(deployment, key)).status).toBe(200)
+})
+
+// An event with no time on it cannot be ordered, so it cannot be trusted to
+// decide anything — 202 like every other delivery there is nothing to do about.
+test("an event with no timestamp is accepted and changes nothing", async () => {
+  const deployment = hosted()
+  await mint(deployment)
+  const { timestamp: _dropped, ...undated } = subscription("subscription.active", "active")
+  expect((await deliver(deployment, undated)).status).toBe(202)
   expect(tierOf(deployment)).toBe("free")
 })

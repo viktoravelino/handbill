@@ -251,7 +251,8 @@ const adminOnly = Effect.gen(function* () {
  * The operator's two routes. `takedown` is the only thing in the API that can
  * kill a published link: the owner comes from R2, not the caller, so the freed
  * bytes land on whoever published it, idempotently and with no tombstone (§07).
- * `tier` writes the same field the webhook does (0.4 §03).
+ * `tier` writes the same field the webhook does (0.4 §03), stamped `now` so no
+ * delivery Polar retries afterwards can undo it (#143).
  */
 export const AdminLive = HttpApiBuilder.group(HandbillApi, "admin", (handlers) =>
   handlers
@@ -268,8 +269,8 @@ export const AdminLive = HttpApiBuilder.group(HandbillApi, "admin", (handlers) =
       })
     )
     .handle("tier", ({ params: { owner }, payload }) =>
-      Effect.flatMap(Effect.andThen(adminOnly, Auth), (auth) =>
-        Effect.asVoid(auth.setTier(owner, payload.tier))
+      Effect.flatMap(Effect.andThen(adminOnly, Effect.all([Auth, DateTime.now])), ([auth, now]) =>
+        Effect.asVoid(auth.setTier(owner, payload.tier, DateTime.formatIso(now)))
       )
     )
 )
@@ -289,8 +290,8 @@ export const BillingLive = HttpApiBuilder.group(HandbillApi, "billing", (handler
       if (!verified) return yield* Effect.fail(new Unauthorized())
       const flip = readFlip(payload)
       if (Option.isNone(flip)) return yield* Effect.log(`billing: no-op ${headers["webhook-id"]}`)
-      const { owner, subscriptionId, tier } = flip.value
-      const moved = yield* (yield* Auth).setTier(owner, tier, subscriptionId)
+      const { at, owner, subscriptionId, tier } = flip.value
+      const moved = yield* (yield* Auth).setTier(owner, tier, at, subscriptionId)
       yield* Effect.log(`billing: ${subscriptionId} moved ${moved} keys of ${owner} to ${tier}`)
     })
   )
