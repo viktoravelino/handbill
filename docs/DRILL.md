@@ -13,6 +13,7 @@ Two standing rules:
 
 | Run | Date | Operator | Worker deployed | Notes |
 |---|---|---|---|---|
+| 3 | 2026-09-15 | Viktor Avelino (agent as scribe) | `6cef2a7` (production, tag `v0.4.0`) | **E1 and E3**, on production against the real Polar organisation: `handbill account --upgrade` through checkout as a zero-amount test order, no refund needed, `handbill account` read `paid` with limits 250 pages/day and 5 GB; immediate revoke at 20:30:30Z read `free` by 20:30:40Z with every page still serving. E2, E4 and E5 not run here (E2 and E4 proven on staging in run 2). Polar's production delivery log API returned `500` when queried, so delivery timestamps are not available for this run. E2–E5 (the lapse leg and the replay/override checks) were not reached and are pending; A, B9.2 and C remain open from run 1. |
 | 2 | 2026-09-14 | Viktor Avelino (agent as scribe) | `f094211` (staging) | **E only**, end to end on `handbill-staging.dev` against the Polar sandbox; production untouched. It was brought forward because #143 — a retried stale delivery re-activating a lapsed account, seen on production on 2026-09-10 — needed rehearsing against a real redelivery once #144 shipped. A, B9.2 and C are still run 1's leftovers and are run 3's opening items. |
 | 1 | 2026-09-01 | Viktor Avelino (agent as scribe) | `d809693` | B, C, D run on production. A and B9.2 pending: no stranger and no second GitHub account on hand — they are run 2's opening items. C was observed rather than looped: the operator had already spent the day's quota, so B1's first refusal *was* the observation, and the day counter was reset per WAF.md §4 to let B proceed — an unplanned rehearsal of that runbook section. |
 
@@ -432,6 +433,9 @@ handbill account                    # tier paid, pages 0 / 250 today
 **Result:** run 2 — pass. Checkout minted by the Worker with `metadata.owner` and `external_customer_id` from the key (M20, #140); `subscription.active` and `subscription.updated` both `202`; `account` read `paid`.
 **Time:** run 2 — payment 15:25:44Z → deliveries 15:25:45–46Z; clean path about a second. (The same leg on production on 2026-09-10 took 16m37s, of which all but ~90s was the #138 key-derivation fix and redeploy — see the incident note at the end of this scenario.)
 
+**Result:** run 3 — pass, on **production**. `handbill account --upgrade` printed the checkout URL for the monthly product; the checkout was completed against the real Polar organisation as a zero-amount test order, so no refund was needed. `handbill account` then read `paid`, with limits 250 pages/day and 5 GB.
+**Time:** run 3 — not available. Polar's production delivery log API returned `500` when queried, so delivery timestamps could not be read for this run.
+
 ### E2 · A scheduled cancel changes nothing
 
 From the Polar dashboard, cancel the subscription **at period end** — not revoke.
@@ -444,6 +448,9 @@ handbill account                    # tier is still paid
 
 **Result:** run 2 — not re-run; proven on production on 2026-09-10 at 19:01:01Z, where the cancel produced `subscription.updated` and `subscription.canceled`, both `status: active` with `ended_at` null, both `202`, and no flip. Re-run it on staging at the next opportunity so all five legs sit on one deployment.
 **Time:** 2026-09-10 — cancel 19:01:01Z → deliveries `202`, tier unchanged.
+
+**Result:** run 3 — not run; the cancel was an immediate revoke (E3), so the scheduled-cancel path was not exercised on production. Proven on staging in run 2.
+**Time:** run 3 — not run.
 
 ### E3 · An immediate revoke lowers the tier
 
@@ -473,6 +480,9 @@ bunx wrangler kv key get --remote --namespace-id "$NS" "k:<digest>"
 **Result:** run 2 — pass. `subscription.updated`, `subscription.canceled` and `subscription.revoked`, all with `ended_at` set, all `202`; `account` read `free`. One wrinkle worth keeping: the operator's first read, at about 15:27Z, still said `paid` because it ran ahead of the deliveries — seconds later it was `free`. Read the delivery log before you read the command.
 **Time:** run 2 — revoke 15:26:52Z → all three `202` by 15:26:55Z, about three seconds. (2026-09-10 on production: revoke 19:01:43Z → accepted delivery 68s. No `subscription.revoked` was emitted for that API revoke at all; the status-plus-`ended_at` rule covered it without depending on an event name.)
 
+**Result:** run 3 — pass, on **production**. Immediate revoke from Polar's dashboard at 20:30:30Z; `handbill account` read `free` by 20:30:40Z, stored bytes intact, every page still serving.
+**Time:** run 3 — revoke → `free` ≤ 10 s (polled every 10 s; Polar's delivery log was unavailable, so this is the CLI's observation).
+
 ### E4 · A replayed delivery does not undo the lapse
 
 The leg #143 bought. Redeliver the **original** `subscription.active` from E1 — the sandbox dashboard's delivery log has a redeliver action, and the API has the same — and leave everything else alone.
@@ -485,6 +495,9 @@ handbill account                    # still free
 
 **Result:** run 2 — pass, on a real Polar redelivery rather than a test double. The original `subscription.active` (event timestamp 15:25:44Z) redelivered at 15:28:23Z → `202`, `account` still `free`. The `tierAt` guard from #144 holds.
 **Time:** run 2 — redelivered 15:28:23Z; verified immediately after.
+
+**Result:** run 3 — not run on production; the real Polar redelivery was proven on staging in run 2 and the guard is unchanged since.
+**Time:** run 3 — not run.
 
 ### E5 · The operator override
 
@@ -502,6 +515,9 @@ handbill account                    # free again
 
 **Result:** run 2 — not re-run on staging; proven on production on 2026-09-10, where `handbill admin tier gh:64113566 paid` and then `free` both wrote the record, verified with `wrangler kv key get --remote`.
 **Time:** 2026-09-10 — two commands, seconds each.
+
+**Result:** run 3 — not run.
+**Time:** run 3 — not run.
 
 ### E · The incident this scenario is built on
 
