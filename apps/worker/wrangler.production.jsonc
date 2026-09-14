@@ -17,9 +17,11 @@
   "compatibility_date": "2026-08-01",
   "workers_dev": false,
   "observability": { "enabled": true },
-  // POLAR_API and POLAR_PRODUCT_ID go here when the production Polar organisation exists; until then the checkout route answers 404 on production by design, and the sandbox lives in wrangler.staging.jsonc.
+  // Production Polar organisation (2026-09-15): both products, monthly then yearly. POLAR_API
+  // defaults to https://api.polar.sh; the token and webhook secret are Worker secrets.
   "vars": {
-    "ZONE": "handbill.dev"
+    "ZONE": "handbill.dev",
+    "POLAR_PRODUCT_ID": "a4a44fc8-03dd-46b0-8cae-4e2192dd433d,d32a560e-86e9-4022-b68c-51091d01cb35"
   },
   "routes": [
     { "pattern": "api.handbill.dev/*", "zone_name": "handbill.dev" },
