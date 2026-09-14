@@ -415,7 +415,7 @@ exports[`spec matches the published spec 1`] = `
   "info": {
     "description": "Hand someone a page: one self-contained HTML file at an unguessable, immutable URL.",
     "title": "handbill",
-    "version": "0.4.0-dev",
+    "version": "0.4.0",
   },
   "openapi": "3.1.0",
   "paths": {
