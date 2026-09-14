@@ -19,9 +19,10 @@ Publishing from CI uses npm **trusted publishing** (OIDC): no npm token anywhere
    - Organization or user: `viktoravelino`
    - Repository: `handbill`
    - Workflow filename: `release.yml` (exact, case-sensitive)
-   - Environment: leave empty
+   - Environment: `npm`
    - Allowed actions: `npm publish`
-4. **Tag the version you just published** so the GitHub release exists too. The workflow sees it is already on npm, skips the publish, and creates the release:
+4. **Create the `npm` environment** (repository *Settings* → *Environments*) with "Deployment branches and tags" set to the `main` branch and the `v*` tag pattern, and no required reviewers. The publish job runs under it, so a run dispatched from any other ref cannot mint the OIDC token npm expects, whatever that ref's copy of the workflow says. No secrets live there.
+5. **Tag the version you just published** so the GitHub release exists too. The workflow sees it is already on npm, skips the publish, and creates the release:
    ```sh
    git tag v0.1.0 && git push origin v0.1.0
    ```
@@ -60,7 +61,7 @@ A `-dev` version is never published: `tag` and the workflow both refuse it, and 
 
 The `Release` workflow then runs: `scripts/release-version.sh` (the tag-vs-version guard, and the dist-tag), typecheck, lint, test, build, `npm publish` via OIDC, GitHub release with generated notes.
 
-The workflow refuses a tag whose version does not match `apps/cli/package.json`, and skips the publish step if that version is already on npm. A prerelease version (anything with a `-`, such as `0.2.0-rc.0`) is published under the `next` dist-tag and its GitHub release is marked as a prerelease, so `latest` and plain `npx handbill` are untouched. To rehearse the pipeline without a version at all, use the nightly dry run below.
+The workflow refuses a tag whose version does not match `apps/cli/package.json` or whose commit is not on `origin/main`, and skips the publish step if that version is already on npm. A prerelease version (anything with a `-`, such as `0.2.0-rc.0`) is published under the `next` dist-tag and its GitHub release is marked as a prerelease, so `latest` and plain `npx handbill` are untouched. To rehearse the pipeline without a version at all, use the nightly dry run below.
 
 ## Nightly
 
@@ -77,7 +78,7 @@ Run one by hand, or rehearse without publishing:
 
 ```sh
 gh workflow run release.yml                   # publish a nightly now
-gh workflow run release.yml -f dry_run=true   # build and `npm publish --dry-run` only
+gh workflow run release.yml -f dry_run=true   # build, pack and `npm publish --dry-run`; the publish job does not run
 scripts/release-version.sh                    # locally: the version the next run would publish
 ```
 
@@ -108,4 +109,4 @@ bun run --cwd apps/worker deploy:prod
 
 ## Why not staged publishing
 
-npm's staged publishing (`npm stage publish` in CI, a human approves with 2FA) is the other supported path. With a single maintainer who is also the one pushing the tag, the tag is the approval; revisit if more people gain release rights. Nightlies publish with no human in the loop, which is fine for the same reason it is fine for `next`: they never touch `latest`.
+npm's staged publishing (`npm stage publish` in CI, a human approves with 2FA) is the other supported path. Here the tag is the approval: the `release tags` ruleset lets only the repository admin create, move or delete a `v*` tag, the version script refuses a tag that is not on `origin/main`, and the `npm` environment refuses to publish from any other ref. Write access alone reaches none of `latest`, `next` or the tag namespace. Nightlies publish with no human in the loop, which is fine for the same reason it is fine for `next`: they never touch `latest`, and the script on `main` is the only one that decides the dist-tag.

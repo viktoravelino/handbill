@@ -7,7 +7,9 @@
 #   skip=true    (nightly only) main has not moved since the last nightly; publish nothing
 #
 # A tag push (GITHUB_EVENT_NAME=push) is a release: the tag must match apps/cli/package.json,
-# prereleases go to `next`, a -dev version is refused. Anything else is a nightly: the version
+# its commit must be on origin/main (a tag on a branch commit publishes nothing, the same gate
+# scripts/deploy-prod.sh applies to production), prereleases go to `next`, a -dev version is
+# refused. Anything else is a nightly: the version
 # main is heading toward, the UTC date and time, and the commit, e.g.
 # 0.2.0-nightly.202608290500.g86df0a5 — the time so two nightlies from one day sort by age, the
 # `g` (git-describe style) because a short sha that is all digits with a leading zero would be an
@@ -35,6 +37,8 @@ if [[ ${GITHUB_EVENT_NAME:-} == push ]]; then
   [[ $ref == v* ]] || die "expected a v* tag, got '$ref'"
   [[ ${ref#v} == "$pkg" ]] || die "tag $ref does not match apps/cli version $pkg"
   [[ $pkg != *-dev ]] || die "$pkg is a development version; bump to the release version before tagging"
+  git -C "$ROOT" fetch -q --no-tags origin main
+  git -C "$ROOT" merge-base --is-ancestor HEAD origin/main || die "$ref is not on origin/main; release tags point at merged commits only"
   tag=latest; [[ $pkg == *-* ]] && tag=next
   echo "version=$pkg"
   echo "dist_tag=$tag"

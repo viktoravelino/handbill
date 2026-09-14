@@ -27,7 +27,7 @@ Relevant if you are reading the source to decide whether to trust the package or
 - `main` takes only pull requests, squash-merged from an up-to-date branch with CI green: typecheck, lint, test, and the Worker size budget.
 - `v*` tags cannot be created, deleted or moved by anyone but the repository admin. A published npm version can never be replaced, so the tag it was built from stays put too.
 - The Cloudflare tokens that deploy the site and the staging Worker live on GitHub environments that only `main` may deploy to, and each is scoped to its own zone; a branch push cannot read them. Production deploys from the maintainer's machine and its token never enters CI.
-- Releases publish through npm trusted publishing (OIDC), so no npm token exists in this repository to leak, and every release after 0.1.0 carries provenance.
+- Releases publish through npm trusted publishing (OIDC), so no npm token exists in this repository to leak, and every release after 0.1.0 carries provenance. The publish job runs under the `npm` environment, which only `main` and `v*` tags may deploy to, installs nothing, and publishes a tarball built in a separate job, so no dependency code runs on the runner that holds the OIDC token.
 
 ## Reporting a vulnerability
 
