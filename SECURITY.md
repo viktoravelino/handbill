@@ -25,7 +25,8 @@ Relevant if you are reading the source to decide whether to trust the package or
 - Secret scanning and push protection are on, so a credential cannot be pushed here without being blocked at the point of push.
 - Dependabot alerts and security updates are on; version updates arrive monthly under `.github/dependabot.yml`.
 - `main` takes only pull requests, squash-merged from an up-to-date branch with CI green: typecheck, lint, test, and the Worker size budget.
-- `v*` tags cannot be deleted or moved once pushed. A published npm version can never be replaced, so the tag it was built from stays put too.
+- `v*` tags cannot be created, deleted or moved by anyone but the repository admin. A published npm version can never be replaced, so the tag it was built from stays put too.
+- The Cloudflare tokens that deploy the site and the staging Worker live on GitHub environments that only `main` may deploy to, and each is scoped to its own zone; a branch push cannot read them. Production deploys from the maintainer's machine and its token never enters CI.
 - Releases publish through npm trusted publishing (OIDC), so no npm token exists in this repository to leak, and every release after 0.1.0 carries provenance.
 
 ## Reporting a vulnerability

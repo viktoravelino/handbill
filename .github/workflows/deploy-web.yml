@@ -2,10 +2,12 @@ name: Deploy web
 
 # handbill.dev is apps/web, built and deployed from main by this workflow and
 # nothing else. Every push to main deploys: the site renders the README, docs/
-# and the CLI's --help, so a paths filter would only ever be incomplete. Needs two
-# repository secrets, CLOUDFLARE_API_TOKEN (the token from docs/SELF-HOSTING.md
-# step 1 will do) and CLOUDFLARE_ACCOUNT_ID; forks have neither, so the job only
-# runs in the upstream repository.
+# and the CLI's --help, so a paths filter would only ever be incomplete. The
+# secrets live on the `web` environment, which only `main` may deploy to:
+# CLOUDFLARE_API_TOKEN (Workers Scripts Write on the account, Workers Routes
+# Write on the handbill.dev zone, nothing else) and CLOUDFLARE_ACCOUNT_ID. A
+# branch push cannot read them, and forks have neither, so the job only runs
+# from main in the upstream repository.
 
 on:
   push:
@@ -23,6 +25,7 @@ jobs:
   deploy:
     if: github.repository == 'viktoravelino/handbill'
     runs-on: ubuntu-latest
+    environment: web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
