@@ -34,7 +34,7 @@ This is the rule the daily quota leans on (see above), so a zone that hosts stra
 
 ### 2. `handbill-read` — reads, 300 per minute per IP · recommended
 
-Pages are served from cache and are meant to be shared; this rule is only there so a scraper walking the hash space cannot bill the account for it. It should never fire for a real reader, including a page that loads a handful of subresources.
+Every page read is a Worker invocation plus an R2 read — a stock zone does not CDN-cache a Worker-synthesised response, so there is no edge copy sitting in front of `pages.ts`. Pages are meant to be shared, so this rule is not about secrecy; it is there so a scraper walking the hash space cannot run up the bill on Worker invocations and R2 reads. It should never fire for a real reader, including a page that loads a handful of subresources.
 
 | Field | Value |
 |---|---|
@@ -49,7 +49,7 @@ Guessing a live link is ~2⁴⁷ tries; at 300 a minute that is not a threat mod
 
 ### Free plan: the rules
 
-The free plan allows **one** rate-limiting rule, and its period and mitigation timeout are fixed at 10 seconds. Check what the dashboard offers before assuming the table above is available as written. With one rule to spend, take rule 1 (writes) — reads are cached at the edge and cost far less per request — and scale the threshold to the period the plan gives you (10 seconds → 2 requests is the same rate as 10 a minute).
+The free plan allows **one** rate-limiting rule, and its period and mitigation timeout are fixed at 10 seconds. Check what the dashboard offers before assuming the table above is available as written. With one rule to spend, take rule 1 (writes) — a write costs a KV read-modify-write on top of the R2 put, well past what a read costs, and it is the rule the daily quota leans on (see above) — and scale the threshold to the period the plan gives you (10 seconds → 2 requests is the same rate as 10 a minute).
 
 ### Free plan: the other ceiling, which is KV writes
 
@@ -93,9 +93,9 @@ handbill admin takedown https://<hash>.<zone>
 
 The object and its index entry go, and the owner's stored bytes are released. It is idempotent, so running it twice, or on a hash that was never published, is not an error. There is no tombstone: a taken-down page is indistinguishable from a hash that never existed.
 
-**What a takedown does and does not reach.** At the origin it is immediate: the object is gone and any *new* request 404s. But pages are served `Cache-Control: public, max-age=31536000, immutable`, which is what makes a hash URL safe to hand out — and it means a reader who already fetched the page keeps their own copy for up to a year and is told not to revalidate. A takedown stops new fetches; it cannot reach a browser that already has it. Cloudflare's edge copy *can* be cleared, and should be, since it serves everyone: Caching → Configuration → **Purge Cache** → purge by URL (`https://<hash>.<zone>/`), or `POST /zones/<id>/purge_cache` with that URL. Nothing in the Worker does this for you.
+**What a takedown does and does not reach.** At the origin it is immediate: the object is gone and any *new* request 404s. Pages are served `Cache-Control: public, max-age=31536000, immutable`, which is what makes a hash URL safe to hand out — and it means a reader who already fetched the page keeps their own copy for up to a year and is told not to revalidate. A takedown stops new fetches; it cannot reach a browser that already has it. It needs no purge step beyond that: a stock zone does not CDN-cache a Worker-synthesised response (`index.ts` exports a plain `fetch` handler, `pages.ts` builds the response from an R2 read, no `caches.default`, no cache rule), so there is no edge copy to clear. If a cache rule is ever added, purging it (Caching → Configuration → **Purge Cache** → by URL, `https://<hash>.<zone>/`, or `POST /zones/<id>/purge_cache`) joins this runbook as a step.
 
-So the honest promise to a reporter is "it stops being served now", not "every copy is gone". [DRILL.md](DRILL.md) §B5 measures the first from a fresh client, purge included.
+So the honest promise to a reporter is "it stops being served now", not "every copy is gone" — the gap is a reader's already-fetched browser copy, not an edge cache. [DRILL.md](DRILL.md) §B5 measures the first from a fresh client, confirming there is nothing to purge.
 
 `ADMIN_TOKEN` is the operator's own secret and never a user key. Keep it out of the config file (which is where an ordinary key lives) and pass it through the environment.
 

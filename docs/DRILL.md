@@ -103,7 +103,7 @@ handbill /tmp/drill.html
 
 Publish a second page from the same key, six seconds later. It is never reported and never taken down: it is what proves at the end that revoking a key does not unpublish what it published.
 
-**Expected.** Two URLs. Fetch the first one in a browser — deliberately, because a page that was never fetched never entered the edge cache, and B5 is about the cache.
+**Expected.** Two URLs. Fetch the first one in a browser — deliberately, so its response can be checked for a `cf-cache-status` header, which is what B5 confirms is absent.
 
 **Result:** run 1 — both published; edge fetch 200. The page carried no `cf-cache-status` header: Worker responses are not CDN-cached on a stock zone, which B5 then confirmed. (reported page `2452411654b9`, second page `2049b8e534e8`)
 **Time:** 17:46:02–17:46:21Z. First attempt was refused by the day quota the operator had spent testing C; counter reset per WAF.md §4, then clean.
@@ -151,18 +151,18 @@ handbill admin takedown https://<hash>.handbill.dev
 **Result:** run 1 — `i:gh:64113566:2452411654b9` found first, takedown printed the hash, exit 0. (owner `gh:64113566`)
 **Time:** 17:47:34–17:47:36Z
 
-### B5 · Confirm the 404, and purge
+### B5 · Confirm the 404, and confirm there is nothing to purge
 
 ```sh
 curl -s -o /dev/null -w '%{http_code}\n' "https://<hash>.handbill.dev/"
 # 404
 ```
 
-If that answers `200`, it is the edge cache, not the origin: pages are served `immutable`, so a copy the edge took in B1 outlives the object by a year. **Purge it** — Cloudflare dashboard → the zone → Caching → Configuration → *Purge Cache* → by URL, `https://<hash>.handbill.dev/` — then check again from a client that has never seen the page (another network, or a phone off wifi).
+A stock zone does not CDN-cache a Worker-synthesised response, and B1's fetch already showed no `cf-cache-status` header, so there is no edge copy of this page to worry about. If that curl ever answers `200` instead, that would mean a Cache Rule has since been added — pages are served `immutable`, so a copy the edge took in B1 would outlive the object by a year — and purging it (Cloudflare dashboard → the zone → Caching → Configuration → *Purge Cache* → by URL, `https://<hash>.handbill.dev/`) would then join this step for real, checked again from a client that has never seen the page.
 
 **Expected.** 404 from every client that did not already have the page. A reader who already fetched it keeps their copy: that is the limit of the promise, stated on the abuse page, and not a failure of this step.
 
-**Record.** Whether the first `curl` needed the purge — the honest answer to "how long until it stops being served" is the one that includes it.
+**Record.** Whether the first `curl` confirmed there was nothing to purge — the honest answer to "how long until it stops being served" is the one that includes checking.
 
 **Result:** run 1 — 404 on the first `curl`, no purge needed. The B1 fetch had already shown no `cf-cache-status` on page responses: a stock zone does not CDN-cache Worker output, so the `immutable` copy this step guards against does not exist unless a Cache Rule is added. If one ever is, this step's purge becomes real.
 **Time:** 17:47:37Z (B3 → first 404: ~37s)
