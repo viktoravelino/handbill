@@ -44,6 +44,7 @@ export const verifySignature = (
 /** The Polar fields this Worker reads, decoded as an `Option`: an unnamed field cannot break a delivery, and a body that is not JSON is a miss rather than a throw. */
 const SubscriptionEvent = Schema.Struct({
   type: Schema.String,
+  timestamp: Schema.String,
   data: Schema.Struct({
     id: Schema.String,
     status: Schema.String,
@@ -59,9 +60,9 @@ const asOwner = (id: unknown): Option.Option<Owner> =>
   typeof id === "string" && /^gh:\d+$/u.test(id) ? Option.some(Owner.make(id)) : Option.none()
 
 /**
- * Status, never event name: writing the state an event carries rather than a step
- * in a sequence is what makes a replay idempotent. Only a verdict is here, and a
- * free one not final alone: Polar sets `canceled` on request, `ended_at` on end.
+ * Status, never event name: the state an event carries is idempotent where a
+ * step in a sequence is not. Only a verdict is here, and a free one not final
+ * alone — Polar sets `canceled` on request and `ended_at` when access ends.
  */
 const TIER_FOR: Record<string, Tier> = {
   active: "paid",
@@ -73,19 +74,18 @@ const TIER_FOR: Record<string, Tier> = {
 
 /**
  * The tier flip a verified body asks for, or `None` when there is nothing to do
- * — not a subscription event, not decodable, a status or pending cancellation
- * that decides nothing, an owner it cannot name — all 202, none different on a
- * retry. Owner: `metadata.owner` from checkout (0.4 §03), else `external_id`.
- * Accepted: Polar promises no order, so a stale `active` re-pays.
+ * — not a subscription event, not decodable, no event `timestamp`, a status or
+ * pending cancellation that decides nothing, an owner it cannot name, all 202.
+ * Owner: `metadata.owner` (0.4 §03) else `external_id`; `at`, the event time.
  */
 export const readFlip = (body: Uint8Array) =>
-  Option.flatMap(decodeEvent(text.decode(body)), ({ data, type }) => {
+  Option.flatMap(decodeEvent(text.decode(body)), ({ data, timestamp, type }) => {
     const { customer, ended_at: ended, id, metadata, status } = data
     const tier = TIER_FOR[status]
     if (!type.startsWith("subscription.") || tier === undefined) return Option.none()
     if (tier === "free" && (ended === undefined || ended === null)) return Option.none()
     const named = Option.orElse(asOwner(metadata?.["owner"]), () => asOwner(customer?.external_id))
-    return Option.map(named, (owner) => ({ owner, tier, subscriptionId: id }))
+    return Option.map(named, (owner) => ({ at: timestamp, owner, tier, subscriptionId: id }))
   })
 
 /** Where an owner goes to pay, when the deployment sells anything at all. */
@@ -103,9 +103,8 @@ const isSession = Schema.is(Checkout)
 
 /**
  * A checkout session per request, with both owner fields written: `metadata` is
- * what `readFlip` reads back, and `external_customer_id` files it under one
- * Polar customer per owner, which makes that fallback real. Failure honesty as
- * on `githubOwner`: anything but a session throws, so the route 500s instead.
+ * what `readFlip` reads back and `external_customer_id` files it under one Polar
+ * customer per owner, which makes that fallback real. Anything else throws.
  */
 export const BillingPolar = (config: {
   readonly api: string
