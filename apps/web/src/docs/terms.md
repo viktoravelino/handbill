@@ -58,7 +58,7 @@ Deliberately not kept: no reader logs of the operator's own, no reader IP addres
 
 ## Ending it
 
-You can leave whenever: `handbill remove` each page, then `handbill logout`, which revokes the key and deletes it from your machine. What survives is the revoked key record — your GitHub numeric id, when the key was made and when it was revoked, and the tier it was on — plus the pointer that lets the operator find it and a stored-bytes counter reading zero. The revocation stays on the books deliberately; none of it is anything you did not already read in this page. Pages you leave up keep serving.
+You can leave whenever: `handbill remove` each page, then `handbill logout`, which revokes the key and deletes it from your machine. What survives is the revoked key record — your GitHub numeric id, when the key was made and when it was revoked, the tier it was on and when that tier last changed, and, if you ever paid for the account, the id of the subscription that paid for it — plus the pointer that lets the operator find it and a stored-bytes counter reading zero. The revocation stays on the books deliberately; none of it is anything you did not already read in this page. Pages you leave up keep serving.
 
 The operator can revoke your keys and take your pages down at any time, and will say why unless saying so would get in the way of a criminal investigation.
 

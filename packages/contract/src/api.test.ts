@@ -191,6 +191,17 @@ describe("spec", () => {
     expect(spec.paths["/v1/billing/webhook"]?.post?.security).toEqual([])
   })
 
+  // The spec's `info.version` is the CLI's package version: one number for the
+  // release, so a generated client cannot claim a version the release never had.
+  // `scripts/release.sh bump` rewrites both, and this is what catches the day it
+  // rewrites only one.
+  test("the OpenAPI version is the CLI package version", async () => {
+    const manifest = await Bun.file(
+      new URL("../../../apps/cli/package.json", import.meta.url)
+    ).json()
+    expect(spec.info.version).toBe(manifest.version)
+  })
+
   // The whole spec, so M3 and M4 notice if the contract moves under them.
   test("matches the published spec", () => {
     expect(spec).toMatchSnapshot()

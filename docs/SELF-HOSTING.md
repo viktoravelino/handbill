@@ -29,7 +29,7 @@ CLOUDFLARE_ACCOUNT_ID=<account id>   # Workers & Pages overview, right-hand colu
 
 ## 2. Three edits in `wrangler.jsonc`
 
-`apps/worker/wrangler.jsonc` ships pointing at the maintainer's deployment. Change the three lines marked `EDIT`; the fourth and fifth are optional and belong to [living names](#living-names-optional) and [hosted accounts](#hosted-accounts-optional). (`wrangler.production.jsonc` next to it is the maintainer's filled-in copy for deploying handbill.dev; it is not for you.)
+`apps/worker/wrangler.jsonc` ships pointing at the maintainer's deployment. Change the three lines marked `EDIT`; the other three are optional and belong to [living names](#living-names-optional) (`EDIT 4`), [hosted accounts](#hosted-accounts-optional) (`EDIT 5`) and the [paid tier](#paid-tier-optional) (`EDIT 6`). (`wrangler.production.jsonc` next to it is the maintainer's filled-in copy for deploying handbill.dev; it is not for you.)
 
 `wrangler.staging.jsonc` is the maintainer's second copy, a separate Worker on `handbill-staging.dev` with its own bucket and KV namespaces that `.github/workflows/deploy-worker-staging.yml` deploys from `main`; it is not for you either. Self-hosting needs one deployment, and this file is only here so a change can be seen running before it reaches production.
 
@@ -143,7 +143,7 @@ Everything above runs on one shared `PUBLISH_TOKEN`: one operator, one owner. Bi
 
 Binding `ACCOUNTS` brings three things at once, all in that one namespace: the key records, the per-owner page index that makes `list` and `remove` account-scoped, and the quota counters below. Aliases stay operator-only, so a hosted key cannot set, read or enumerate names.
 
-**Quotas.** A hosted account may publish **25 pages a day** and keep **250 MB stored**; the page-size cap (`MAX_BYTES`, 5 MB) applies as always. Over either, publishing answers `429 {"_tag":"QuotaExceeded", ...}` naming the limit, what it allows, and — for the daily one — when it resets (the next UTC midnight). Unpublishing gives the stored bytes back; the day's page count is not refunded. The numbers are per *tier* and the only tier is `free`; they live in one table in `apps/worker/src/quotas.ts`. Without the `ACCOUNTS` binding nothing is counted at all: the operator pays their own bill.
+**Quotas.** The numbers are per *tier*, and there are two of them, one table in `apps/worker/src/quotas.ts`: `free` allows **25 pages a day** and **250 MB stored**, `paid` **250 pages a day** and **5 GiB**. The page-size cap (`MAX_BYTES`, 5 MB) is not a tier row — it applies to both. Over either quota, publishing answers `429 {"_tag":"QuotaExceeded", ...}` naming the limit, what it allows, and — for the daily one — when it resets (the next UTC midnight). Unpublishing gives the stored bytes back; the day's page count is not refunded. An account's tier is a field on its key record, moved either by the billing webhook below or by hand with `handbill admin tier <owner> <free|paid>`; every key the owner holds moves together, and a key minted afterwards inherits it. Nothing on the read path consults the tier, so a lapse lowers a write quota and breaks no link. Without the `ACCOUNTS` binding nothing is counted at all: the operator pays their own bill.
 
 **These are ceilings, not exact numbers.** The counters live in Workers KV, which is eventually consistent, so a burst of parallel publishes can read the same stale count and go past 25 before it catches up — by roughly whatever rate the caller can sustain. The per-IP WAF rate limit is what bounds that rate, which is why [WAF.md](WAF.md)'s rule 1 is **required** rather than recommended before a zone hosts strangers, and why quotas alone are a cost ceiling rather than a flood defence. Exact counters would mean Durable Objects, which 0.3 deliberately does not have. WAF.md also carries the abuse runbook, the KV write budget a hosted publish now costs, and how to reset a counter that has drifted.
 
@@ -159,6 +159,29 @@ It is never a publishing key: a user key gets `401` here, and this token cannot 
 **Before a production zone.** Tenant isolation and quotas ship as of M16, but hosting strangers is more than code: you also need terms saying what may not be published and what you can see, and an address a report can arrive at. The maintainer's are [terms and acceptable use](https://handbill.dev/docs/terms/) and [reporting abuse](https://handbill.dev/docs/abuse/) — written for `handbill.dev`, so adapt rather than copy — and [DRILL.md](DRILL.md) is the script that proves takedown, revocation and the kill switch work end to end, which is worth running once on your own zone before strangers do it for you. Until you have all three, `ACCOUNTS` is for a deployment whose users you know.
 
 The kill switch is symmetrical: remove the `ACCOUNTS` binding and redeploy, and the Worker is back on `PUBLISH_TOKEN` with every published page still serving — accounts were never on the read path. The namespace is untouched by the flip, so putting the binding back brings the keys, the index and the counters with it; [DRILL.md](DRILL.md) §D rehearses both halves and times them.
+
+## Paid tier (optional)
+
+Only if you are selling something. Four settings turn the billing surface on, and they are additive exactly like the two sections above — without them there is nothing to buy and the routes are not there.
+
+Two vars (`EDIT 6` in `wrangler.jsonc`) and two secrets:
+
+```sh
+# The product to sell, and — for the sandbox only — the API it lives on.
+#   "POLAR_PRODUCT_ID": "<uuid from the Polar dashboard>",
+#   "POLAR_API": "https://sandbox-api.polar.sh"
+
+printf '%s' '<organisation access token>' | bunx wrangler secret put POLAR_ACCESS_TOKEN
+printf '%s' '<endpoint secret, whsec_ prefix included>' | bunx wrangler secret put POLAR_WEBHOOK_SECRET
+```
+
+`POLAR_ACCESS_TOKEN` and `POLAR_PRODUCT_ID` are both or neither: with them, `POST /v1/account/checkout` creates a session — `handbill account --upgrade` is what a user runs — and the Worker stamps it with the owner the presented key resolved to, so a checkout URL can only ever pay for the account that asked for it. Without either, that route answers `404` and `handbill account --upgrade` says the deployment sells nothing.
+
+`POLAR_WEBHOOK_SECRET` is what `POST /v1/billing/webhook` verifies deliveries against — [Standard Webhooks](https://www.standardwebhooks.com/): HMAC-SHA256 over `<id>.<timestamp>.<body>`, with a five-minute timestamp window. Paste the endpoint secret whole, `whsec_` prefix included; the prefix is how the Worker knows to base64-decode the key rather than take the string's bytes. Without the secret the route answers `404` and no tier is ever flipped. Everything that verifies is `202`, including an event that decides nothing — the provider retries on anything else, and there is nothing to retry when the answer would not change. A replayed delivery is ignored: the record keeps the event time of the last flip, and only a strictly newer event writes.
+
+`handbill admin tier <owner> paid` is the manual override for a delivery that never landed, and the support tool. It needs `ADMIN_TOKEN`, not a Polar anything, and it always wins over a replay — so a webhook that arrives late cannot undo it.
+
+The comments in `wrangler.jsonc` are the reference for all four; this section is the summary.
 
 ## Scripting against it
 

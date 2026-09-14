@@ -323,10 +323,22 @@
       <ul><li>Per key: pages/day and total bytes; per IP: WAF rules on publish and read.</li><li><code>handbill admin takedown &lt;hash&gt;</code> with an operator token; abuse contact and ToS published.</li></ul></li>
   </ul>
 
-  <h3>v0.4 &middot; Sheets and time</h3>
+  <h3>v0.4 &middot; Paid</h3>
   <ul class="stories">
-    <li class="story"><span class="story__id">S4.1 &middot; Ada</span><p>As a writer, I want local images, CSS, and scripts inlined at publish so that a page with assets is still one object.</p></li>
-    <li class="story"><span class="story__id">S4.2 &middot; Ada</span><p>As an operator, I want <code>--ttl 7d</code> so that throwaway pages clean themselves up.</p></li>
+    <li class="story"><span class="story__id">S4.1 &middot; Kai</span><p>As a hosted user, I want to upgrade from the terminal so that paying is one command rather than a page to find.</p>
+      <ul><li><code>handbill account --upgrade</code> prints a checkout URL; <code>--open</code> opens it after printing.</li><li>The Worker creates the session and stamps it with the owner the key resolved to, so a URL can only pay for the account that asked for it.</li></ul></li>
+    <li class="story"><span class="story__id">S4.2 &middot; Kai</span><p>As someone whose subscription ends, I want every link I published to keep working.</p>
+      <ul><li>The subscription ending moves the tier back to <code>free</code>; the read path never consults a tier, so nothing is unpublished and no URL changes.</li><li>Over the free ceiling, the next <em>publish</em> is refused with <code>QuotaExceeded</code> until something is removed.</li></ul></li>
+    <li class="story"><span class="story__id">S4.3 &middot; operator</span><p>As the operator, I want to set an account&rsquo;s tier by hand so that a webhook that never landed is a support reply, not an outage.</p>
+      <ul><li><code>handbill admin tier &lt;owner&gt; &lt;free|paid&gt;</code> behind <code>ADMIN_TOKEN</code>; idempotent and absolute, and stamped <code>now</code> so no retried delivery can undo it.</li></ul></li>
+    <li class="story"><span class="story__id">S4.4 &middot; Kai</span><p>As a hosted user, I want one command that says what my key may spend so that I can see whether the upgrade landed.</p>
+      <ul><li><code>handbill account</code>: owner, tier, pages today and stored bytes against the tier&rsquo;s limits; <code>--json</code> for the object.</li></ul></li>
+  </ul>
+
+  <h3>v0.5 &middot; Sheets and time</h3>
+  <ul class="stories">
+    <li class="story"><span class="story__id">S5.1 &middot; Ada</span><p>As a writer, I want local images, CSS, and scripts inlined at publish so that a page with assets is still one object.</p></li>
+    <li class="story"><span class="story__id">S5.2 &middot; Ada</span><p>As an operator, I want <code>--ttl 7d</code> so that throwaway pages clean themselves up.</p></li>
   </ul>
 </section>
 
@@ -410,6 +422,10 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
         <tr><td><code>PUT | DELETE /v1/aliases/:name</code>, <code>GET /v1/aliases</code></td><td>bearer</td><td>Alias CRUD; 404 unless a KV binding exists</td><td>0.2</td></tr>
         <tr><td><code>POST /v1/keys</code>, <code>DELETE /v1/keys/current</code></td><td>a GitHub token / the key itself</td><td>Mint and revoke a hosted key; 404 unless the <code>ACCOUNTS</code> binding exists</td><td>0.3</td></tr>
         <tr><td><code>DELETE /v1/admin/pages/:hash</code></td><td><code>ADMIN_TOKEN</code></td><td>Takedown; <code>204</code>, idempotent; 404 unless the secret is set</td><td>0.3</td></tr>
+        <tr><td><code>GET /v1/account</code></td><td>bearer</td><td><code>200 { owner, tier, usage, limits }</code>; <code>limits</code> is <code>null</code> where nothing is counted</td><td>0.4</td></tr>
+        <tr><td><code>POST /v1/account/checkout</code></td><td>bearer</td><td><code>200 { url }</code>, the session created by the Worker with the owner taken from the key; 404 with nothing to sell, 409 already paid</td><td>0.4</td></tr>
+        <tr><td><code>PUT /v1/admin/tier/:owner</code></td><td><code>ADMIN_TOKEN</code></td><td>Tier override; <code>204</code>, idempotent and absolute; 404 unless the secret is set and the deployment has accounts</td><td>0.4</td></tr>
+        <tr><td><code>POST /v1/billing/webhook</code></td><td>a Standard Webhooks signature over the body</td><td>Subscription events flip <code>tier</code>; <code>202</code> for anything that verifies, including an event it does nothing with; 404 unless the webhook secret is set</td><td>0.4</td></tr>
         <tr><td><s><code>GET /v1/me</code></s></td><td>&mdash;</td><td>Planned for 0.3, not built &mdash; see Status</td><td>&mdash;</td></tr>
       </tbody>
     </table>
@@ -440,7 +456,7 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
   packages/
     contract/src/                 api.ts (HttpApi: pages, aliases, meta), schemas.ts, errors.ts; spec snapshot test
   apps/
-    worker/                       Effect on Workers; wrangler.jsonc; 1125-line source budget
+    worker/                       Effect on Workers; wrangler.jsonc; 1560-line source budget
       src/index.ts                fetch handler; picks layers from the bindings that exist
       src/app.ts  api.ts  pages.ts   router + OpenAPI/docs routes; handlers; host classes and page/alias serving
       src/config.ts  storage.ts  auth.ts  aliases.ts  hash.ts   one file per service, R2/KV + memory layers
@@ -542,12 +558,12 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
 
 <section id="status">
   <h2>Status &middot; what shipped, what changed</h2>
-  <p>As of 2026-09-01. Where the build departed from the plan above, the departure and its reason are here so the plan stays readable as a plan.</p>
+  <p>As of 2026-09-14. Where the build departed from the plan above, the departure and its reason are here so the plan stays readable as a plan.</p>
   <ul>
     <li><strong>0.1 shipped 2026-08-28</strong> as <code>handbill@0.1.0</code> and <code>0.1.1</code>; the maintainer&rsquo;s flow is migrated and <code>publish-plan</code> retired.</li>
     <li><strong>Publishing is npm trusted publishing (OIDC) from <code>release.yml</code></strong>, with provenance; no npm token anywhere. <code>scripts/release.sh bump | tag</code> is the two-move release, and it has a real dry run.</li>
     <li><strong>Nightlies, not in the plan.</strong> Every night at 05:00 UTC, and on demand, <code>main</code> is published under the <code>nightly</code> dist-tag as <code>&lt;release&gt;-nightly.&lt;UTC date-time&gt;.g&lt;sha&gt;</code>, skipped when <code>main</code> has not moved; <code>latest</code> and <code>next</code> are never touched. <code>&lt;release&gt;</code> is the version <code>main</code> is heading toward: a <code>-dev</code> version in <code>apps/cli/package.json</code> (<code>0.2.0-dev</code> &rarr; <code>0.2.0-nightly&hellip;</code>) names it, and a plain release version means the next patch. A <code>-dev</code> version can never be tagged. A merged feature is installable the next morning instead of at the next release.</li>
-    <li><strong>Worker budget is 1310 source lines</strong>, not the &ldquo;~400&rdquo; first written here: tests excluded, enforced by the CI <code>size</code> job, and <code>services.ts</code> split into <code>config</code> / <code>storage</code> / <code>auth</code> / <code>aliases</code> (and, in 0.3, <code>quotas</code>). It was 750 through 0.2, raised to 1125 in #88 because hosted mode earns it, and raised again in #116 because #88 had priced services that did not exist yet: M13 and M14 alone spent 390 of the ~315 it had allowed for all of 0.3. 0.3 ends at 1308 of 1310.</li>
+    <li><strong>Worker budget is 1560 source lines</strong>, not the &ldquo;~400&rdquo; first written here: tests excluded, enforced by the CI <code>size</code> job, and <code>services.ts</code> split into <code>config</code> / <code>storage</code> / <code>auth</code> / <code>aliases</code> (and, in 0.3, <code>quotas</code>; in 0.4, <code>billing</code>). It was 750 through 0.2, raised to 1125 in #88 because hosted mode earns it, and raised again in #116 because #88 had priced services that did not exist yet: M13 and M14 alone spent 390 of the ~315 it had allowed for all of 0.3. 0.3 ended at 1308 of 1310; 0.4 re-argued it twice, to 1460 on #130 and to 1560 on #132 once the account route and a server-created checkout both came in over their estimates, and stands at 1551 with 12 of the remainder already owed to M21. It is a budget rather than a target: once it binds, a PR that adds lines takes something out and says what &mdash; the itemised arithmetic and that rule live in <code>AGENTS.md</code>.</li>
     <li><strong>Shell completions shipped in 0.1</strong> (M4), a version early. The descriptor is written by hand because the framework keeps its conversion internal; a test pins it to the real command tree.</li>
     <li><strong>Markdown (0.2).</strong> Parser is <code>marked</code>, chosen on bundle size (57&nbsp;KB, no transitive dependencies, versus 195&nbsp;KB / 209&nbsp;KB for the alternatives) and kept as a real dependency rather than inlined. Title from the first H1 with inline markup resolved, else the filename; <code>--markdown</code> is how stdin opts in. Raw HTML in the source passes through unchanged &mdash; right for a self-hoster publishing to their own zone, revisited at 0.3 when hosted mode began serving strangers, and kept (see Open questions).</li>
     <li><strong>OpenAPI + <code>/docs</code> (0.2).</strong> The spec comes from <code>HttpApiBuilder.layer(&hellip;, { openapiPath })</code>, token-free and cached five minutes. The docs page is nine lines of hand-written HTML loading a pinned Scalar from a CDN &mdash; <code>HttpApiScalar</code> would have inlined Scalar&rsquo;s 3&nbsp;MB browser build and blown the 1&nbsp;MiB gzip gate.</li>
@@ -560,7 +576,7 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
     <li><strong>The mode is the binding, not a var (0.3).</strong> The outline said <code>MODE=accounts</code>; what shipped picks <code>AuthAccounts</code> / <code>IndexKV</code> / <code>QuotaKV</code> when the <code>ACCOUNTS</code> binding exists and the secret-mode layers when it does not, decided once in <code>index.ts</code> &mdash; the rule aliases already followed. One consequence is the whole backout plan: unbind and deploy, and the Worker is on <code>PUBLISH_TOKEN</code> again with every page still serving and the namespace untouched.</li>
     <li><strong>No <code>GET /v1/me</code>, and no key-minting page (0.3).</strong> Both were in the 0.3 row and neither was built. <code>handbill list</code> already answers &ldquo;what do I have&rdquo;, and the quota numbers are two rows on the hosted page rather than a route nobody reads; sign-in is GitHub&rsquo;s device flow in the terminal, so the site has no login, no session and no cookie. That also answers the framework question below without spending it.</li>
     <li><strong>Quotas are a ceiling, and they lean on the WAF (0.3).</strong> 25 pages a day and 250&nbsp;MB per owner, counted in KV, which is eventually consistent &mdash; so parallel publishes overshoot by whatever rate the caller can sustain, and the per-IP rate-limiting rule is what bounds that rate. It is required rather than recommended before a zone hosts strangers. Exact counters would mean Durable Objects, which 0.3 deliberately does not have. The rules and the abuse runbook are configuration, so they live in <code>docs/WAF.md</code> rather than in code.</li>
-    <li><strong>The drill is a document (0.3).</strong> <code>docs/DRILL.md</code>: the stranger test, the report&rarr;takedown&rarr;revoke loop, the quota 429, and the kill-switch rehearsal, each with the commands verbatim and a blank <code>Result:</code>/<code>Time:</code> slot. Run 1 is pending: the script merged first so it could be executed against <code>main</code>, and the numbers land in a follow-up commit. Findings become issues rather than inline fixes. It is not on the site &mdash; it is for whoever runs a deployment, not for whoever reads about one.</li>
+    <li><strong>The drill is a document (0.3).</strong> <code>docs/DRILL.md</code>: the stranger test, the report&rarr;takedown&rarr;revoke loop, the quota 429, the kill-switch rehearsal, and &mdash; added with 0.4 &mdash; the billing scenario, each with the commands verbatim and a <code>Result:</code>/<code>Time:</code> slot. Run 1 ran on production on 2026-09-01 and its numbers are in the file; run 2, on 2026-09-14, was the billing scenario alone, on staging against the Polar sandbox. The stranger test and the bystander check are still owed. Findings become issues rather than inline fixes. It is not on the site &mdash; it is for whoever runs a deployment, not for whoever reads about one.</li>
     <li><strong>The three-self-hoster exit criterion is dropped</strong>, from 0.1&rsquo;s and 0.2&rsquo;s exit criteria and from the success measures. It measured adoption, not the product: nothing the project can do makes three strangers deploy on a schedule, so it could only ever hold a release hostage to luck. What it was really asking &mdash; that the README works end to end &mdash; is covered by the criteria that remain.</li>
     <li><strong><code>@handbill/contract</code> stays unpublished until 1.0.</strong> Decided 2026-08-31, as the PRD leaned. Every deployment already serves <code>/v1/openapi.json</code> generated from that same contract, so anyone wanting a client can generate one against the instance they are actually talking to. Publishing now would put an Effect 4 release candidate in a package&rsquo;s public types and make its churn a breaking change for other people; the 1.0 freeze is the honest moment.</li>
   </ul>
@@ -572,7 +588,7 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
     <li><span class="tag">effect</span><strong>v4 RC churn.</strong> <code>unstable/*</code> APIs may rename before stable. Mitigation: exact pin, small surface (one HttpApi, one router, one CLI command tree), and the contract package as the only place that touches the API-definition side.</li>
     <li><span class="tag">effect</span><strong>Raw binary request body in HttpApi.</strong> The publish endpoint takes bytes, not JSON. Spike it in M2; the fallback (read the request stream in the handler) costs nothing in the contract.</li>
     <li><span class="tag">workers</span><strong>Bundle size and cold start.</strong> Effect 4 is markedly smaller than 3 (~20&nbsp;KB minimal), but HttpApi and Schema add up. The CI size gate keeps it honest; Workers free allows 3&nbsp;MB compressed.</li>
-    <li><span class="tag">people</span><strong>Learning curve for contributors.</strong> Effect is a barrier for a drive-by fix. Mitigation: the Worker source stays under 1125 lines (<code>src/*.ts</code> excluding tests, enforced by the <code>size</code> job), each service is one file, and the README links a &ldquo;how this codebase uses Effect&rdquo; page.</li>
+    <li><span class="tag">people</span><strong>Learning curve for contributors.</strong> Effect is a barrier for a drive-by fix. Mitigation: the Worker source stays under 1560 lines (<code>src/*.ts</code> excluding tests, enforced by the <code>size</code> job), each service is one file, and the README links a &ldquo;how this codebase uses Effect&rdquo; page.</li>
     <li><span class="tag">hosted</span><strong>Being a host.</strong> Abuse, cost, liability. Contained by the separate account, quotas, rate limits, takedown, and by not doing it until 0.3.</li>
     <li><span class="tag tag--scope">scope</span><strong>Feature pull toward a site builder.</strong> Every &ldquo;can it also serve my folder&rdquo; request is answered by the non-goals. Inlining (0.4) is the last concession.</li>
   </ul>
@@ -591,7 +607,7 @@ env      HANDBILL_ENDPOINT, HANDBILL_TOKEN  (env wins over file; flags win over 
 </section>
 
 <footer>
-  <p>PRD &middot; 2026-08-28 &middot; <code>~/projects/handbill/docs/2026-08-28-prd.html</code>. Effect versions verified against npm the same day (<code>effect@rc</code> = 4.0.0-rc.112; v3 feature-frozen). Updated 2026-08-31 for the 0.2.0 release: the Status section, the decisions taken, and the repository as built. Updated 2026-09-01 for 0.3: what hosted mode actually shipped as, the three remaining open questions closed, and the drill.</p>
+  <p>PRD &middot; 2026-08-28 &middot; <code>~/projects/handbill/docs/2026-08-28-prd.html</code>. Effect versions verified against npm the same day (<code>effect@rc</code> = 4.0.0-rc.112; v3 feature-frozen). Updated 2026-08-31 for the 0.2.0 release: the Status section, the decisions taken, and the repository as built. Updated 2026-09-01 for 0.3: what hosted mode actually shipped as, the three remaining open questions closed, and the drill. Updated 2026-09-14 for 0.4 in progress: the Worker budget as re-argued, the drill&rsquo;s two runs, the 0.4 stories and the four routes the paid tier added.</p>
 </footer>
 
 </div>

@@ -24,11 +24,11 @@ Hand someone a page: `handbill plan.html` → `https://<sha256[0:12]>.<zone>`. S
 
 ```
 packages/contract   HttpApi + Schema — the single source of truth for the API
-apps/worker         Effect on Workers; one file per service — storage (+ index) / auth / aliases / quotas
+apps/worker         Effect on Workers; one file per service — storage (+ index) / auth / aliases / quotas / billing
 apps/cli            effect/unstable/cli; npm package "handbill"; bundled to dist/cli.js
 apps/web            Astro site (0.2)
 skills/handbill     the agent skill (SKILL.md)
-docs/               PRD, SELF-HOSTING.md, RELEASING.md, WAF.md, DRILL.md, the original brainstorm
+docs/               PRD, the 0.3 architecture and 0.4 paid HTML docs, SELF-HOSTING.md, RELEASING.md, WAF.md, DRILL.md, the original brainstorm
 ```
 
 ## Design invariants
