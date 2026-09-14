@@ -18,16 +18,16 @@ export interface StoredDocument extends StoredMeta {
 }
 
 /**
- * The object store, keyed by hash. `StorageR2` is production, `StorageMemory`
- * is what the tests run on — the swap is the whole reason this is a service.
- * Backend failures are defects: there is nothing a caller can do about them and
- * the contract has no error for them.
+ * The object store, keyed by hash. `StorageR2` is production, `StorageMemory` is
+ * what the tests run on — the swap is the whole reason this is a service. Backend
+ * failures are defects: nothing a caller could do, and no contract error to say.
  */
 export interface StorageShape {
   readonly put: (document: StoredDocument) => Effect.Effect<void>
   readonly get: (hash: Hash) => Effect.Effect<Option.Option<StoredDocument>>
   readonly head: (hash: Hash) => Effect.Effect<Option.Option<StoredMeta>>
-  readonly remove: (hash: Hash) => Effect.Effect<void>
+  /** Deletes the object; `true` when this call is the one that found it there. */
+  readonly remove: (hash: Hash) => Effect.Effect<boolean>
   /** Every page the owner published, newest first. */
   readonly list: (owner: Owner) => Effect.Effect<ReadonlyArray<StoredMeta>>
 }
@@ -48,7 +48,7 @@ export const StorageMemory: Layer.Layer<Storage> = Layer.sync(Storage, () => {
     put: (document) => Effect.sync(() => void objects.set(document.hash, document)),
     get: (hash) => Effect.sync(() => Option.fromNullishOr(objects.get(hash))),
     head: (hash) => Effect.sync(() => Option.map(Option.fromNullishOr(objects.get(hash)), metaOf)),
-    remove: (hash) => Effect.sync(() => void objects.delete(hash)),
+    remove: (hash) => Effect.sync(() => objects.delete(hash)),
     list: (owner) =>
       Effect.sync(() =>
         Array.from(objects.values(), metaOf)
@@ -97,7 +97,13 @@ export const StorageR2 = (bucket: R2Bucket): Layer.Layer<Storage> =>
         const object = await bucket.head(hash)
         return object === null ? Option.none() : Option.some(metaFromR2(hash, object))
       }),
-    remove: (hash) => Effect.promise(() => bucket.delete(hash)),
+    // R2 `delete` is idempotent and reports nothing, so the head before it is what
+    // says whether this request removed a page — the caller only refunds bytes it
+    // took away. Deletes racing inside that one round trip can still both see it.
+    remove: (hash) =>
+      Effect.promise(() =>
+        bucket.head(hash).then((found) => bucket.delete(hash).then(() => found !== null))
+      ),
     list: (owner) =>
       Effect.promise(async () => {
         const found: Array<StoredMeta> = []
@@ -123,13 +129,10 @@ export const StorageR2 = (bucket: R2Bucket): Layer.Layer<Storage> =>
  * from one KV read instead of a whole-bucket scan. `add`/`remove` keep it in step
  * on publish and unpublish; `list` returns an owner's pages newest first.
  *
- * R2 is the source of truth and the bucket wins on any disagreement — there is
- * deliberately no reconcile job in 0.3 (architecture §04, decision 04). A publish
- * writes the object first and the index second, so a crash between them leaves an
- * object with no entry: invisible in `list`, yet still served and still removable
- * by its owner (which is why `remove` reads ownership from R2, never from here).
- * An entry with no object serves 404 like any unknown hash; both states are
- * harmless and only the owner's `remove` heals them.
+ * R2 wins every disagreement and nothing reconciles the two (architecture §04): a
+ * publish writes the object first, so a crash between the two leaves a page `list`
+ * misses and its owner can still remove — which is why `remove` reads ownership
+ * from R2, never from here. An entry with no object 404s like any unknown hash.
  */
 export interface IndexShape {
   readonly add: (meta: StoredMeta) => Effect.Effect<void>

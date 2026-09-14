@@ -34,7 +34,7 @@ docs/               PRD, the 0.3 architecture and 0.4 paid HTML docs, SELF-HOSTI
 ## Design invariants
 
 - `hash = hex(sha256(bytes)).slice(0, 12)`; client computes it for the URL, server recomputes and rejects a mismatch (400).
-- Served pages: `Content-Type: text/html; charset=utf-8`, `X-Robots-Tag: noindex, nofollow`, `Cache-Control: public, max-age=31536000, immutable`. Every path on a hash hostname serves the same document. An alias hostname serves the document it currently points at — served, never redirected — with `max-age=60` and the same other headers.
+- Served pages: `Content-Type: text/html; charset=utf-8`, `X-Robots-Tag: noindex, nofollow`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: public, max-age=31536000, immutable`. Every path on a hash hostname serves the same document. An alias hostname serves the document it currently points at — served, never redirected — with `max-age=60` and the same other headers.
 - Every stored object carries `customMetadata: { owner, title, publishedAt }` from day one — `owner` is what makes hosted mode (0.3) additive.
 - Swappable layers: `StorageR2` / `StorageMemory`, `AliasesKV` / `AliasesDisabled`, `AuthSecret` / `AuthAccounts`, `IndexBucket` / `IndexKV`. A binding that may be missing picks its layer in `index.ts`; the handlers never ask whether a feature is on. Tests run on the memory layers; no Miniflare, no network.
 - CLI stdout discipline: success prints exactly one line (the URL) or the `--json` object; everything else goes to stderr; non-zero exit on failure.

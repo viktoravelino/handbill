@@ -4,10 +4,9 @@ import type { KVNamespace } from "@cloudflare/workers-types"
 import { Context, DateTime, Effect, Layer } from "effect"
 
 /**
- * The quota numbers, and the one place they live (§05): how often a key publishes, and how much
- * it keeps stored. The tier is read off the key record, so the paid tier is this second row plus
- * a webhook that writes the field — no migration, no handler that knows about money (decision 11),
- * and a tier with no row fails to compile. Page size is no row: 5 MB caps every tier (0.4 §02).
+ * The quota numbers, and the one place they live (§05): how often a key publishes, and how much it
+ * keeps stored. The tier comes off the key record, so the paid tier is this second row plus the
+ * webhook that writes the field, and a tier with no row fails to compile. Page size is no row.
  */
 export const TIER_LIMITS = {
   free: { pagesPerDay: 25, storedBytes: 250 * 1024 * 1024 },
@@ -18,7 +17,9 @@ export const TIER_LIMITS = {
  * The per-owner cost ceiling. `check` runs before the R2 write and fails with the limit
  * that tripped; `record` and `release` move the counters after it (§04's order). Counters
  * are eventually consistent: parallel requests all read one stale count and overshoot by a
- * publish rate rather than by one, so WAF rule 1 is required rather than advisory.
+ * publish rate rather than by one, so WAF rule 1 is required rather than advisory. Drift upward
+ * overcharges an owner; drift downward is free storage, which no floor can undo — so `release`
+ * is the caller's to gate on having been the request that removed the object (#157).
  */
 export interface QuotasShape {
   readonly check: (owner: Owner, tier: Tier, bytes: number) => Effect.Effect<void, QuotaExceeded>

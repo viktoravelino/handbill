@@ -44,12 +44,27 @@ export const QuotaLimit = Schema.Literals(["pagesPerDay", "storedBytes"])
 export type QuotaLimit = typeof QuotaLimit.Type
 
 /**
+ * Any URL this API hands back. Parsed rather than pattern-matched, and `https:`
+ * or nothing: the CLI gives these to a browser with `--open`, and an endpoint —
+ * hostile, or merely misconfigured — is not trusted to have sent something a
+ * shell or a handler would read as anything but one URL.
+ */
+export const HttpsUrl = Schema.String.check(
+  Schema.isPattern(/^https:\/\//u),
+  Schema.makeFilter<string>((url) => URL.canParse(url), {
+    title: "parsableUrl",
+    description: "a URL the WHATWG parser accepts"
+  })
+).annotate({ identifier: "HttpsUrl" })
+export type HttpsUrl = typeof HttpsUrl.Type
+
+/**
  * One published page as `GET /v1/pages` reports it. `title` is the document's
  * `<title>`, or `""` when it has none — callers render their own placeholder.
  */
 export const Page = Schema.Struct({
   hash: Hash,
-  url: Schema.String,
+  url: HttpsUrl,
   title: Schema.String,
   publishedAt: Schema.DateTimeUtcFromString,
   size: Schema.Natural
@@ -68,7 +83,7 @@ export type PageList = typeof PageList.Type
  */
 export const PublishResult = Schema.Struct({
   hash: Hash,
-  url: Schema.String,
+  url: HttpsUrl,
   created: Schema.Boolean
 }).annotate({ identifier: "PublishResult" })
 export type PublishResult = typeof PublishResult.Type
@@ -155,12 +170,11 @@ export type Account = typeof Account.Type
 /**
  * The body of `POST /v1/account/checkout`: where to go and pay. The session
  * behind the URL is created by the Worker with the owner taken from the key, so
- * a checkout can only ever pay for the account that asked for it. `https://` is
- * checked rather than assumed — the CLI hands this to a browser with `--open`,
- * and an endpoint is not trusted to have sent a URL scheme at all.
+ * a checkout can only ever pay for the account that asked for it. The URL is an
+ * `HttpsUrl` like every other the API returns, checked rather than assumed.
  */
 export const Checkout = Schema.Struct({
-  url: Schema.String.check(Schema.isPattern(/^https:\/\//u))
+  url: HttpsUrl
 }).annotate({ identifier: "Checkout" })
 export type Checkout = typeof Checkout.Type
 
@@ -187,7 +201,7 @@ export type AliasTarget = typeof AliasTarget.Type
 export const Alias = Schema.Struct({
   name: AliasName,
   hash: Hash,
-  url: Schema.String
+  url: HttpsUrl
 }).annotate({ identifier: "Alias" })
 export type Alias = typeof Alias.Type
 

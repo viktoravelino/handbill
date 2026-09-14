@@ -87,11 +87,10 @@ export const keyStore = (kv: KVNamespace): KeyStore => ({
 })
 
 /**
- * What `k:<sha256(key)>` holds. `tier` is the quota table's key (decision 11),
- * rewritten in place by `setTier` rather than migrated; `subscriptionId` names
- * the subscription that paid for it, kept for good, so a lapsed account —
- * `tier: "free"`, id intact — is still traceable. `tierAt` is the event time of
- * the last flip, and a record without one is older than anything (#143).
+ * What `k:<sha256(key)>` holds. `tier` is the quota table's key, rewritten in
+ * place by `setTier`; `subscriptionId` names the subscription that paid for it and
+ * is kept for good, so a lapsed account is still traceable. `tierAt` is the event
+ * time of the last flip, and a record without one is older than anything (#143).
  */
 const KeyRecord = Schema.Struct({
   owner: Owner,

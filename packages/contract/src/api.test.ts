@@ -10,7 +10,7 @@ import {
   TooLarge,
   Unauthorized
 } from "./errors"
-import { AliasName, Hash, Page } from "./schemas"
+import { AliasName, Hash, HttpsUrl, Page } from "./schemas"
 
 const spec = OpenApi.fromApi(HandbillApi)
 
@@ -41,6 +41,31 @@ describe("Hash", () => {
     ["not hex", "a3f9c1d4e2bz"]
   ])("rejects %s", (_, input) => {
     expect(() => Schema.decodeUnknownSync(Hash)(input)).toThrow()
+  })
+})
+
+// #160: every URL the API hands back is one the CLI may give to a browser with
+// `--open`, so the contract parses it rather than trusting a prefix.
+describe("HttpsUrl", () => {
+  test.each([
+    "https://a3f9c1d4e2b8.handbill.dev",
+    "https://plan.handbill.dev",
+    // A query and an ampersand are ordinary URL, and stay accepted: the opener
+    // is what must not hand them to a shell.
+    "https://polar.sh/checkout?session=abc&owner=gh%3A42"
+  ])("accepts %s", (input) => {
+    expect(Schema.decodeUnknownSync(HttpsUrl)(input)).toBe(input)
+  })
+
+  test.each([
+    ["http", "http://handbill.dev"],
+    ["a scheme a browser would run", "javascript:alert(1)"],
+    ["a local file", "file:///etc/passwd"],
+    ["no scheme at all", "handbill.dev"],
+    ["something that does not parse", "https://"],
+    ["nothing", ""]
+  ])("rejects %s", (_, input) => {
+    expect(() => Schema.decodeUnknownSync(HttpsUrl)(input)).toThrow()
   })
 })
 

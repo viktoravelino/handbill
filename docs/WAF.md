@@ -142,14 +142,14 @@ Take each hash down, then revoke the keys. An owner's page count is quota-bounde
 
 ### 4. Fix a stuck counter, if an owner reports one
 
-`q:<owner>:bytes` is derived state that is never recomputed, and it can drift upward: a KV write that failed during a removal is not retried (the retry finds the object already gone and has nothing to release), so an owner can end up charged for storage they no longer have — and at their tier's ceiling of phantom bytes (250 MB on `free`, 5 GiB on `paid`) they cannot publish at all. Nothing self-heals this. Delete the counter and it starts again from zero:
+`q:<owner>:bytes` is derived state that is never recomputed, and it drifts upward: a KV write that failed during a removal is not retried (the retry finds the object already gone and has nothing to release), so an owner can end up charged for storage they no longer have — and at their tier's ceiling of phantom bytes (250 MB on `free`, 5 GiB on `paid`) they cannot publish at all. Nothing self-heals this. Delete the counter and it starts again from zero:
 
 ```sh
 bunx wrangler kv key delete --remote --namespace-id "$NS" "q:gh:4242:bytes"
 bunx wrangler kv key list   --remote --namespace-id "$NS" --prefix "i:gh:4242:"   # what they actually hold
 ```
 
-Zeroing it under-counts rather than over-counts, which is the direction this codebase prefers everywhere else; if you want it exact, sum the `bytes` metadata on that owner's `i:` entries and `kv key put` that number instead. The daily counter (`q:<owner>:d:<yyyymmdd>`) needs no such tool: it expires itself in 48 hours.
+Downward drift is the direction that matters and the one the code refuses to allow: a counter below what the owner really stores is free storage, and `bump`'s floor at zero cannot undo it. That is why `DELETE` refunds bytes only on the request that actually removed the object (#157), and why zeroing a counter by hand is an operator decision rather than something a route can be talked into. Zeroing it under-counts rather than over-counts, which is the direction this codebase prefers everywhere else; if you want it exact, sum the `bytes` metadata on that owner's `i:` entries and `kv key put` that number instead. The daily counter (`q:<owner>:d:<yyyymmdd>`) needs no such tool: it expires itself in 48 hours.
 
 ### 5. Write it down
 

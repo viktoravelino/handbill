@@ -2,10 +2,12 @@
 # Deploys the Worker to production, gated on a release tag: HEAD must be exactly
 # `v<version>` — matching apps/worker/package.json's version — and that tag must
 # already be on origin/main, so a deploy always ships something the maintainer
-# merged, never a branch in progress.
+# merged, never a branch in progress. Dependencies come from a frozen install, so
+# what ships matches the lockfile rather than the local node_modules.
 #
-#   scripts/deploy-prod.sh [wrangler args…]   deploy HEAD, refusing a dirty tree,
-#                                              an untagged commit, or an unmerged tag
+#   scripts/deploy-prod.sh [wrangler args…]   deploy HEAD, refusing a dirty tree, an
+#                                              untagged commit, an unmerged tag, or a
+#                                              pre-release tag (anything with a `-`)
 #   scripts/deploy-prod.sh --force […]        skip every check above for a hotfix or
 #                                              the kill-switch drill and nothing else;
 #                                              VERSION is whatever
@@ -46,10 +48,14 @@ else
   git -C "$ROOT" merge-base --is-ancestor HEAD origin/main \
     || die "$TAG is not reachable from origin/main; merge it first or pass --force for a hotfix"
   VERSION=${TAG#v}
+  [[ $VERSION != *-* ]] || die "$TAG is a pre-release tag; production deploys only from a final release tag (no '-' in the version)"
   [[ $VERSION == "$PKG_VERSION" ]] || die "$TAG does not match apps/worker/package.json's version ($PKG_VERSION)"
 fi
 
 BUILD=$(git -C "$ROOT" rev-parse --short HEAD)
+
+# Deploy what the lockfile says, not whatever node_modules happens to hold.
+(cd "$ROOT" && bun install --frozen-lockfile) || die "bun install --frozen-lockfile failed"
 
 cd "$WORKER"
 exec "$WRANGLER" deploy --config wrangler.production.jsonc \
