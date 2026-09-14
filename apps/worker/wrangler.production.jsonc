@@ -17,11 +17,9 @@
   "compatibility_date": "2026-08-01",
   "workers_dev": false,
   "observability": { "enabled": true },
-  // Polar's sandbox organisation until the production one exists; both flip together.
+  // POLAR_API and POLAR_PRODUCT_ID go here when the production Polar organisation exists; until then the checkout route answers 404 on production by design, and the sandbox lives in wrangler.staging.jsonc.
   "vars": {
-    "ZONE": "handbill.dev",
-    "POLAR_API": "https://sandbox-api.polar.sh",
-    "POLAR_PRODUCT_ID": "8313da80-c695-4a15-b5be-bde0d7eee784"
+    "ZONE": "handbill.dev"
   },
   "routes": [
     { "pattern": "api.handbill.dev/*", "zone_name": "handbill.dev" },

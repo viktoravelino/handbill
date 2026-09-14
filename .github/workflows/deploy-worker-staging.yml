@@ -1,0 +1,47 @@
+name: deploy worker (staging)
+
+# handbill-staging.dev is apps/worker deployed from main by this workflow and
+# nothing else; production stays manual (`bun run --cwd apps/worker deploy:prod`).
+# Staging is where the Polar sandbox wiring lives — see wrangler.staging.jsonc.
+# Needs the same two repository secrets as deploy-web.yml, CLOUDFLARE_API_TOKEN
+# and CLOUDFLARE_ACCOUNT_ID; forks have neither, so the job only runs in the
+# upstream repository. The token needs Workers Scripts Edit, Workers KV Storage
+# and R2 on this account. The existing token is the one documented in
+# docs/SELF-HOSTING.md step 1 — the maintainer must confirm it covers the
+# staging Worker, its two KV namespaces and the handbill-staging bucket, and
+# widen its scope if it does not.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/worker/**"
+      - "packages/contract/**"
+      - "bun.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-worker-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.repository == 'viktoravelino/handbill'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.9
+      - run: bun install --frozen-lockfile
+      # `bun run` puts node_modules/.bin on PATH, so the script's bare
+      # `wrangler` is the workspace-installed one, never a `bunx` fetch. The
+      # script also needs the checkout's git history for BUILD, which
+      # actions/checkout gives it.
+      - run: bun run --cwd apps/worker deploy:staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
