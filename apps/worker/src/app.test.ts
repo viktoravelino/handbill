@@ -61,6 +61,30 @@ test("health reports the mode and the zone without a token", async () => {
   expect(response.headers.get("cache-control")).toBe("no-store")
 })
 
+// Both vars arrive from `deploy:prod`; a run started without them says nothing
+// rather than reporting an empty version.
+test("health carries the deploy's version and build when they are set", async () => {
+  const deployed = makeApp(
+    { zone: ZONE, maxBytes: MAX_BYTES, version: "0.4.0", build: "d9d75b5" },
+    Layer.mergeAll(
+      IndexBucket.pipe(Layer.provideMerge(StorageMemory)),
+      AuthSecret(TOKEN),
+      QuotaUnlimited,
+      AliasesDisabled,
+      BillingDisabled
+    )
+  )
+  const response = await deployed.fetch(new Request(`https://api.${ZONE}/v1/health`))
+  expect(await response.json()).toEqual({
+    ok: true,
+    mode: "secret",
+    zone: ZONE,
+    version: "0.4.0",
+    build: "d9d75b5"
+  })
+  await deployed.dispose()
+})
+
 test("publishing returns the page URL and serves the document", async () => {
   const hash = await hashOf(DOC)
   const published = await publish(hash, DOC)

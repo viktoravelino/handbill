@@ -176,6 +176,9 @@ exports[`spec matches the published spec 1`] = `
       "Health": {
         "additionalProperties": false,
         "properties": {
+          "build": {
+            "type": "string",
+          },
           "mode": {
             "enum": [
               "secret",
@@ -185,6 +188,9 @@ exports[`spec matches the published spec 1`] = `
           },
           "ok": {
             "type": "boolean",
+          },
+          "version": {
+            "type": "string",
           },
           "zone": {
             "type": "string",

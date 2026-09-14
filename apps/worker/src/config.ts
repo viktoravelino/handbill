@@ -1,17 +1,19 @@
 import { Context } from "effect"
 
 /**
- * `ZONE`, `MAX_BYTES` and the two operator secrets as the handlers see them.
- * Read once from the Worker `env`; `zone` is also what the hostname classifier
- * matches against, so it is passed to `makeApp` as a plain value rather than
- * pulled out of the layer. An undefined `adminToken` takes the admin routes
- * away; an undefined `webhookSecret`, the billing webhook.
+ * The `env` vars as the handlers see them, read once. `zone` is also what the
+ * hostname classifier matches against, so it is passed to `makeApp` as a plain
+ * value rather than pulled out of the layer. Undefined takes something away: the
+ * admin routes (`adminToken`), the billing webhook (`webhookSecret`), or what
+ * health says about the deploy (`version`, `build`).
  */
 export interface WorkerConfig {
   readonly zone: string
   readonly maxBytes: number
   readonly adminToken?: string | undefined
   readonly webhookSecret?: string | undefined
+  readonly version?: string | undefined
+  readonly build?: string | undefined
 }
 
 export class Config extends Context.Service<Config, WorkerConfig>()("handbill/Config") {}

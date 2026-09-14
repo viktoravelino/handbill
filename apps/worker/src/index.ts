@@ -22,6 +22,8 @@ export interface Env {
   readonly POLAR_ACCESS_TOKEN?: string
   readonly POLAR_PRODUCT_ID?: string
   readonly POLAR_API?: string
+  readonly VERSION?: string
+  readonly BUILD?: string
   readonly BUCKET: R2Bucket
   readonly ALIASES?: KVNamespace
   readonly ACCOUNTS?: KVNamespace
@@ -37,19 +39,17 @@ export const maxBytesFrom = (value: string | undefined): number => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_BYTES
 }
 
-/**
- * Built once per isolate. The bindings do not change between requests, so the
- * layers are built on the first one and reused.
- */
+/** Built once per isolate: the bindings do not change between requests. */
 let app: ReturnType<typeof makeApp> | undefined
 
 const appFor = (env: Env) => {
   const storage = StorageR2(env.BUCKET)
   const { ADMIN_TOKEN: adminToken, POLAR_WEBHOOK_SECRET: webhookSecret, ZONE: zone } = env
   const { POLAR_ACCESS_TOKEN: polar, POLAR_PRODUCT_ID: product } = env
+  const { BUILD: build, VERSION: version } = env
   const api = env.POLAR_API ?? DEFAULT_POLAR_API
   return (app ??= makeApp(
-    { zone, maxBytes: maxBytesFrom(env.MAX_BYTES), adminToken, webhookSecret },
+    { zone, maxBytes: maxBytesFrom(env.MAX_BYTES), adminToken, webhookSecret, version, build },
     Layer.mergeAll(
       storage,
       // Quotas ride the same binding: hosting strangers is what makes a ceiling
