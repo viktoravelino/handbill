@@ -107,7 +107,7 @@ Effect 4 end to end, pinned to an exact release candidate. Conventions and invar
 - **0.1** — self-host kit: Worker, CLI, skill (released)
 - **0.2** — markdown input rendered in the CLI, living names on KV with `alias` commands, `--open`, OpenAPI + `/docs`, the site at [handbill.dev](https://handbill.dev) (released)
 - **0.3** — hosted mode: the same Worker with accounts instead of a single token, `handbill login`, per-account quotas, operator takedown, and [handbill.dev](https://handbill.dev/docs/hosted/) as the default endpoint (released)
-- **0.4** — paid tier on [Polar](https://polar.sh): a subscription that raises the hosted quotas, bought with `handbill account --upgrade`, flipped by a verified webhook, with pricing and account pages on the site — and nothing on the read path that knows about any of it
+- **0.4** — paid tier on [Polar](https://polar.sh): a subscription that raises the hosted quotas, bought with `handbill account --upgrade`, flipped by a verified webhook, with pricing and account pages on the site — and nothing on the read path that knows about any of it (shipped 2026-09-15)
 - **0.5** — sheets and time: inline local assets at publish time, expiring pages
 - later — encrypted pages
 
