@@ -127,13 +127,13 @@
   <h2>02 · The model</h2>
   <p>Two tiers, one product. No metering, no seats, no add-ons — a flat subscription that buys bigger numbers:</p>
   <div class="scroll"><table>
-    <caption>Tiers (free column confirmed with 0.3; paid column placeholders until 0.4 opens)</caption>
+    <caption>Tiers (free column confirmed with 0.3; paid column settled 2026-09-15)</caption>
     <thead><tr><th>Limit</th><th>free</th><th>paid</th></tr></thead>
     <tbody>
       <tr><td>Pages per day</td><td>25</td><td>250</td></tr>
       <tr><td>Stored bytes</td><td>250 MB</td><td>5 GiB</td></tr>
       <tr><td>Page size</td><td>5 MB</td><td>5 MB — unchanged; it is a format constraint, not a paywall</td></tr>
-      <tr><td>Price</td><td>—</td><td>single monthly price, annual discount; picked at 0.4 launch</td></tr>
+      <tr><td>Price</td><td>—</td><td>$8/month, or $80/year — ten months' price for twelve</td></tr>
     </tbody>
   </table></div>
   <ul>
@@ -180,7 +180,7 @@
       <tr><td>Ops</td><td>webhook delivery monitoring (Polar's dashboard + a weekly <code>account</code> spot-check); the drill gains a step: upgrade, verify, cancel, verify lapse</td></tr>
     </tbody>
   </table></div>
-  <p><b>Open until 0.4:</b> the price; annual-only vs monthly+annual; whether webhook event names are consumed via Polar's SDK or verified raw (decide against the SDK if it drags dependencies into the Worker — the signature check is small); whether <code>handbill account</code> belongs in 0.3's M15 already (leaning no — YAGNI until there is a tier to report). <i>Settled 2026-09-10 when the milestones were cut:</i> <code>account</code> was not in M15 and is M20; the signature is verified raw (M19); the price and the annual question stay open until the Polar product is created.</p>
+  <p><b>Open until 0.4:</b> the price; annual-only vs monthly+annual; whether webhook event names are consumed via Polar's SDK or verified raw (decide against the SDK if it drags dependencies into the Worker — the signature check is small); whether <code>handbill account</code> belongs in 0.3's M15 already (leaning no — YAGNI until there is a tier to report). <i>Settled 2026-09-10 when the milestones were cut:</i> <code>account</code> was not in M15 and is M20; the signature is verified raw (M19); the price and the annual question stay open until the Polar product is created. <i>Settled 2026-09-15, before the release:</i> $8 a month and $80 a year — ten months' price for twelve, carried as two Polar products rather than one with two prices, because that is how Polar models a yearly plan and <code>POLAR_PRODUCT_ID</code> therefore names both; no trial, because a checkout that costs nothing is a checkout worth squatting and 25 pages a day is already the trial; and the signature is verified raw on WebCrypto, with no Polar SDK in the Worker.</p>
 </section>
 
 <section id="roadmap">

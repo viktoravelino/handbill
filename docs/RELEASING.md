@@ -47,6 +47,21 @@ Do them in the bump PR. After the tag they are the thing nobody remembers, and t
 
 Before any release that announces the paid tier: the Polar sandbox organisation lives in `apps/worker/wrangler.staging.jsonc` and stays there. `apps/worker/wrangler.production.jsonc` carries no `POLAR_API` or `POLAR_PRODUCT_ID` at all, so the checkout route answers 404 on production — by design, until the production organisation exists. Creating it means adding those two vars to `wrangler.production.jsonc` and putting a production `POLAR_ACCESS_TOKEN` and `POLAR_WEBHOOK_SECRET` as secrets on the production Worker; until all four are in place, do not announce the tier, because every checkout the CLI would hand out either 404s or takes no money.
 
+### The 0.4.0 checklist
+
+0.4 is the first release that takes money, so it has an order of its own. In it:
+
+1. The production Polar organisation exists, past KYC, with the two subscription products — $8/month and $80/year — and a webhook endpoint at `https://api.handbill.dev/v1/billing/webhook`.
+2. `POLAR_ACCESS_TOKEN` and `POLAR_WEBHOOK_SECRET` are set as secrets on the production Worker.
+3. `wrangler.production.jsonc` carries `POLAR_API` (`https://api.polar.sh`) and both `POLAR_PRODUCT_ID`s, comma-separated.
+4. `scripts/release.sh bump 0.4.0`, the maintainer merges, `scripts/release.sh tag`.
+5. `bun run --cwd apps/worker deploy:prod` from the tag.
+6. `docs/DRILL.md` scenario E, once, on production with a real card — subscribe, `handbill account` says `paid`, cancel, the lapse lands — then refund that payment in Polar's dashboard and fill in the `Result:` lines.
+7. The PRD versions row and the README roadmap line say shipped, with the date (the three hand edits above).
+8. `scripts/release.sh bump 0.5.0-dev`.
+
+Steps 1 to 3 are the announcement gate: until all of them are done a checkout either 404s or takes no money, so nothing may say the tier exists.
+
 `bump` refuses a release version while `CLIENT_ID` in `apps/cli/src/github.ts` is still the placeholder — a `handbill login` against an app that does not exist cannot work, and a release is the point past which that is no longer fixable in a branch. On this repository the gate is dormant: the constant holds the client id of the "handbill CLI" GitHub App on the maintainer's account, registered with device flow enabled and no permissions. It still binds anyone standing the project up on their own account, who has to create the app first (GitHub → *Settings* → *Developer settings* → *GitHub Apps* or *OAuth Apps*, with **device flow enabled**) and set the constant; the client id is public and has no secret, so it belongs in the source. `-dev` versions are never published and are allowed to carry the placeholder.
 
 `bump` is the only thing that edits a version: `apps/cli/package.json` is the source of truth (the CLI's `--version` reads it at build time) and the script mirrors it into the `apps/cli` entry of `bun.lock`, which bun does not rewrite on its own. `tag` refuses to run off `main`, with a dirty tree, behind origin, if the tag exists, if that version is already on npm, or if it is a `-dev` version. `DRY_RUN=1` in front of either command runs the checks and the build but prints the branch, commit, push, PR and tag steps instead of doing them, and leaves the tree as it found it.

@@ -33,11 +33,22 @@ type ConfigFile = typeof ConfigFile.Type
 export const DEFAULT_ENDPOINT = "https://api.handbill.dev"
 
 /**
- * The hosted site — the default endpoint without its `api.` label — which is
- * where the account page lives. `account --web` opens it and refuses for any
- * other endpoint: a self-hosted deployment is an API with no site behind it.
+ * The site that belongs to an endpoint — the zone under its `api.` label, which
+ * is where the account page lives. `https://api.handbill.dev` is
+ * `https://handbill.dev` and `https://api.handbill-staging.dev` is the staging
+ * site, so the page is not pinned to one host and staging can be read the same
+ * way. `None` for any other shape: an endpoint that is not `api.<zone>` is an
+ * API with no site behind it, and a key is never handed to a guess. HTTPS only
+ * — the URL carries the key, so loopback is not an exception here.
  */
-export const DEFAULT_SITE = DEFAULT_ENDPOINT.replace("://api.", "://")
+export const siteFor = (endpoint: string): Option.Option<string> => {
+  if (!URL.canParse(endpoint)) return Option.none()
+  const { hostname, protocol } = new URL(endpoint)
+  const zone = hostname.toLowerCase().replace(/^api\./u, "")
+  return protocol === "https:" && zone !== hostname.toLowerCase() && zone.includes(".")
+    ? Option.some(`https://${zone}`)
+    : Option.none()
+}
 
 /** The config file exists but cannot be used. A missing file is not an error. */
 export class BadConfigFile extends Data.TaggedError("BadConfigFile")<{

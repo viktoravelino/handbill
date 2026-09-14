@@ -261,12 +261,15 @@ export const logout = Command.make(
  * URL. A fragment is never sent to a server and the page takes it straight out
  * of the address bar, which is what keeps "no login on the site" true — but the
  * URL itself is the key for as long as it exists, which is why it is printed
- * with a warning and why the page lives on one known host rather than wherever
- * `--endpoint` points. That host is the built-in default, and nothing else: a
- * self-hosted deployment is an API with no site behind it.
+ * with a warning and why the site is derived from the endpoint rather than
+ * taken from a flag. {@link Config.siteFor} is that derivation: the zone under
+ * an `api.` label, so the hosted deployment and staging each open their own
+ * site and anything else is refused — an endpoint with no site behind it has
+ * nowhere to send the key.
  */
 const accountPage = Effect.fn(function* (settings: Config.Settings) {
-  if (!Config.sameEndpoint(settings.endpoint.value, Config.DEFAULT_ENDPOINT)) {
+  const derived = Config.siteFor(settings.endpoint.value)
+  if (Option.isNone(derived)) {
     return yield* Effect.fail(new Output.NoAccountPage({ endpoint: settings.endpoint.value }))
   }
   const { token } = yield* Config.credentials(settings)
@@ -275,7 +278,7 @@ const accountPage = Effect.fn(function* (settings: Config.Settings) {
   // another deployment minted is not this site's to read an account with.
   yield* Config.sendable(settings, token)
   yield* Config.pinned(settings)
-  return `${Config.DEFAULT_SITE}/account/#key=${encodeURIComponent(Redacted.value(token))}`
+  return `${derived.value}/account/#key=${encodeURIComponent(Redacted.value(token))}`
 })
 
 /**
@@ -344,7 +347,7 @@ export const account = Command.make(
   )
 ).pipe(
   Command.withDescription(
-    "Show what the key in hand is: its owner, its tier, and the quotas it has spent today. --upgrade prints a checkout URL for the paid tier instead, and is the only form --open applies to; --web opens the same account in the browser, on the hosted site only."
+    "Show what the key in hand is: its owner, its tier, and the quotas it has spent today. --upgrade prints a checkout URL for the paid tier instead, and is the only form --open applies to; --web opens the same account in the browser, on the site that belongs to the endpoint's zone."
   ),
   Command.withExamples([
     { command: "handbill account", description: "Owner, tier and quota usage" },
@@ -358,7 +361,7 @@ export const account = Command.make(
     },
     {
       command: "handbill account --web",
-      description: "Open the account page on handbill.dev with this key"
+      description: "Open the account page on the endpoint's site with this key"
     }
   ])
 )

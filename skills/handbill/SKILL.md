@@ -78,7 +78,7 @@ Run it when a publish was refused for a quota, or when the user asks what their 
 
 `handbill account --upgrade` prints a checkout URL for the paid tier, created for the account whose key is in hand. Hand that URL to the user and stop: paying is theirs to do, never yours. A deployment with no paid tier says so in one sentence.
 
-`handbill account --web` opens the same account on handbill.dev, for a user who would rather see it in a browser — it works against the hosted deployment only, and refuses elsewhere. **The URL it prints carries the user's key in its fragment: never repeat it, quote it, or put it in a file, a message or a page.** Run the command and tell the user their browser is open.
+`handbill account --web` opens the same account on the site that belongs to the endpoint's zone — `https://api.handbill.dev` opens handbill.dev — for a user who would rather see it in a browser; an endpoint that is not `api.<zone>` has no site behind it and is refused. **The URL it prints carries the user's key in its fragment: never repeat it, quote it, or put it in a file, a message or a page.** Run the command and tell the user their browser is open.
 
 ## Showing the page
 
