@@ -5,6 +5,10 @@
   // ships with `kv_namespaces` commented out for self-hosters, and would flip
   // production back to secret mode. Deploy production with
   //   bun run deploy:prod        (= wrangler deploy --config wrangler.production.jsonc)
+  // That script also passes VERSION and BUILD — this package's version and the
+  // short commit, substituted by the shell bun runs the script through — so
+  // `/v1/health` says which checkout is live. A `wrangler dev` run sets neither
+  // and health omits both, which is how a local run tells itself apart.
   // Namespace ids are not secrets; the secrets stay in `wrangler secret`.
   // Self-hosting? Ignore this file and follow docs/SELF-HOSTING.md.
   "$schema": "./node_modules/wrangler/config-schema.json",

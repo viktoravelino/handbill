@@ -23,7 +23,7 @@ const unreachable = Layer.succeed(FetchHttpClient.Fetch, unreachableFetch).pipe(
  * rather than only on what it printed. Health has to succeed for `auth` to run
  * at all, which the in-process Worker cannot do for a hostname off its zone.
  */
-const recording = () => {
+const recording = (health: Record<string, string> = {}) => {
   const sent: Array<{ readonly path: string; readonly authorization: string | null }> = []
   const fetch: typeof globalThis.fetch = Object.assign(
     (input: string | URL | Request, init?: RequestInit) => {
@@ -32,7 +32,7 @@ const recording = () => {
       sent.push({ path: url.pathname, authorization: request.headers.get("authorization") })
       return Promise.resolve(
         url.pathname === "/v1/health"
-          ? Response.json({ ok: true, mode: "accounts", zone: "handbill.dev" })
+          ? Response.json({ ok: true, mode: "accounts", zone: "handbill.dev", ...health })
           : new Response(null, { status: 404 })
       )
     },
@@ -91,6 +91,29 @@ describe("doctor", () => {
     expect(
       checks.map((check: { name: string; status: string }) => `${check.status} ${check.name}`)
     ).toEqual(["ok config", "ok token", "FAIL health", "skip auth", "skip tls"])
+  })
+})
+
+/** What the endpoint is running, which only a deployed Worker knows about itself. */
+describe("doctor and the deployed version", () => {
+  const healthLine = async (health?: Record<string, string>) => {
+    const transport = recording(health)
+    const outcome = await run(["doctor", "--json"], {
+      http: transport.layer,
+      env: { XDG_CONFIG_HOME: configHome(JSON.stringify({ token: "key" })) }
+    })
+    const { checks } = JSON.parse(outcome.stdout[0] ?? "")
+    return checks.find((check: { name: string }) => check.name === "health").detail as string
+  }
+
+  test("reports the version and the build when health carries them", async () => {
+    expect(await healthLine({ version: "0.4.0-dev", build: "d9d75b5" })).toBe(
+      "GET /v1/health answered: mode accounts, zone handbill.dev, version 0.4.0-dev, build d9d75b5."
+    )
+  })
+
+  test("says nothing about them when health omits them", async () => {
+    expect(await healthLine()).toBe("GET /v1/health answered: mode accounts, zone handbill.dev.")
   })
 })
 

@@ -1,11 +1,11 @@
 {
   "name": "@handbill/worker",
-  "version": "0.0.0",
+  "version": "0.4.0-dev",
   "private": true,
   "type": "module",
   "scripts": {
     "size": "bun run scripts/size.ts",
-    "deploy:prod": "wrangler deploy --config wrangler.production.jsonc"
+    "deploy:prod": "wrangler deploy --config wrangler.production.jsonc --var VERSION:$(node -p \"require('./package.json').version\") --var BUILD:$(git rev-parse --short HEAD)"
   },
   "dependencies": {
     "@handbill/contract": "workspace:*",

@@ -73,11 +73,18 @@ export const PublishResult = Schema.Struct({
 }).annotate({ identifier: "PublishResult" })
 export type PublishResult = typeof PublishResult.Type
 
-/** The body of `GET /v1/health`: enough for `handbill doctor` to say what it reached. */
+/**
+ * The body of `GET /v1/health`: enough for `handbill doctor` to say what it
+ * reached. `version` and `build` are the deployed Worker's package version and
+ * short commit; they arrive as deploy-time vars, so a run started without them
+ * — `wrangler dev`, a self-hosted deploy — omits both rather than sending "".
+ */
 export const Health = Schema.Struct({
   ok: Schema.Boolean,
   mode: Mode,
-  zone: Schema.String
+  zone: Schema.String,
+  version: Schema.optionalKey(Schema.String),
+  build: Schema.optionalKey(Schema.String)
 }).annotate({ identifier: "Health" })
 export type Health = typeof Health.Type
 

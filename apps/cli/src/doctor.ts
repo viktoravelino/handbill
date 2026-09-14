@@ -1,7 +1,7 @@
 import { Effect, Option, Redacted, Result } from "effect"
 import { Command } from "effect/unstable/cli"
 import { HttpClient } from "effect/unstable/http"
-import type { Mode } from "@handbill/contract"
+import type { Health, Mode } from "@handbill/contract"
 import * as Client from "./client"
 import { handler } from "./command-kit"
 import * as Config from "./config"
@@ -119,6 +119,17 @@ const wildcard = Effect.fn(function* (zone: string) {
 })
 
 /**
+ * What the deployment says about itself, for the `health` line. Both fields are
+ * deploy-time vars, so a `wrangler dev` run or an older Worker reports neither
+ * and the line reads exactly as it did before them.
+ */
+const deployed = ({ build, version }: Health): string =>
+  [
+    version === undefined ? "" : `, version ${version}`,
+    build === undefined ? "" : `, build ${build}`
+  ].join("")
+
+/**
  * The three checks that need the network, in the order they depend on each
  * other. `health` is also what tells the two later checks which auth the
  * endpoint runs — accounts or one shared secret — so they can name the fix.
@@ -154,7 +165,7 @@ const reachable = Effect.fn(function* (settings: Config.Settings) {
     check(
       "health",
       "ok",
-      `GET /v1/health answered: mode ${health.success.mode}, zone ${health.success.zone}.`
+      `GET /v1/health answered: mode ${health.success.mode}, zone ${health.success.zone}${deployed(health.success)}.`
     ),
     yield* accepts(client, settings, Option.some(health.success.mode)),
     yield* wildcard(health.success.zone)

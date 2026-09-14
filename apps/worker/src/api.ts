@@ -35,10 +35,9 @@ const publishedAt = (iso: string): DateTime.Utc =>
 export const pageUrl = (zone: string, label: string): string => `https://${label}.${zone}`
 
 /**
- * Bearer auth for the `pages` group. It resolves the token through whichever
- * `Auth` layer is installed and hands the owner and tier to the handlers, the
- * single place `secret` and `accounts` mode differ. The tier rides along because
- * the quota check needs it and only this layer read the key record (decision 11).
+ * Bearer auth for the `pages` group: it resolves the token through whichever
+ * `Auth` layer is installed and hands the handlers the owner and the tier — the
+ * single place the two modes differ, and the only read of the key record (§11).
  */
 export const AuthorizationLive = Layer.effect(
   Authorization,
@@ -109,12 +108,10 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
       })
     )
     // Idempotent for a page that is not there (204), but ownership-checked: a
-    // hash owned by someone else answers 404, deletes nothing, and never 403.
-    // Decision 05's bar is that a non-owner learns no *ownership*, so 404 is the
-    // "not yours" answer rather than a "forbidden" that would confirm another
-    // account holds it — existence itself is already public on the hash host.
-    // Ownership is read from R2 (`head`), never the index, so a crashed publish
-    // that left an object with no entry is still removable by its owner.
+    // hash owned by someone else answers 404, deletes nothing, and never 403 —
+    // decision 05's bar is that a non-owner learns no *ownership*. Ownership is
+    // read from R2 (`head`), never the index, so a crashed publish that left an
+    // object with no entry is still removable by its owner.
     .handle("remove", ({ params }) =>
       Effect.gen(function* () {
         const storage = yield* Storage
@@ -196,9 +193,8 @@ const presentedKey = (headers: Headers.Headers): Redacted.Redacted =>
   )
 
 /**
- * Keys. Nothing here asks whether accounts are on: `AuthSecret` fails both `mint`
- * and `revoke` with `NotFound`, so a deployment on one shared token 404s these
- * two the way it 404s the alias routes when there is no KV binding.
+ * Keys. Nothing here asks whether accounts are on: `AuthSecret` fails `mint` and
+ * `revoke` with `NotFound`, the way a missing KV binding 404s the alias routes.
  */
 export const KeysLive = HttpApiBuilder.group(HandbillApi, "keys", (handlers) =>
   handlers
@@ -213,10 +209,10 @@ export const KeysLive = HttpApiBuilder.group(HandbillApi, "keys", (handlers) =>
 )
 
 /**
- * The caller's own account, as `AccountGroup` defines the two answers. `limits`
- * comes from `Quotas`, so neither handler asks which layer is on, and the one
- * outbound call the checkout makes is bounded by WAF rule 1 (2 writes / 10 s per
- * IP on api.handbill.dev): nobody can spend the Polar rate limit from here.
+ * The caller's own account. `limits` comes from `Quotas`, so neither handler asks
+ * which layer is on, and the one outbound call the checkout makes is bounded by
+ * WAF rule 1 (2 writes / 10 s per IP on api.handbill.dev): nobody can spend the
+ * Polar rate limit from here.
  */
 export const AccountLive = HttpApiBuilder.group(HandbillApi, "account", (handlers) =>
   handlers
@@ -304,9 +300,11 @@ export const BillingLive = HttpApiBuilder.group(HandbillApi, "billing", (handler
 export const MetaLive = HttpApiBuilder.group(HandbillApi, "meta", (handlers) =>
   handlers.handle("health", () =>
     Effect.gen(function* () {
-      const { zone } = yield* Config
+      const { build, version, zone } = yield* Config
       const auth = yield* Auth
-      return { ok: true, mode: auth.mode, zone }
+      // A var the deploy did not set is absent from the body, never an empty string.
+      const deploy = { ...(version ? { version } : {}), ...(build ? { build } : {}) }
+      return { ok: true, mode: auth.mode, zone, ...deploy }
     })
   )
 )
