@@ -91,11 +91,13 @@ jobs:
       # publish against it; a dry run ends on this step.
       - name: Pack
         working-directory: apps/cli
+        env:
+          DIST_TAG: ${{ needs.version.outputs.dist_tag }}
         run: |
           set -euo pipefail
           npm pack --pack-destination "$RUNNER_TEMP"
           mv "$RUNNER_TEMP"/handbill-*.tgz "$RUNNER_TEMP/handbill.tgz"
-          npm publish "$RUNNER_TEMP/handbill.tgz" --access public --dry-run
+          npm publish "$RUNNER_TEMP/handbill.tgz" --access public --tag "$DIST_TAG" --dry-run
       - if: inputs.dry_run == true
         run: |
           echo "dry run: built and packed, nothing published." >> "$GITHUB_STEP_SUMMARY"
