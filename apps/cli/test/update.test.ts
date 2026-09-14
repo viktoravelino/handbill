@@ -159,6 +159,58 @@ describe("update and a lagging listing", () => {
   })
 })
 
+/** `GET /v1/aliases` a minute behind a name that was just set: it reports nothing at all. */
+const emptyListing = () =>
+  Promise.resolve(
+    new Response(JSON.stringify({ aliases: [] }), {
+      headers: { "content-type": "application/json" }
+    })
+  )
+
+describe("update --alias", () => {
+  // #112, the residual of #95: discovery cannot see a name created in the last
+  // minute, and the rotation would unpublish the page under it. Naming it moves
+  // it by the consistent read-by-key instead, with no minute to wait.
+  test("moves a name the listing does not report yet", async () => {
+    await cli([plan.path])
+    await cli(["alias", "plan", hash])
+
+    const outcome = await cli(["update", hash, retro.path, "--json", "--alias", "plan"], {
+      http: broken((request) => new URL(request.url).pathname === "/v1/aliases", emptyListing)
+    })
+    expect(outcome.ok).toBe(true)
+    expect(JSON.parse(outcome.stdout[0] ?? "")).toMatchObject({ aliases: ["plan"] })
+    // The name followed the page, and the old hash is gone: no 404 window.
+    expect(await (await server().fetch(`${planUrl}/`)).text()).toBe(retro.html)
+    expect(server().hashes()).toEqual([retro.hash])
+  })
+
+  // The opposite of a discovered name that 404s: the caller asserted this one
+  // exists, so treating it as gone is exactly how the page gets unpublished
+  // under it. The rotation stops before the remove and names it.
+  test("fails on a named alias the deployment does not answer for", async () => {
+    await cli([plan.path])
+    await cli(["alias", "plan", hash])
+
+    const outcome = await cli(["update", hash, retro.path, "--alias", "kickoff"])
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stderr.join("\n")).toContain('--alias "kickoff" names no alias')
+    // The old page is still up, and nothing was moved.
+    expect(server().hashes()).toContain(hash)
+    expect(await (await server().fetch(`${planUrl}/`)).text()).toBe(plan.html)
+  })
+
+  // A typo is caught before anything is published, so the rotation is never
+  // left half done over a name the deployment could not have stored anyway.
+  test("refuses a name the contract will not store, before publishing", async () => {
+    await cli([plan.path])
+    const outcome = await cli(["update", hash, retro.path, "--alias", "Not A Name"])
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stderr.join("\n")).toContain("is not a name an alias can have")
+    expect(server().hashes()).toEqual([hash])
+  })
+})
+
 describe("update target", () => {
   // An alias URL is a handbill URL; it just is not the one `update` can act on.
   // Saying only "not a handbill URL" would deny the URL the user most likely

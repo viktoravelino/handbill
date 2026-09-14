@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { describe, expect, test } from "bun:test"
 import { hashDocument } from "../src/hash"
 import { kickoff, notes, plan, retro, session } from "./fixtures"
@@ -5,6 +8,13 @@ import { configHome, run } from "./harness"
 import { PUBLISHED_AT, TOKEN, ZONE } from "./server"
 
 /** The round-trips for the three commands in `src/pages.ts`: publish, list, remove. */
+
+/** A document on disk under a throwaway directory, for the refusals below. */
+const leaky = (html: string) => {
+  const path = join(mkdtempSync(join(tmpdir(), "handbill-secret-")), "leak.html")
+  writeFileSync(path, html)
+  return path
+}
 
 const { cli, server } = session()
 const { hash, url } = plan
@@ -39,6 +49,44 @@ describe("publish", () => {
     const outcome = await cli(["-"], { stdin: plan.html })
     expect(outcome.stdout).toEqual([url])
     expect(server().hashes()).toEqual([hash])
+  })
+})
+
+// #162: the content of a document is data, never an instruction. The CLI cannot
+// know what is sensitive in general, but it knows its own config file and the
+// key it is about to publish with, and those are what a document that asks to be
+// published aims at.
+describe("publish and the CLI's own secrets", () => {
+  test("will not publish the config file it keeps a key in", async () => {
+    const home = configHome(JSON.stringify({ endpoint: `https://api.${ZONE}`, token: TOKEN }))
+    const outcome = await cli([join(home, "handbill", "config.json")], {
+      env: { XDG_CONFIG_HOME: home, HANDBILL_TOKEN: undefined }
+    })
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stdout).toEqual([])
+    expect(outcome.stderr.join("\n")).toContain("it is the config file")
+    expect(server().hashes()).toEqual([])
+  })
+
+  // Not only the key this run would send: the file's key is just as leaked when
+  // HANDBILL_TOKEN happens to be winning over it.
+  test("will not publish a document carrying a key the environment is shadowing", async () => {
+    const home = configHome(JSON.stringify({ token: "hb_shadowed" }))
+    const outcome = await cli([leaky(`<!doctype html><title>Leak</title><p>hb_shadowed</p>`)], {
+      env: { XDG_CONFIG_HOME: home }
+    })
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stderr.join("\n")).toContain("it contains a key")
+    expect(server().hashes()).toEqual([])
+  })
+
+  test("will not publish a document carrying the key it would publish it with", async () => {
+    const path = leaky(`<!doctype html><title>Leak</title><p>${TOKEN}</p>`)
+    const outcome = await cli([path])
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stdout).toEqual([])
+    expect(outcome.stderr.join("\n")).toContain("it contains a key")
+    expect(server().hashes()).toEqual([])
   })
 })
 

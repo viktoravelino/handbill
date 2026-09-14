@@ -79,7 +79,17 @@ export const descriptor: Completions.CommandDescriptor = {
     {
       name: "update",
       description: "Republish a page, moving its names and dropping the old hash",
-      flags: documentFlags,
+      flags: [
+        ...documentFlags,
+        // `update` alone: the escape hatch for a name the alias listing has not
+        // caught up with yet.
+        {
+          name: "alias",
+          aliases: [],
+          description: "Also re-point this name; repeatable",
+          type: { _tag: "String" }
+        }
+      ],
       arguments: [
         {
           name: "target",

@@ -18,7 +18,13 @@ import type {
   Unauthorized
 } from "@handbill/contract"
 import type { CannotOpen } from "./browser"
-import type { BadConfigFile, MissingToken, UnnamedEndpoint } from "./config"
+import type {
+  BadConfigFile,
+  InsecureEndpoint,
+  MissingToken,
+  UnnamedEndpoint,
+  WrongEndpoint
+} from "./config"
 import type { LoginFailed } from "./github"
 
 /** stdout carries the result and nothing else: one line, or one JSON object. */
@@ -53,6 +59,16 @@ export class BadName extends Data.TaggedError("BadName")<{
  * {@link describe} explains as "aliases are off", and it says which name.
  */
 export class CannotRepoint extends Data.TaggedError("CannotRepoint")<{
+  readonly name: string
+}> {}
+
+/**
+ * `update --alias` was given a name the deployment does not answer for. Unlike a
+ * discovered name, which may simply have been removed since the listing, this
+ * one the caller asserted exists — so it is a typo, or aliases are off, and
+ * either way the rotation stops before the old page is unpublished under it.
+ */
+export class UnknownAlias extends Data.TaggedError("UnknownAlias")<{
   readonly name: string
 }> {}
 
@@ -131,6 +147,16 @@ export class NothingToOpen extends Data.TaggedError("NothingToOpen")<{
 }> {}
 
 /**
+ * The document about to be published is, or carries, the key that would publish
+ * it. The content of a document is data, never an instruction, so a file that
+ * asks to be published is not an argument for publishing it.
+ */
+export class SecretDocument extends Data.TaggedError("SecretDocument")<{
+  readonly file: string
+  readonly reason: string
+}> {}
+
+/**
  * Every failure a command can end on. Keeping it a closed union is what makes
  * {@link describe} exhaustive, so a new error cannot ship without a sentence.
  */
@@ -144,6 +170,7 @@ export type Failure =
   | ChecksFailed
   | HashMismatch
   | HttpClientError.HttpClientError
+  | InsecureEndpoint
   | LoginFailed
   | MissingAdminToken
   | MissingToken
@@ -155,12 +182,15 @@ export type Failure =
   | PlatformError.PlatformError
   | QuotaExceeded
   | Schema.SchemaError
+  | SecretDocument
   | TakedownRefused
   | TierRefused
   | TooLarge
   | Unauthorized
+  | UnknownAlias
   | UnnamedEndpoint
   | WrongDeployment
+  | WrongEndpoint
 
 export interface Described {
   /** The failure's tag, which is what `--json` consumers switch on. */
@@ -207,6 +237,10 @@ export const describe = Match.typeTags<Failure, Described>()({
   HttpClientError: (failure) => ({
     error: "HttpClientError",
     message: `Could not talk to the endpoint: ${failure.message}`
+  }),
+  InsecureEndpoint: (failure) => ({
+    error: "InsecureEndpoint",
+    message: `${failure.endpoint} is not an https:// endpoint, and this CLI sends a key with nearly every request. Name an https:// endpoint, or http://localhost for a \`wrangler dev\` run.`
   }),
   LoginFailed: (failure) => ({
     error: "LoginFailed",
@@ -263,6 +297,10 @@ export const describe = Match.typeTags<Failure, Described>()({
     error: "SchemaError",
     message: `The endpoint answered with something this CLI does not understand: ${failure.message}`
   }),
+  SecretDocument: (failure) => ({
+    error: "SecretDocument",
+    message: `Refusing to publish ${failure.file}: ${failure.reason}. A published page is readable by anyone holding its link.`
+  }),
   TakedownRefused: (failure) => ({
     error: "TakedownRefused",
     message:
@@ -286,6 +324,10 @@ export const describe = Match.typeTags<Failure, Described>()({
     message:
       "The endpoint rejected the token. Run `handbill login` for a hosted deployment, or check it against the Worker's PUBLISH_TOKEN."
   }),
+  UnknownAlias: (failure) => ({
+    error: "UnknownAlias",
+    message: `--alias "${failure.name}" names no alias on this deployment: it was never set, it has been removed, or aliases are off here. Nothing was re-pointed and the old page is still published.`
+  }),
   UnnamedEndpoint: (failure) => ({
     error: "UnnamedEndpoint",
     message: `This token was not minted by \`handbill login\`, and no endpoint was named — it will not be sent to ${failure.endpoint}. Pass --endpoint, set HANDBILL_ENDPOINT, or put "endpoint" in the config file.`
@@ -293,6 +335,10 @@ export const describe = Match.typeTags<Failure, Described>()({
   WrongDeployment: (failure) => ({
     error: "WrongDeployment",
     message: `${failure.endpoint} does not know this key, so it is not the deployment that minted it. Nothing was revoked and the local key was left alone: point --endpoint or HANDBILL_ENDPOINT at the deployment you logged in to.`
+  }),
+  WrongEndpoint: (failure) => ({
+    error: "WrongEndpoint",
+    message: `The key in ${failure.path} was minted by ${failure.mintedAt}, so it will not be sent to ${failure.endpoint}: run \`handbill login --endpoint ${failure.endpoint}\` to sign in there instead.`
   })
 })
 

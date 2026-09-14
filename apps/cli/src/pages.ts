@@ -1,7 +1,8 @@
 import { DateTime, Effect, Schema } from "effect"
 import { Argument, Command } from "effect/unstable/cli"
 import { PageList } from "@handbill/contract"
-import { connect, handler, openIf, qrIf, required, targetHash } from "./command-kit"
+import { clientFor, connect, handler, openIf, qrIf, required, targetHash } from "./command-kit"
+import * as Config from "./config"
 import * as Document from "./document"
 import { endpointFlag, jsonFlag, markdownFlag, openFlag, qrFlag } from "./flags"
 import * as Output from "./output"
@@ -30,8 +31,11 @@ export const publish = Command.make(
   },
   handler(({ endpoint, file, json, markdown, open, qr }) =>
     Effect.gen(function* () {
-      const client = yield* connect(endpoint)
-      const document = yield* Document.load({ file, markdown })
+      // The settings rather than just a client: `load` refuses a document that
+      // is the config file or carries the key, and needs both to say so.
+      const settings = yield* Config.resolve({ endpoint })
+      const client = yield* clientFor(settings)
+      const document = yield* Document.load({ file, markdown, settings })
       const result = yield* client.pages.publish({
         params: { hash: document.hash },
         payload: document.bytes

@@ -2,12 +2,25 @@ import { homedir } from "node:os"
 import { Config, Data, Effect, FileSystem, Option, Path, Redacted, Schema } from "effect"
 
 /**
- * The `~/.config/handbill/config.json` document. Both fields are optional so a
+ * The `~/.config/handbill/config.json` document. Every field is optional so a
  * half-filled file still parses and `doctor` can say which half is missing.
+ *
+ * `endpoint` is a preference — where this machine publishes — while `mintedAt`
+ * is provenance: the deployment that issued `token`, written by `handbill
+ * login` and never used for routing. It carries the literal `"default"` when
+ * the key was minted at {@link DEFAULT_ENDPOINT}, so the default stays free to
+ * move without stranding a key.
+ *
+ * A file with a `token` and no `mintedAt` is every user who logged in before
+ * this field existed. The rule for them, in {@link resolve}: the key is taken
+ * to have been minted at the file's own `endpoint`, or at
+ * {@link DEFAULT_ENDPOINT} when the file names none — which is what both
+ * shapes that existed before this field actually mean.
  */
 const ConfigFile = Schema.Struct({
   endpoint: Schema.optional(Schema.String),
-  token: Schema.optional(Schema.String)
+  token: Schema.optional(Schema.String),
+  mintedAt: Schema.optional(Schema.String)
 })
 type ConfigFile = typeof ConfigFile.Type
 
@@ -42,6 +55,32 @@ export class UnnamedEndpoint extends Data.TaggedError("UnnamedEndpoint")<{
   readonly endpoint: string
 }> {}
 
+/**
+ * The stored key was minted somewhere else. Raised by {@link sendable} before
+ * any request: a key is only good against the deployment that issued it, so
+ * pointing the CLI at another one is "log in there", never "reuse this key".
+ */
+export class WrongEndpoint extends Data.TaggedError("WrongEndpoint")<{
+  readonly endpoint: string
+  readonly mintedAt: string
+  readonly path: string
+}> {}
+
+/**
+ * An endpoint that would carry a credential over plain HTTP. `wrangler dev`
+ * serves on loopback and is the only exception, because nothing there leaves
+ * the machine.
+ */
+export class InsecureEndpoint extends Data.TaggedError("InsecureEndpoint")<{
+  readonly endpoint: string
+}> {}
+
+/**
+ * The prefix a handbill deployment puts on every key it mints — the Worker's
+ * own, there so a leaked key is greppable. See {@link isMintedKey}.
+ */
+const KEY_PREFIX = "hb_"
+
 /** Where a value came from, in precedence order. */
 export type Source = "flag" | "env" | "file" | "default"
 
@@ -61,6 +100,19 @@ export interface Settings {
   /** Always resolved: the flag, the environment, the file, or the default. */
   readonly endpoint: Setting<string>
   readonly token: Option.Option<Setting<Redacted.Redacted<string>>>
+  /**
+   * The deployment that minted the key in the config file, as an absolute URL —
+   * the `"default"` marker already resolved. `None` when the file holds no key
+   * a deployment minted: an operator's own token has no issuer to pin it to.
+   */
+  readonly mintedAt: Option.Option<string>
+  /**
+   * Every credential this machine holds, winner or not — the environment's and
+   * the file's. Only {@link token} is ever sent; this is for the one caller that
+   * has to recognise a secret rather than use it, and a document carrying the
+   * key that `HANDBILL_TOKEN` happens to be shadowing is just as leaked.
+   */
+  readonly secrets: ReadonlyArray<Redacted.Redacted<string>>
 }
 
 /**
@@ -121,6 +173,38 @@ const configPath = Effect.fn(function* (configHome: Option.Option<string>) {
 })
 
 /**
+ * The same deployment, however it was spelled: a trailing slash and the case of
+ * the host are not a different host. Comparing the strings raw would refuse a
+ * key over `https://api.example.dev/` against `https://api.example.dev`.
+ */
+const normalise = (url: string) => url.trim().replace(/\/+$/u, "").toLowerCase()
+
+const sameEndpoint = (left: string, right: string): boolean => normalise(left) === normalise(right)
+
+/**
+ * Loopback, where `wrangler dev` runs. The only hosts a credential may reach
+ * over plain HTTP, because the request never leaves the machine.
+ */
+const LOOPBACK = new Set(["localhost", "127.0.0.1"])
+
+/**
+ * Every endpoint the CLI will talk to has to be `https:` — a bearer key is
+ * attached to all but two routes, and `--endpoint http://…` would otherwise
+ * hand it to anything on the path. Checked in {@link resolve} rather than at the
+ * call sites, so `login` — which posts a GitHub access token before any key
+ * exists — is covered by the same rule.
+ */
+const secure = (endpoint: string) => {
+  // Not a URL at all is the HTTP client's to report, with the message it has:
+  // failing it here would only say the same thing less well.
+  if (!URL.canParse(endpoint)) return Effect.void
+  const { hostname, protocol } = new URL(endpoint)
+  return protocol === "https:" || (protocol === "http:" && LOOPBACK.has(hostname))
+    ? Effect.void
+    : Effect.fail(new InsecureEndpoint({ endpoint }))
+}
+
+/**
  * Resolves the configuration: flag beats environment beats config file beats
  * {@link DEFAULT_ENDPOINT}. The token has no flag — a secret on the command line
  * ends up in the shell history and in `ps` — so it comes from `HANDBILL_TOKEN`,
@@ -142,26 +226,47 @@ export const resolve = Effect.fn(function* (flags: { readonly endpoint: Option.O
   const fromFile = (read: (file: ConfigFile) => string | undefined) =>
     Option.flatMap(file, (contents) => Option.fromUndefinedOr(read(contents)))
 
+  const fileToken = fromFile((contents) => contents.token)
+
+  const endpoint = Option.getOrElse(
+    pick([
+      ["flag", flags.endpoint],
+      ["env", env.endpoint],
+      ["file", fromFile((contents) => contents.endpoint)]
+    ]),
+    (): Setting<string> => ({ value: DEFAULT_ENDPOINT, source: "default" })
+  )
+  yield* secure(endpoint.value)
+
   return {
     path,
-    endpoint: Option.getOrElse(
-      pick([
-        ["flag", flags.endpoint],
-        ["env", env.endpoint],
-        ["file", fromFile((contents) => contents.endpoint)]
-      ]),
-      (): Setting<string> => ({ value: DEFAULT_ENDPOINT, source: "default" })
-    ),
+    endpoint,
     token: pick([
       ["env", env.token],
-      [
-        "file",
-        Option.map(
-          fromFile((contents) => contents.token),
-          Redacted.make
+      ["file", Option.map(fileToken, Redacted.make)]
+    ]),
+    secrets: [
+      ...Option.toArray(env.token),
+      ...Option.toArray(Option.map(fileToken, Redacted.make))
+    ],
+    // Provenance belongs to a key a deployment minted and put in the file: an
+    // operator's own `PUBLISH_TOKEN` was never issued to anyone, so there is no
+    // deployment to pin it to and {@link sendable} is the only rule about it.
+    // The `"default"` marker and the pre-`mintedAt` reading both resolve here,
+    // so nothing downstream has to know either spelling.
+    mintedAt: Option.map(
+      Option.filter(fileToken, (token) => token.startsWith(KEY_PREFIX)),
+      () => {
+        const recorded = fromFile((contents) => contents.mintedAt)
+        if (Option.isSome(recorded)) {
+          return recorded.value === "default" ? DEFAULT_ENDPOINT : recorded.value
+        }
+        return Option.getOrElse(
+          fromFile((contents) => contents.endpoint),
+          () => DEFAULT_ENDPOINT
         )
-      ]
-    ])
+      }
+    )
   } satisfies Settings
 })
 
@@ -235,7 +340,7 @@ export const save = Effect.fn(function* (
  * ever declines to send the token somewhere it was not told to.
  */
 export const isMintedKey = (token: Redacted.Redacted<string>): boolean =>
-  Redacted.value(token).startsWith("hb_")
+  Redacted.value(token).startsWith(KEY_PREFIX)
 
 /**
  * The one rule about where a credential may go, in the one place that states
@@ -256,3 +361,48 @@ export const sendable = (settings: Settings, token: Redacted.Redacted<string>) =
   settings.endpoint.source === "default" && !isMintedKey(token)
     ? Effect.fail(new UnnamedEndpoint({ endpoint: settings.endpoint.value }))
     : Effect.void
+
+/**
+ * The endpoint pin, and the reason `mintedAt` is written at all: the key in the
+ * config file goes to the deployment that issued it and nowhere else. A
+ * `--endpoint` that names another one means "log in there", never "reuse this
+ * key" — the old key would otherwise be disclosed to a host that never minted
+ * it, and answer 204 or 404 in a way that says nothing.
+ *
+ * A token from `HANDBILL_TOKEN` is the escape hatch: it was handed to this run
+ * deliberately, and the file's provenance says nothing about it. So is a machine
+ * with no key in the file at all.
+ */
+export const pinned = (settings: Settings): Effect.Effect<void, WrongEndpoint> => {
+  if (Option.isNone(settings.token) || settings.token.value.source !== "file") return Effect.void
+  return Option.isSome(settings.mintedAt) &&
+    !sameEndpoint(settings.mintedAt.value, settings.endpoint.value)
+    ? Effect.fail(
+        new WrongEndpoint({
+          endpoint: settings.endpoint.value,
+          mintedAt: settings.mintedAt.value,
+          path: settings.path
+        })
+      )
+    : Effect.void
+}
+
+/**
+ * Where a command that acts on the key itself — `logout`, and `login` giving
+ * back the key it replaces — has to send it: the deployment that minted it, not
+ * the one this run resolved. Those two commands are about the key rather than
+ * about publishing with it, so they follow it home instead of stopping at
+ * {@link pinned}, and `--endpoint` cannot redirect a revocation.
+ */
+export const mintedEndpoint = (
+  settings: Settings,
+  source: Source
+): Effect.Effect<string, InsecureEndpoint> => {
+  const where =
+    source === "file"
+      ? Option.getOrElse(settings.mintedAt, () => settings.endpoint.value)
+      : settings.endpoint.value
+  // `resolve` vouches for the endpoint it resolved, not for this one: `mintedAt`
+  // is a line in a file a hand can edit, and it is about to receive a live key.
+  return Effect.as(secure(where), where)
+}

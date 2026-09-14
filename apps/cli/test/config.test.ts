@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs"
-import { join } from "node:path"
+import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { dirname, join } from "node:path"
 import { describe, expect, test } from "bun:test"
 import { NodeFileSystem, NodePath } from "@effect/platform-node"
 import { ConfigProvider, Effect, Layer, Option, Redacted } from "effect"
@@ -75,9 +75,59 @@ describe("resolve", () => {
     expect(settings.path).toEndWith("/handbill/config.json")
   })
 
+  // #161: a bearer key rides on nearly every request, so the endpoint has to be
+  // one TLS protects. Loopback is the exception, because `wrangler dev` is there
+  // and nothing leaves the machine.
+  test("refuses an http:// endpoint that is not loopback", async () => {
+    const failure = await resolveWith({ flag: "http://evil.test" }).catch((error: unknown) => error)
+    expect(String(failure)).toContain("InsecureEndpoint")
+  })
+
+  test("takes http://localhost, which is where wrangler dev runs", async () => {
+    const settings = await resolveWith({ flag: "http://localhost:8787" })
+    expect(settings.endpoint.value).toBe("http://localhost:8787")
+  })
+
   test("fails on a config file that is not valid JSON", async () => {
     const failure = await resolveWith({ file: "{ nope" }).catch((error: unknown) => error)
     expect(String(failure)).toContain("BadConfigFile")
+  })
+})
+
+// #115: a key is only good against the deployment that minted it, and the file
+// is the only place that can remember which one that was.
+describe("where the key in the file was minted", () => {
+  const mintedAt = async (contents: Record<string, string>) =>
+    Option.getOrUndefined((await resolveWith({ file: JSON.stringify(contents) })).mintedAt)
+
+  test("reads the endpoint the file records", async () => {
+    expect(await mintedAt({ token: "hb_k", mintedAt: "https://api.example.dev" })).toBe(
+      "https://api.example.dev"
+    )
+  })
+
+  // The marker, so the hosted deployment stays free to move without stranding
+  // every key ever minted against the address it used to have.
+  test("resolves the default marker to wherever the default points now", async () => {
+    expect(await mintedAt({ token: "hb_k", mintedAt: "default" })).toBe(DEFAULT_ENDPOINT)
+  })
+
+  // Every user who logged in before the field existed. Their key was minted at
+  // the endpoint the file names, and at the default when it names none — which
+  // is what the two shapes that existed before this field actually meant.
+  test("falls back to the file's own endpoint, and then to the default", async () => {
+    expect(await mintedAt({ token: "hb_k", endpoint: "https://api.example.dev" })).toBe(
+      "https://api.example.dev"
+    )
+    expect(await mintedAt({ token: "hb_k" })).toBe(DEFAULT_ENDPOINT)
+  })
+
+  // An operator's own PUBLISH_TOKEN was never issued to anyone, so there is no
+  // deployment to pin it to: `sendable` is the only rule that applies to it.
+  test("has nothing to say about a token no deployment minted", async () => {
+    expect(await mintedAt({ token: "publish-me", endpoint: "https://api.example.dev" })).toBe(
+      undefined
+    )
   })
 })
 
@@ -143,8 +193,11 @@ describe("save", () => {
 
   // The write goes to a sibling and is renamed over the target, so a crash
   // cannot leave a half-written config every later command reports as broken.
+  // The directory rather than one guessed name: the sibling is named after the
+  // writing process, so asserting on `config.json.pending` would pass even with
+  // the rename deleted.
   test("leaves nothing behind next to the file", async () => {
     const path = await saveIn(configHome(), { token: "hb_minted" })
-    expect(existsSync(`${path}.pending`)).toBe(false)
+    expect(readdirSync(dirname(path))).toEqual(["config.json"])
   })
 })

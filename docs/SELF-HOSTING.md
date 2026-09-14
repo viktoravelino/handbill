@@ -81,7 +81,11 @@ mkdir -p ~/.config/handbill
 (umask 077 && printf '{ "endpoint": "https://api.<zone>", "token": "%s" }\n' "$TOKEN" > ~/.config/handbill/config.json)
 ```
 
-Environment variables work too and win over the file: `HANDBILL_ENDPOINT`, `HANDBILL_TOKEN`. Then:
+Environment variables work too and win over the file: `HANDBILL_ENDPOINT`, `HANDBILL_TOKEN`.
+
+Moving a machine from the hosted deployment to your own is both fields, not just `endpoint`. If `handbill login` has ever run here, the file holds a hosted key and a `mintedAt` recording where it came from; a minted key is only ever sent back to the deployment that minted it, so one left beside your own endpoint is refused in one sentence naming both. Run `handbill logout` first — it gives the hosted key back and takes `mintedAt` with it — then write the file above. A `PUBLISH_TOKEN` of your own is not pinned to anything: nobody issued it.
+
+Then:
 
 ```sh
 npm i -g handbill
