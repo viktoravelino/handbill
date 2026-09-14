@@ -7,7 +7,7 @@ handbill plan.html
 # https://a3f9c1d4e2b8.handbill.dev
 ```
 
-Free, and by publishing here you accept the [terms and acceptable use](/docs/terms/) — short, and blunt about what the operator can see.
+Free to start, and by publishing here you accept the [terms and acceptable use](/docs/terms/) — short, and blunt about what the operator can see.
 
 ## How login works
 
@@ -19,15 +19,23 @@ GitHub is a dependency of signing in and of nothing else. If GitHub is down you 
 
 ## What you get
 
-One tier, `free`, per account:
+Two tiers per account, `free` and `paid`:
 
-| Limit         | Value                         |
-| ------------- | ----------------------------- |
-| Pages per day | 25, resetting at UTC midnight |
-| Stored bytes  | 250 MB                        |
-| Per page      | 5 MB                          |
+| Limit         | free                          | paid |
+| ------------- | ----------------------------- | ---- |
+| Pages per day | 25, resetting at UTC midnight | 250  |
+| Stored bytes  | 250 MB                        | 5 GB |
+| Per page      | 5 MB                          | 5 MB |
 
-Past either of the first two, publishing answers `429 QuotaExceeded` naming the limit, what it allows, and — for the daily one — when it resets. They are ceilings rather than exact counts: a burst of publishes at once can slip a little past before the counter catches up, never short of it. Unpublishing gives the stored bytes back; it does not refund the day's page count. A paid tier that raises these numbers is planned, with no pricing to quote yet, and nothing on the read path will ever ask whether a page's owner is paying.
+Paid is $8 a month or $80 a year, and buys those two numbers and nothing else — [pricing](/docs/pricing/) has the detail, including what happens when a subscription lapses. Nothing on the read path ever asks whether a page's owner is paying.
+
+```sh
+handbill account            # owner, tier, and what today has spent
+handbill account --upgrade  # a checkout URL for this account, --open to open it
+handbill account --web      # the same account in the browser
+```
+
+Past either of the first two limits, publishing answers `429 QuotaExceeded` naming the limit, what it allows, and — for the daily one — when it resets. They are ceilings rather than exact counts: a burst of publishes at once can slip a little past before the counter catches up, never short of it. Unpublishing gives the stored bytes back; it does not refund the day's page count.
 
 ## How it differs from self-hosting
 

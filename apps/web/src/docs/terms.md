@@ -1,4 +1,4 @@
-**Effective 2026-09-01.** These terms cover the hosted service at `handbill.dev`: publishing through `handbill login` and the keys it mints. They do not cover the software, which is MIT-licensed — a deployment on your own Cloudflare account is yours alone, and nothing on this page reaches it. [Self-hosting](/docs/self-hosting/) is and stays the first-class path.
+**Effective 2026-09-15.** These terms cover the hosted service at `handbill.dev`: publishing through `handbill login` and the keys it mints. They do not cover the software, which is MIT-licensed — a deployment on your own Cloudflare account is yours alone, and nothing on this page reaches it. [Self-hosting](/docs/self-hosting/) is and stays the first-class path.
 
 "The operator" below is one person. They run this service on their own Cloudflare account and read `abuse@handbill.dev` themselves. To publish here you need a GitHub account and enough years to enter an agreement where you live; `handbill login` is where you accept these terms.
 
@@ -51,10 +51,25 @@ Deliberately not kept: no reader logs of the operator's own, no reader IP addres
 ## What is promised, and what is not
 
 - **Published links never change.** For as long as the service runs, a hash URL serves the same bytes. Takedown is the only thing that kills a link.
-- **Best effort, no SLA.** One person, no charge, no uptime guarantee, no support commitment, no backups you can call on. The file on your disk is the original — keep it.
+- **Best effort, no SLA.** One person, no uptime guarantee, no support commitment, no backups you can call on — and paying for the bigger limits buys none of those either. The file on your disk is the original — keep it.
 - **The service may end**, and its links die with it. That is the honest failure mode of hosting on someone else's domain, and the reason self-hosting stays first-class: the same CLI against your own Worker gives you links nobody else can switch off.
-- **Quotas and features may change**, including the numbers on the [hosted page](/docs/hosted/). A paid tier is planned; there is no pricing to quote, and nothing already published starts costing money retroactively.
+- **Quotas and features may change**, including the numbers on the [hosted page](/docs/hosted/) and the price on the [pricing page](/docs/pricing/). Publishing here stays free at the free limits, and nothing already published starts costing money retroactively. A price change applies from your next renewal, never to a period already paid for.
 - **No warranty.** The service is provided as is. As far as the law allows, the operator is not liable for damage arising from using it or from being unable to use it.
+
+## Payments
+
+The free tier is the service; paying buys more of it and nothing else. What that means, in order:
+
+- **Who you pay.** [Polar](https://polar.sh) is the merchant of record. The checkout runs on their domain, the charge appears under their name, and handbill never sees a card number — the operator sees that an account is paid for and the id of the subscription that says so, and that is the whole of it. Polar's own terms and privacy policy cover what they hold.
+- **What it buys.** $8 a month, or $80 a year, raises this account's limits to 250 pages a day and 5 GB stored, instead of 25 and 250 MB. Nothing else changes: not the per-page limit, not the links, not what is served or how, and nothing on the read path ever asks whether a page's owner is paying.
+- **Renewal.** The subscription renews automatically at the price you signed up at until you cancel it. Cancel any time from Polar's customer portal — the operator does not need to be told — and paid access runs to the end of the period you have already paid for.
+- **Lapse.** At that point paid access ends and the account returns to the free limits. Nothing is deleted and no link stops working, however far over the free ceiling your pages add up to. If more is stored than the free limit allows, publishing is refused until you remove pages below it: the next publish answers `429 QuotaExceeded` saying exactly that, and `handbill remove` frees the bytes. The daily count is 25 again from the next UTC midnight. A card that stops working ends the same way.
+- **Refunds.** Polar's policy, from Polar's dashboard — refunds are not something the operator processes in code. A refunded period lapses the account the same way a cancellation does.
+- **Taxes.** Polar collects and remits whatever sales tax or VAT is owed where you are, and their receipt is the document for it.
+- **Paying does not buy immunity.** Everything in "What you may not publish" applies to a paid account exactly as it does to a free one: a paying account is taken down and revoked on the same terms, and is not refunded for it.
+- **Billing mistakes.** The operator can move an account between tiers by hand, and will, to fix one — a webhook that never arrived, a charge that should not have gone through. It is a correction, not a negotiation: nothing else about payment happens outside Polar.
+
+[Pricing](/docs/pricing/) is the same thing in numbers.
 
 ## Ending it
 

@@ -536,8 +536,9 @@ describe("account --upgrade", () => {
 })
 
 // M21: the browser gets the key in a URL fragment, which never reaches a server
-// — so `--web` needs no request at all, and the page it opens is the hosted
-// site's, not whatever `--endpoint` names.
+// — so `--web` needs no request at all. M22: the site is the zone under the
+// endpoint's `api.` label, so staging opens staging and an endpoint with no site
+// behind it is refused.
 /** A machine logged in to the hosted deployment: the key in the file, minted at the default. */
 const hostedHome = () => configHome(JSON.stringify({ token: "hb_web_key", mintedAt: "default" }))
 
@@ -578,8 +579,27 @@ describe("account --web", () => {
     })
   })
 
-  // The page is part of handbill.dev. A self-hosted deployment is an API with no
-  // site behind it, so there is nowhere to send the key — and it is not sent.
+  // Another deployment of the same code has its own site under the same rule:
+  // `api.<zone>` in, `<zone>` out, with no host written into the CLI.
+  test("opens the staging site for the staging endpoint", async () => {
+    const outcome = await run(["account", "--web"], {
+      http: server.layer,
+      env: {
+        XDG_CONFIG_HOME: configHome(
+          JSON.stringify({ token: "hb_web_key", mintedAt: "https://api.handbill-staging.dev" })
+        ),
+        HANDBILL_ENDPOINT: "https://api.handbill-staging.dev"
+      }
+    })
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stdout).toEqual(["https://handbill-staging.dev/account/#key=hb_web_key"])
+    expect(outcome.opened).toEqual(["https://handbill-staging.dev/account/#key=hb_web_key"])
+    expect(server.requests()).toEqual([])
+  })
+
+  // No `api.` label, so no zone to derive a site from. A self-hosted deployment
+  // is an API with no site behind it: there is nowhere to send the key, and it
+  // is not sent.
   test("refuses for a self-hosted endpoint", async () => {
     const outcome = await run(["account", "--web", "--endpoint", "https://self.host"], {
       http: server.layer,
@@ -588,7 +608,7 @@ describe("account --web", () => {
     expect(outcome.ok).toBe(false)
     expect(outcome.stdout).toEqual([])
     expect(outcome.opened).toEqual([])
-    expect(outcome.stderr.join("\n")).toContain("--web only works against")
+    expect(outcome.stderr.join("\n")).toContain("api.<zone>")
   })
 
   // Both print a URL, and stdout carries exactly one line.

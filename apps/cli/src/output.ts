@@ -20,7 +20,6 @@ import type {
 import type { CannotOpen } from "./browser"
 import {
   type BadConfigFile,
-  DEFAULT_ENDPOINT,
   type InsecureEndpoint,
   type MissingToken,
   type UnnamedEndpoint,
@@ -148,8 +147,8 @@ export class NothingToOpen extends Data.TaggedError("NothingToOpen")<{
 }> {}
 
 /**
- * `account --web` against a deployment that is not the hosted one. The account
- * page is part of handbill.dev; a self-hosted deployment is an API with no site
+ * `account --web` against an endpoint no site belongs to. The account page
+ * lives on the zone under an `api.` label; anything else is an API with no site
  * behind it, and `handbill account` prints the same numbers anywhere.
  */
 export class NoAccountPage extends Data.TaggedError("NoAccountPage")<{
@@ -281,7 +280,7 @@ export const describe = Match.typeTags<Failure, Described>()({
   }),
   NoAccountPage: (failure) => ({
     error: "NoAccountPage",
-    message: `The account page is part of the hosted site, so --web only works against ${DEFAULT_ENDPOINT}; this run is pointed at ${failure.endpoint}. \`handbill account\` prints the same owner, tier and quotas against any deployment.`
+    message: `The account page lives on the hosted site of an \`api.<zone>\` deployment, so --web has no site to open for ${failure.endpoint}. \`handbill account\` prints the same owner, tier and quotas against any deployment.`
   }),
   NoAccounts: (failure) => ({
     error: "NoAccounts",
