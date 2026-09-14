@@ -7,7 +7,7 @@ import { AuthAccounts, type Identify, type KeyStore } from "./auth"
 import { BillingDisabled } from "./billing"
 import { hashBytes } from "./hash"
 import { QuotaMemory, Quotas, type QuotasShape, quotasOn, TIER_LIMITS } from "./quotas"
-import { IndexMemory, StorageMemory } from "./storage"
+import { IndexMemory, Storage, StorageMemory } from "./storage"
 
 /**
  * M16 on memory layers: the per-owner quotas, and the operator's takedown. The
@@ -61,13 +61,15 @@ const movableClock = (start: number) => {
  * holds, and — unless a test says otherwise — an `ADMIN_TOKEN`, so the takedown
  * route is there.
  */
-const hosted = (options: { readonly admin?: string } = { admin: ADMIN }) => {
+const hosted = (
+  options: { readonly admin?: string; readonly storage?: Layer.Layer<Storage> } = { admin: ADMIN }
+) => {
   const counters = new Map<string, number>()
   const time = movableClock(DAY_ONE)
   const app = makeApp(
     { zone: ZONE, maxBytes: MAX_BYTES, adminToken: options.admin },
     Layer.mergeAll(
-      StorageMemory,
+      options.storage ?? StorageMemory,
       IndexMemory,
       AuthAccounts(memoryKeys(), identify),
       AliasesMemory,
@@ -175,6 +177,35 @@ test("publishing spends stored bytes and removing gives them back", async () => 
 
   expect((await removePage(deployment, key, await hashOf(page))).status).toBe(204)
   expect(storedBytes(deployment)).toBe(0)
+})
+
+/**
+ * Memory storage that loses the delete race: `head` still sees the object, and
+ * `remove` reports that someone else had already taken it away. R2 has no way to
+ * make head-then-delete atomic, so this is the state a second concurrent DELETE
+ * of one hash lands in — reproduced by hand, because two real requests would race
+ * on the counter read as well and hide the refund they double.
+ */
+const StorageRaced = Layer.effect(
+  Storage,
+  Effect.map(Storage, (storage) => ({ ...storage, remove: () => Effect.succeed(false) }))
+).pipe(Layer.provide(StorageMemory))
+
+// #157: R2's delete is idempotent, so a DELETE that removed nothing used to refund
+// the bytes anyway — drift aimed *below* what is stored, which the floor at zero in
+// `bump` does nothing about, and unpublishing is deliberately outside WAF rule 1.
+// Only the request that took the object away gives the bytes back.
+test("a remove that deleted nothing gives no bytes back", async () => {
+  const deployment = hosted({ admin: ADMIN, storage: StorageRaced })
+  const key = await keyFor(deployment)
+  const page = doc(1)
+  await publish(deployment, key, page)
+
+  expect((await removePage(deployment, key, await hashOf(page))).status).toBe(204)
+  expect(storedBytes(deployment)).toBe(page.length)
+  // The operator's takedown reads the same answer.
+  expect((await takedown(deployment, await hashOf(page), ADMIN)).status).toBe(204)
+  expect(storedBytes(deployment)).toBe(page.length)
 })
 
 // The stored-bytes limit itself, without writing 250 MB: the check is asked

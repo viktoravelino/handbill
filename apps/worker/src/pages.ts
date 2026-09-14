@@ -16,11 +16,10 @@ export type HostKind =
   | { readonly kind: "unknown" }
 
 /**
- * Lowercased and without the trailing dot a fully-qualified name carries. Both
- * the request's host and the configured zone go through it, so a `ZONE` pasted
- * out of DNS tooling as `example.dev.` classifies — and prints — the same as
- * `example.dev`. `makeApp` canonicalises the zone once so every URL the Worker
- * hands out agrees with what the classifier accepts.
+ * Lowercased and without the trailing dot a fully-qualified name carries. Both the
+ * request's host and the configured zone go through it, so a `ZONE` pasted out of
+ * DNS tooling as `example.dev.` classifies — and prints — the same as `example.dev`.
+ * `makeApp` canonicalises the zone once, so every URL agrees with the classifier.
  */
 export const canonical = (name: string): string => name.toLowerCase().replace(/\.$/u, "")
 
@@ -53,16 +52,16 @@ export const nothingHere = (): Response =>
   })
 
 /**
- * A hash names bytes that cannot change under it, so its page is cached for a
- * year; an alias is a moving target and gets a minute, long enough to absorb a
- * burst of readers and short enough that republishing feels immediate.
+ * A hash names bytes that cannot change under it, so its page is cached for a year;
+ * an alias is a moving target and gets a minute, which republishing outlives.
  */
 const IMMUTABLE = "public, max-age=31536000, immutable"
 const ALIASED = "public, max-age=60"
 
 /**
- * The document behind a hostname, kept out of search results either way. Every
- * path on the hostname serves the same document.
+ * The document behind a hostname, kept out of search results and every path serving
+ * it. `no-referrer` because the URL is the secret: nothing a page loads carries the
+ * hash to a third party (#158).
  */
 export const servePage = (
   hash: Hash,
@@ -77,15 +76,15 @@ export const servePage = (
         "content-type": "text/html; charset=utf-8",
         "cache-control": cacheControl,
         "x-robots-tag": "noindex, nofollow",
-        "x-content-type-options": "nosniff"
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "no-referrer"
       }
     })
   })
 
 /**
- * The document an alias currently points at — served, not redirected, so the
- * name stays in the reader's address bar and nothing leaks the hash it resolved
- * to. An unset name and a dangling one are both "nothing here".
+ * The document an alias currently points at — served, not redirected, so the name
+ * stays in the address bar and the hash leaks nowhere. Unset and dangling both 404.
  */
 export const serveAlias = (name: AliasName): Effect.Effect<Response, never, Aliases | Storage> =>
   Effect.gen(function* () {

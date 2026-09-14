@@ -97,6 +97,9 @@ test("publishing returns the page URL and serves the document", async () => {
   expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8")
   expect(page.headers.get("cache-control")).toBe("public, max-age=31536000, immutable")
   expect(page.headers.get("x-robots-tag")).toBe("noindex, nofollow")
+  expect(page.headers.get("x-content-type-options")).toBe("nosniff")
+  // The URL is the secret: nothing the page loads may carry the hash away.
+  expect(page.headers.get("referrer-policy")).toBe("no-referrer")
 })
 
 test("every path on a hash hostname serves the same document", async () => {
@@ -219,6 +222,8 @@ test("an alias serves the page it points at, and follows it when it moves", asyn
   expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8")
   expect(page.headers.get("cache-control")).toBe("public, max-age=60")
   expect(page.headers.get("x-robots-tag")).toBe("noindex, nofollow")
+  expect(page.headers.get("x-content-type-options")).toBe("nosniff")
+  expect(page.headers.get("referrer-policy")).toBe("no-referrer")
 
   await setAlias("plan", second)
   expect(await (await app.fetch(new Request(`https://plan.${ZONE}/`))).text()).toBe(OTHER)

@@ -120,11 +120,13 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
         if (Option.isSome(existing) && existing.value.owner !== owner) {
           return yield* Effect.fail(new NotFound())
         }
-        yield* storage.remove(params.hash)
+        const removed = yield* storage.remove(params.hash)
         yield* (yield* Index).remove(owner, params.hash)
-        // The bytes go back, at R2's own size for the object that was there, so
-        // the counter follows the bucket. Removing nothing releases nothing.
-        if (Option.isSome(existing)) yield* (yield* Quotas).release(owner, existing.value.size)
+        // The bytes go back at R2's own size for the object, and only to the request
+        // that removed it: a second DELETE refunding again is free storage (#157).
+        if (removed && Option.isSome(existing)) {
+          yield* (yield* Quotas).release(owner, existing.value.size)
+        }
       })
     )
 )
@@ -248,11 +250,10 @@ const adminOnly = Effect.gen(function* () {
 })
 
 /**
- * The operator's two routes. `takedown` is the only thing in the API that can
- * kill a published link: the owner comes from R2, not the caller, so the freed
- * bytes land on whoever published it, idempotently and with no tombstone (§07).
- * `tier` writes the same field the webhook does (0.4 §03), stamped `now` so no
- * delivery Polar retries afterwards can undo it (#143).
+ * The operator's two routes. `takedown` is the only thing in the API that can kill
+ * a published link: the owner comes from R2, so the freed bytes land on whoever
+ * published it, idempotently and with no tombstone (§07). `tier` writes the field
+ * the webhook does, stamped `now` so no retried delivery can undo it (#143).
  */
 export const AdminLive = HttpApiBuilder.group(HandbillApi, "admin", (handlers) =>
   handlers
@@ -263,9 +264,9 @@ export const AdminLive = HttpApiBuilder.group(HandbillApi, "admin", (handlers) =
         const existing = yield* storage.head(params.hash)
         if (Option.isNone(existing)) return
         const { owner, size } = existing.value
-        yield* storage.remove(params.hash)
+        const removed = yield* storage.remove(params.hash)
         yield* (yield* Index).remove(owner, params.hash)
-        yield* (yield* Quotas).release(owner, size)
+        if (removed) yield* (yield* Quotas).release(owner, size)
       })
     )
     .handle("tier", ({ params: { owner }, payload }) =>

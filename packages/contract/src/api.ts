@@ -89,9 +89,11 @@ export const WebhookBody = Schema.Uint8Array.pipe(
 )
 
 /**
- * How large a delivery may be before the route stops reading it (413). A Polar
- * subscription event is a couple of kilobytes; anything near this is not one,
- * and refusing it by length costs less than an HMAC over a megabyte.
+ * How large a delivery may be before the route refuses it (413). A Polar
+ * subscription event is a couple of kilobytes; anything near this is not one.
+ * The handler measures the body the platform has already buffered, so what this
+ * bounds is the HMAC and not the read — the WAF's body-size rule is what keeps a
+ * large body off the Worker in the first place.
  */
 export const WEBHOOK_MAX_BYTES = 64 * 1024
 
@@ -288,8 +290,9 @@ export class AdminGroup extends HttpApiGroup.make("admin")
  * Everything that verifies is `202 Accepted`, including an event this Worker
  * does nothing with — a status that decides nothing, an owner it cannot name:
  * the provider retries on any other status, and there is nothing to retry when
- * the answer would not change. A body over `WEBHOOK_MAX_BYTES` is `413`, read
- * by length before anything reads it at all.
+ * the answer would not change. A body over `WEBHOOK_MAX_BYTES` is `413`, checked
+ * by length once the body is in hand and before the signature is verified, so no
+ * HMAC is ever computed over a megabyte the route was never going to accept.
  */
 export class BillingGroup extends HttpApiGroup.make("billing")
   .add(

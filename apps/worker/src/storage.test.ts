@@ -36,15 +36,18 @@ test("list is newest first and only the caller's pages", async () => {
   ])
 })
 
-test("remove is idempotent", async () => {
-  const found = await run((storage) =>
+// Idempotent, and it says which call did the removing: the caller refunds the
+// page's bytes on the `true` and nothing on the `false` (#157).
+test("remove is idempotent and reports whether it found the object", async () => {
+  const { removals, found } = await run((storage) =>
     Effect.gen(function* () {
       yield* storage.put(document("aaaaaaaaaaaa", "2026-08-01T00:00:00.000Z"))
-      yield* storage.remove(Hash.make("aaaaaaaaaaaa"))
-      yield* storage.remove(Hash.make("aaaaaaaaaaaa"))
-      return yield* storage.head(Hash.make("aaaaaaaaaaaa"))
+      const once = yield* storage.remove(Hash.make("aaaaaaaaaaaa"))
+      const again = yield* storage.remove(Hash.make("aaaaaaaaaaaa"))
+      return { removals: [once, again], found: yield* storage.head(Hash.make("aaaaaaaaaaaa")) }
     })
   )
+  expect(removals).toEqual([true, false])
   expect(Option.isNone(found)).toBe(true)
 })
 
