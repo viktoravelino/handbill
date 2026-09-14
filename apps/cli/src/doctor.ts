@@ -84,7 +84,9 @@ const accepts = Effect.fn(function* (
   // them, so it is squarely on the path the refusal creates — and it must
   // report that state rather than reproduce the leak by probing with the token.
   // The same rule `connect` stops on, inverted into a check.
-  const allowed = yield* Effect.result(Config.sendable(settings, settings.token.value.value))
+  const allowed = yield* Effect.result(
+    Effect.andThen(Config.sendable(settings, settings.token.value.value), Config.pinned(settings))
+  )
   if (Result.isFailure(allowed)) {
     return check("auth", "FAIL", Output.describe(allowed.failure).message)
   }

@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { afterAll, beforeEach, describe, expect, test } from "bun:test"
+import { Layer } from "effect"
+import { FetchHttpClient } from "effect/unstable/http"
 import { plan, session } from "./fixtures"
 import { configHome, run, type RunOptions, USER_CODE, VERIFICATION_URI } from "./harness"
 import {
@@ -51,21 +53,58 @@ const cli = (
 interface StoredConfig {
   readonly endpoint?: string
   readonly editor?: string
+  readonly mintedAt?: string
   readonly token?: string
 }
 
 const configFile = (): StoredConfig =>
   JSON.parse(readFileSync(join(home, "handbill", "config.json"), "utf8"))
 
-/** A key for one of the two accounts, minted straight from the Worker. */
-const mint = async (githubToken: string): Promise<string> => {
-  const response = await server.fetch(`https://api.${ZONE}/v1/keys`, {
+/** A key for one of the two accounts, minted straight from a Worker. */
+const mint = async (githubToken: string, on = server): Promise<string> => {
+  const response = await on.fetch(`https://api.${ZONE}/v1/keys`, {
     method: "POST",
     body: JSON.stringify({ githubToken }),
     headers: { "content-type": "application/json" }
   })
   const body = (await response.json()) as { readonly key: string }
   return body.key
+}
+
+/** The other deployment in the endpoint-pin tests: the one that minted the stored key. */
+const ELSEWHERE = "https://api.elsewhere.dev"
+
+/**
+ * Two deployments behind one `fetch`, and every URL recorded whole. Which host
+ * a key was sent to is the whole question here, and `server.requests()` keeps
+ * only the path. A request for {@link ELSEWHERE} is re-addressed to the second
+ * Worker's own zone, because a Worker classifies hosts against the zone it was
+ * deployed with; nothing bodied is sent there, so the method and headers are all
+ * that has to survive the move.
+ */
+const twoDeployments = () => {
+  const urls: Array<string> = []
+  const elsewhere = makeServer({ accounts: true })
+  const fetch: typeof globalThis.fetch = Object.assign(
+    (input: string | URL | Request, init?: RequestInit) => {
+      const request =
+        input instanceof Request ? new Request(input, init) : new Request(String(input), init)
+      urls.push(`${request.method} ${request.url}`)
+      const url = new URL(request.url)
+      return url.origin === ELSEWHERE
+        ? elsewhere.fetch(`https://api.${ZONE}${url.pathname}`, {
+            method: request.method,
+            headers: request.headers
+          })
+        : server.transport(request)
+    },
+    { preconnect: () => Promise.resolve() }
+  )
+  return {
+    elsewhere,
+    urls: (): ReadonlyArray<string> => [...urls],
+    layer: Layer.succeed(FetchHttpClient.Fetch, fetch).pipe(Layer.merge(FetchHttpClient.layer))
+  }
 }
 
 describe("login", () => {
@@ -254,6 +293,99 @@ describe("against a deployment with no accounts", () => {
     expect(JSON.parse(outcome.stdout[0] ?? "")).toMatchObject({ revoked: false })
     expect(outcome.stderr.join("\n")).toContain("does not run accounts")
     expect(configFile().token).toBeUndefined()
+  })
+})
+
+// #115/#161: the key in the file belongs to one deployment, and the CLI now
+// knows which. Pointing it somewhere else means "log in there", never "send this
+// key there and see what it says".
+describe("the endpoint that minted the key", () => {
+  test("refuses to send a stored key anywhere else, naming both endpoints", async () => {
+    home = configHome(JSON.stringify({ token: "hb_stored", mintedAt: ELSEWHERE }))
+    const outcome = await cli(["list"])
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stderr.join("\n")).toContain(`was minted by ${ELSEWHERE}`)
+    expect(outcome.stderr.join("\n")).toContain(`will not be sent to https://api.${ZONE}`)
+    // Before any request: the key never leaves.
+    expect(server.requests()).toEqual([])
+  })
+
+  test("sends it to the deployment that minted it", async () => {
+    await cli(["login"], { githubToken: GITHUB_TOKEN })
+    expect(configFile().mintedAt).toBe(`https://api.${ZONE}`)
+    expect((await cli(["list"])).ok).toBe(true)
+  })
+
+  // Every user who logged in before `mintedAt` existed: the file's own endpoint
+  // is what their key was minted at, and the default when it names none.
+  test("takes a config file written before the field existed", async () => {
+    const key = await mint(GITHUB_TOKEN)
+    home = configHome(JSON.stringify({ endpoint: `https://api.${ZONE}`, token: key }))
+    const outcome = await cli(["list"], { env: { HANDBILL_ENDPOINT: undefined } })
+    expect(outcome.ok).toBe(true)
+  })
+
+  // `logout` is about the key, not about publishing with it: it follows the key
+  // home whatever the environment says, so a revocation cannot be redirected.
+  test("logout revokes at the minting endpoint, whatever the environment names", async () => {
+    const both = twoDeployments()
+    const stale = await mint(GITHUB_TOKEN, both.elsewhere)
+    home = configHome(JSON.stringify({ token: stale, mintedAt: ELSEWHERE }))
+
+    const outcome = await cli(["logout", "--json"], { http: both.layer })
+    expect(outcome.ok).toBe(true)
+    expect(JSON.parse(outcome.stdout[0] ?? "")).toMatchObject({
+      revoked: true,
+      endpoint: ELSEWHERE
+    })
+    expect(both.urls()).toContain(`DELETE ${ELSEWHERE}/v1/keys/current`)
+    // The provenance goes with the key it belonged to.
+    expect(configFile().token).toBeUndefined()
+    expect(configFile().mintedAt).toBeUndefined()
+    await both.elsewhere.dispose()
+  })
+
+  // `mintedAt` is a line in a file a hand can edit, and it is about to receive a
+  // live key: the scheme is checked on it too, not only on the resolved endpoint.
+  test("refuses to give a key back over plain http", async () => {
+    home = configHome(JSON.stringify({ token: "hb_stored", mintedAt: "http://evil.test" }))
+    const outcome = await cli(["logout"])
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stderr.join("\n")).toContain("is not an https:// endpoint")
+    expect(server.requests()).toEqual([])
+    expect(configFile().token).toBe("hb_stored")
+  })
+
+  // The same guard on the login side, where the new key is already stored: the
+  // old one is not sent, and the login is not thrown away over it either.
+  test("login will not give a key back over plain http, and says so", async () => {
+    home = configHome(JSON.stringify({ token: "hb_stored", mintedAt: "http://evil.test" }))
+    const outcome = await cli(["login"], { githubToken: GITHUB_TOKEN })
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stderr.join("\n")).toContain("is not an https:// endpoint")
+    expect(String(configFile().token)).toStartWith("hb_")
+    expect(configFile().mintedAt).toBe(`https://api.${ZONE}`)
+  })
+
+  // The gap #161 names: `login --endpoint` used to hand the live key to the host
+  // being logged in to, which answers 204 for a key it has never seen — leaving
+  // the real one live forever on the deployment that issued it.
+  test("login gives the key it replaces back to the deployment that minted it", async () => {
+    const both = twoDeployments()
+    const stale = await mint(GITHUB_TOKEN, both.elsewhere)
+    home = configHome(JSON.stringify({ token: stale, mintedAt: ELSEWHERE }))
+
+    const outcome = await cli(["login"], { githubToken: GITHUB_TOKEN, http: both.layer })
+    expect(outcome.ok).toBe(true)
+    expect(both.urls()).toContain(`DELETE ${ELSEWHERE}/v1/keys/current`)
+    expect(both.urls()).not.toContain(`DELETE https://api.${ZONE}/v1/keys/current`)
+
+    // Dead where it lived, not merely forgotten here.
+    const refused = await both.elsewhere.fetch(`https://api.${ZONE}/v1/pages`, {
+      headers: { authorization: `Bearer ${stale}` }
+    })
+    expect(refused.status).toBe(401)
+    await both.elsewhere.dispose()
   })
 })
 

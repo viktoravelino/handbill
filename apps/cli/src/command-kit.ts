@@ -31,11 +31,13 @@ export const handler =
  */
 export const clientFor = Effect.fn(function* (settings: Config.Settings) {
   const credentials = yield* Config.credentials(settings)
-  // Before the client exists, so nothing can put the token on the wire by
-  // accident. `credentials` runs first, so a machine with nothing configured is
-  // told to run `handbill login` rather than lectured about endpoints it has no
-  // token for.
+  // Both before the client exists, so nothing can put the token on the wire by
+  // accident: the endpoint has to be one somebody named, and it has to be the
+  // one that minted the key in the file. `credentials` runs first, so a machine
+  // with nothing configured is told to run `handbill login` rather than lectured
+  // about endpoints it has no token for.
   yield* Config.sendable(settings, credentials.token)
+  yield* Config.pinned(settings)
   return yield* Client.make(credentials)
 })
 

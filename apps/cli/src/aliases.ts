@@ -10,7 +10,8 @@ import * as Output from "./output"
  * they point at. `update` re-points them and lives in `update.ts`.
  */
 
-const decodeName = Schema.decodeUnknownOption(AliasName)
+/** A name the contract will store, or `None`. `update --alias` decodes with it too. */
+export const decodeName = Schema.decodeUnknownOption(AliasName)
 
 /** `alias remove <name>`: the name stops answering; the page it pointed at stays published. */
 const aliasRemove = Command.make(

@@ -25,7 +25,7 @@ Node ≥ 22. Two dependencies: `effect` and `marked`. Bleeding edge from `main`:
 handbill login
 ```
 
-Opens `github.com/login/device` on a short code, mints an API key for your GitHub account, and writes it to `~/.config/handbill/config.json`. Nothing else to configure: the endpoint defaults to the hosted deployment. `handbill logout` revokes that key and removes it again.
+Opens `github.com/login/device` on a short code, mints an API key for your GitHub account, and writes it to `~/.config/handbill/config.json` — along with `mintedAt`, the deployment that issued it. `handbill logout` revokes that key, at the deployment that minted it, and removes it again.
 
 The hosted deployment is free — 25 pages a day, 250 MB stored — and what handbill learns about you is your numeric GitHub id: [handbill.dev/docs/hosted](https://handbill.dev/docs/hosted/), and the [terms](https://handbill.dev/docs/terms/) you accept by publishing there.
 
@@ -42,9 +42,11 @@ The endpoint is taken from the first of these that says anything, so a config fi
 3. `endpoint` in the config file, for this machine
 4. `https://api.handbill.dev`, the default
 
-The token has no flag — a secret on the command line ends up in the shell history — so it comes from `HANDBILL_TOKEN` or from `token` in the config file, which is where `handbill login` puts the key it mints. The file is written `0600`.
+Every endpoint has to be `https://`, with `http://localhost` and `http://127.0.0.1` the only exceptions, for a `wrangler dev` run. The token has no flag — a secret on the command line ends up in the shell history — so it comes from `HANDBILL_TOKEN` or from `token` in the config file, which is where `handbill login` puts the key it mints. The file is written `0600`.
 
 Falling back to step 4 only happens silently for a key `handbill login` minted (they start with `hb_`). A token of your own with no endpoint named anywhere is refused rather than sent to the hosted deployment: it is your Worker's `PUBLISH_TOKEN`, and it should not leave for a host you did not choose. Name the endpoint and it goes where you meant.
+
+**A minted key only ever goes back to the deployment that minted it.** `login` records that deployment as `mintedAt` beside the key, and every command compares it with the endpoint it is about to call: a mismatch is refused in one sentence naming both, before the key leaves. Publishing somewhere else is `handbill login --endpoint <url>` — signing in there, not lending this key to it. A config file written before `mintedAt` existed keeps working: its key is taken to have been minted at the file's own `endpoint`, or at the hosted default when it names none. A token of your own is not pinned at all — nobody issued it — and neither is one from `HANDBILL_TOKEN`, which you supplied to that run deliberately.
 
 Don't have a deployment yet? It is one Worker, one bucket and two DNS records — about ten minutes: [self-hosting guide](https://github.com/viktoravelino/handbill/blob/main/docs/SELF-HOSTING.md).
 
@@ -68,6 +70,8 @@ Don't have a deployment yet? It is one Worker, one bucket and two DNS records �
 | `handbill admin takedown <url-or-hash>`   | For whoever runs the deployment: take a page down. Needs `HANDBILL_ADMIN_TOKEN`.                                                         |
 | `handbill admin tier gh:4242 paid`        | Also for the operator: set what an account may spend. Needs `HANDBILL_ADMIN_TOKEN`.                                                      |
 
+Two things `handbill <file>` will not publish, each refused in one sentence before anything is uploaded: its own config file, and a document containing the key it would publish with. The content of a document is data, not an instruction to this CLI.
+
 Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents. `--open` on `handbill <file>`, `handbill update`, `handbill alias` and `handbill account --upgrade` opens the URL in your browser after printing it; stdout is still that one line. `--qr` on `handbill <file>` and `handbill alias` prints a scannable QR code for the URL to stderr — and skips it silently when stderr is not a terminal, so pipes never see it.
 
 ## Names
@@ -84,7 +88,7 @@ handbill update https://a3f9c1d4e2b8.yourdomain.dev plan.html
 
 One command for the whole rotation: publish the new file, re-point every name that pointed at the old page, then unpublish the old hash — in that order, so a reader following a name is not left on a 404. It prints the new URL and nothing else; `--json` adds what it did (`{ "hash", "url", "created", "removed", "aliases" }`), and the names it moved are reported on stderr. Update a page to bytes it already has and nothing happens.
 
-The names it moves are the ones `alias list` reports, and it re-reads each of them by name before it moves anything, so a listing that reports a name against a stale hash no longer misleads it. What the listing does not report at all, it still cannot move: a name **created** in the last minute may be missing from the listing entirely, and `update` would then unpublish the page it points at. Give a brand-new name a minute before updating the page under it. Nothing else in the rotation is at risk — if any step fails, the new URL is still printed on stderr and the old page is left alone.
+The names it moves are the ones `alias list` reports, and it re-reads each of them by name before it moves anything, so a listing that reports a name against a stale hash no longer misleads it. What the listing does not report at all, it cannot discover: a name **created** in the last minute may be missing from it entirely. `--alias <name>` is the way past that — `handbill update <old> plan.html --alias plan` moves that name by reading the name itself, which is current, rather than trusting the list. It is repeatable, and it adds to the discovered set rather than replacing it. Nothing else in the rotation is at risk — if any step fails, the new URL is still printed on stderr and the old page is left alone.
 
 ## Markdown
 

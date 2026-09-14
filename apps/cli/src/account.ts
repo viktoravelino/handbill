@@ -61,9 +61,11 @@ const store = Effect.fn(function* (settings: Config.Settings, minted: Key) {
   yield* Config.save(settings, {
     token: minted.key,
     // A key is only good against the deployment that minted it, so `login`
-    // writes down which one that was — unless it is the built-in default, which
-    // stays unpinned so it can move. Spread rather than `undefined`, which
-    // would remove the field instead.
+    // writes down which one that was. `mintedAt` is the provenance every later
+    // command checks the endpoint it is about to call against; `endpoint` is
+    // still only a preference, and is left alone when the default was used so
+    // it can move. Spread rather than `undefined`, which would remove it.
+    mintedAt: settings.endpoint.source === "default" ? "default" : settings.endpoint.value,
     ...(settings.endpoint.source === "default" ? {} : { endpoint: settings.endpoint.value })
   }).pipe(
     // Minting is the one moment the key exists in readable form, so a file that
@@ -93,10 +95,30 @@ const store = Effect.fn(function* (settings: Config.Settings, minted: Key) {
   // operator's `PUBLISH_TOKEN` never is.
   yield* Option.match(settings.token, {
     onNone: () => Effect.void,
-    onSome: (previous) =>
-      previous.source === "file" && Config.isMintedKey(previous.value)
-        ? Effect.ignore(revokeKey(settings.endpoint.value, previous.value))
-        : Effect.void
+    onSome: (previous) => {
+      if (previous.source !== "file" || !Config.isMintedKey(previous.value)) return Effect.void
+      // The deployment that minted it, which `--endpoint` may have just moved
+      // away from: sending it to the one being logged in to would hand a live
+      // production key to another host, get a meaningless answer, and leave the
+      // real key live forever on the deployment that issued it.
+      return Config.mintedEndpoint(settings, previous.source).pipe(
+        Effect.flatMap((where) =>
+          revokeKey(where, previous.value).pipe(
+            Effect.catch(() =>
+              Output.note(
+                `The key this one replaces could not be given back at ${where}: it is still live there, and nothing holds it any more.`
+              )
+            )
+          )
+        ),
+        // A `mintedAt` no key may cross — someone hand-edited it to plain http —
+        // is worth saying out loud, not worth abandoning a login for: the new
+        // key is already stored, and failing here would only lose it too.
+        Effect.catchTag("InsecureEndpoint", (failure) =>
+          Output.note(Output.describe(failure).message)
+        )
+      )
+    }
   })
   yield* Output.note(`Signed in to ${settings.endpoint.value}. The key is in ${settings.path}.`)
   // The file is not where the CLI will read a key from next: the environment
@@ -170,7 +192,9 @@ export const login = Command.make(
  */
 const clearLocal = Effect.fn(function* (settings: Config.Settings, source: Config.Source) {
   if (source === "file") {
-    yield* Config.save(settings, { token: undefined })
+    // `mintedAt` is about the key and nothing else, so it goes with it: leaving
+    // it behind would pin a file that no longer holds anything to pin.
+    yield* Config.save(settings, { token: undefined, mintedAt: undefined })
     return true
   }
   yield* Output.note(
@@ -199,7 +223,13 @@ export const logout = Command.make(
       // answers 204 for a key it has never seen, so an operator's token sent
       // here would come back "revoked" and take the config file with it.
       yield* Config.sendable(settings, current.value)
-      const revoked = yield* revokeKey(settings.endpoint.value, current.value).pipe(
+      // The deployment that minted it, not the one this run resolved — so
+      // `logout` does not go through `pinned`, which is the rule for *using* a
+      // key. `--endpoint` and HANDBILL_ENDPOINT cannot redirect a revocation:
+      // the key goes home, or nowhere. Only a key from `HANDBILL_TOKEN` has no
+      // provenance, and then the resolved endpoint is all there is to go on.
+      const where = yield* Config.mintedEndpoint(settings, current.source)
+      const revoked = yield* revokeKey(where, current.value).pipe(
         Effect.as(true),
         Effect.catchTag("NotFound", () =>
           // A 404 has two readings, and the key's own shape says which. A key a
@@ -209,19 +239,15 @@ export const logout = Command.make(
           // operator's own token reaching a 404 means what it says: this
           // deployment runs no accounts and there was never a key to give back.
           Config.isMintedKey(current.value)
-            ? Effect.fail(new Output.WrongDeployment({ endpoint: settings.endpoint.value }))
+            ? Effect.fail(new Output.WrongDeployment({ endpoint: where }))
             : Effect.as(
-                Output.note(
-                  `${settings.endpoint.value} does not run accounts, so there was no key to revoke.`
-                ),
+                Output.note(`${where} does not run accounts, so there was no key to revoke.`),
                 false
               )
         )
       )
       const cleared = yield* clearLocal(settings, current.source)
-      yield* json
-        ? Output.json({ revoked, cleared, endpoint: settings.endpoint.value })
-        : Output.line(settings.endpoint.value)
+      yield* json ? Output.json({ revoked, cleared, endpoint: where }) : Output.line(where)
     })
   )
 ).pipe(
