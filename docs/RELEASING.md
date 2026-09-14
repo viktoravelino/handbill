@@ -88,7 +88,7 @@ To pull a nightly back: `npm dist-tag rm handbill nightly` removes the tag, `npm
 
 ## If a release fails
 
-- Before the publish step: fix on `main`, delete the tag locally and remotely (`git tag -d v0.1.1 && git push origin :refs/tags/v0.1.1`), tag again.
+- Before the publish step: the `release tags` ruleset forbids deleting or moving a `v*` tag for anyone but the repository admin, so `v0.1.1` is not retagged — fix on `main` and publish the next patch version (`0.1.2`) instead. The bad tag stays pushed, unpublished, as a record of the failed attempt.
 - After the publish step (for example the GitHub release step): do not re-tag; re-run the workflow — the publish is skipped and the release gets created — or `gh release create v0.1.1 --generate-notes`.
 - npm never allows republishing a version; a fix after a successful publish is the next patch version.
 
@@ -104,6 +104,8 @@ bun run --cwd apps/worker deploy:prod
 `scripts/deploy-prod.sh` (what `deploy:prod` runs) refuses unless the working tree is clean, `HEAD` is exactly a tag matching `v[0-9]*`, and that tag is on `origin/main` — so a deploy always ships a commit the maintainer merged and tagged, never a branch in progress. `VERSION` comes from the tag and must match `apps/worker/package.json`.
 
 `main` deploys itself to staging on every push that touches the Worker or the contract (`deploy:staging`); production never deploys from a branch tip.
+
+`version` and `build` on `GET /v1/health` exist only because `deploy:prod` and `deploy:staging` pass them as `--var`s (`VERSION` from the tag or `package.json`, `BUILD` from the short commit) — they are not baked into the Worker any other way. A bare `wrangler deploy --config wrangler.production.jsonc` ships the same bindings but skips the tag gate and passes no `--var`s, so it deploys silently with `version`/`build` absent from health. A production health response with no `build` is that sign; the fix is not to add the vars by hand but to redeploy from the tag with `deploy:prod`, which is the only path that both stamps them and proves the deploy came from a merged, tagged commit.
 
 `--force` skips all three checks — clean tree, tag, reachability — with one loud warning line naming the commit and, when the tree is dirty, saying so. `VERSION` falls back to `apps/worker/package.json`. It is for a hotfix or the kill-switch drill (`docs/DRILL.md` scenario D, which deploys mid-drill with an intentionally uncommitted edit) and nothing else.
 
