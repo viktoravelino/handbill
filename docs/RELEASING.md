@@ -91,6 +91,21 @@ To pull a nightly back: `npm dist-tag rm handbill nightly` removes the tag, `npm
 - After the publish step (for example the GitHub release step): do not re-tag; re-run the workflow — the publish is skipped and the release gets created — or `gh release create v0.1.1 --generate-notes`.
 - npm never allows republishing a version; a fix after a successful publish is the next patch version.
 
+## Deploying the Worker
+
+Production deploys from the release tag only: check out the tag, then deploy from it.
+
+```sh
+git checkout v0.4.0
+bun run --cwd apps/worker deploy:prod
+```
+
+`scripts/deploy-prod.sh` (what `deploy:prod` runs) refuses unless the working tree is clean, `HEAD` is exactly a tag matching `v[0-9]*`, and that tag is on `origin/main` — so a deploy always ships a commit the maintainer merged and tagged, never a branch in progress. `VERSION` comes from the tag and must match `apps/worker/package.json`.
+
+`main` deploys itself to staging on every push that touches the Worker or the contract (`deploy:staging`); production never deploys from a branch tip.
+
+`--force` skips all three checks — clean tree, tag, reachability — with one loud warning line naming the commit and, when the tree is dirty, saying so. `VERSION` falls back to `apps/worker/package.json`. It is for a hotfix or the kill-switch drill (`docs/DRILL.md` scenario D, which deploys mid-drill with an intentionally uncommitted edit) and nothing else.
+
 ## Why not staged publishing
 
 npm's staged publishing (`npm stage publish` in CI, a human approves with 2FA) is the other supported path. With a single maintainer who is also the one pushing the tag, the tag is the approval; revisit if more people gain release rights. Nightlies publish with no human in the loop, which is fine for the same reason it is fine for `next`: they never touch `latest`.

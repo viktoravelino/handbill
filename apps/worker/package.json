@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "size": "bun run scripts/size.ts",
-    "deploy:prod": "wrangler deploy --config wrangler.production.jsonc --var VERSION:$(node -p \"require('./package.json').version\") --var BUILD:$(git rev-parse --short HEAD)",
+    "deploy:prod": "../../scripts/deploy-prod.sh",
     "deploy:staging": "wrangler deploy --config wrangler.staging.jsonc --var VERSION:$(node -p \"require('./package.json').version\") --var BUILD:$(git rev-parse --short HEAD)"
   },
   "dependencies": {

@@ -314,8 +314,10 @@ Pick two page URLs that must keep serving: one published by a hosted account, on
 Comment the `ACCOUNTS` entry out of `kv_namespaces` in `wrangler.production.jsonc` — leave `ALIASES` bound, and keep the namespace id in the comment, because putting it back is the next step.
 
 ```sh
-bun run deploy:prod
+bun run deploy:prod --force
 ```
+
+The unbind is an uncommitted edit, which the deploy gate's clean-tree check otherwise refuses.
 
 **Time:** run 1 — 17:50:02→17:50:11Z (9s).
 
@@ -361,7 +363,7 @@ HANDBILL_TOKEN=<PUBLISH_TOKEN>  handbill list    # the operator's own pages, and
 Put the `ACCOUNTS` binding back — `git checkout wrangler.production.jsonc` restores it — then:
 
 ```sh
-bun run deploy:prod
+bun run deploy:prod --force
 curl -s https://api.handbill.dev/v1/health                       # mode: accounts
 HANDBILL_TOKEN=<the same hosted key> handbill list               # works, same pages as D1
 bunx wrangler kv key get --remote --namespace-id "$NS" "q:<owner>:bytes"  # the number from D1
