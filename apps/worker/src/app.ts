@@ -6,6 +6,7 @@ import { AuthorizationLive, Groups } from "./api"
 import { canonical, classifyHost, nothingHere, serveAlias, servePage } from "./pages"
 import type { Aliases } from "./aliases"
 import type { Auth } from "./auth"
+import type { Billing } from "./billing"
 import { Config, type WorkerConfig } from "./config"
 import type { Quotas } from "./quotas"
 import type { Index, Storage } from "./storage"
@@ -19,8 +20,8 @@ const PlatformLive = Layer.mergeAll(Etag.layer, Path.layer, HttpPlatform.layer).
   Layer.provideMerge(FileSystem.layerNoop({}))
 )
 
-/** Everything the handlers need beyond the platform: storage, the per-owner index, auth, aliases, quotas. */
-export type AppServices = Storage | Index | Auth | Aliases | Quotas
+/** Everything the handlers need beyond the platform: storage, the per-owner index, auth, aliases, quotas, billing. */
+export type AppServices = Storage | Index | Auth | Aliases | Quotas | Billing
 
 /** The spec generated from the contract, and the Scalar page that renders it. Neither needs a token. */
 const OPENAPI_PATH = "/v1/openapi.json"

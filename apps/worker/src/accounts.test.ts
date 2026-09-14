@@ -4,6 +4,7 @@ import { Effect, Layer, Schema } from "effect"
 import { AliasesMemory } from "./aliases"
 import { makeApp } from "./app"
 import { AuthAccounts, githubOwner, type Identify, type KeyStore } from "./auth"
+import { BillingDisabled } from "./billing"
 import { hashBytes, sha256Hex } from "./hash"
 import { QuotaMemory } from "./quotas"
 import { IndexMemory, StorageMemory } from "./storage"
@@ -52,7 +53,8 @@ const hosted = () =>
       IndexMemory,
       AuthAccounts(memoryKeys(), identify),
       AliasesMemory,
-      QuotaMemory()
+      QuotaMemory(),
+      BillingDisabled
     )
   )
 
@@ -165,7 +167,8 @@ test("minting also files an owner→key back-reference", async () => {
       IndexMemory,
       AuthAccounts(memoryKeys(records), identify),
       AliasesMemory,
-      QuotaMemory()
+      QuotaMemory(),
+      BillingDisabled
     )
   )
   const { key } = await minted(await mint(app, GITHUB_TOKEN))
@@ -356,7 +359,8 @@ test("a title over the KV metadata budget still publishes and lists, clamped", a
       IndexMemory,
       AuthAccounts(memoryKeys(), identify),
       AliasesMemory,
-      QuotaMemory()
+      QuotaMemory(),
+      BillingDisabled
     )
   )
   const key = await keyFor(app, GITHUB_TOKEN)

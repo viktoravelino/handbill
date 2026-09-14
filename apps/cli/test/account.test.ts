@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { afterAll, beforeEach, describe, expect, test } from "bun:test"
-import { plan } from "./fixtures"
+import { plan, session } from "./fixtures"
 import { configHome, run, type RunOptions, USER_CODE, VERIFICATION_URI } from "./harness"
 import {
   GITHUB_TOKEN,
@@ -14,10 +14,11 @@ import {
 } from "./server"
 
 /**
- * Everything the CLI does against a deployment in accounts mode — `login` and
- * `logout`, what `doctor` makes of the hosted tier, and the one page error that
- * only exists there. They share a file because they share the setup: a Worker
- * with keys instead of one shared token, and two GitHub accounts to be.
+ * Everything the CLI does against a deployment in accounts mode — `login`,
+ * `logout` and `account`, what `doctor` makes of the hosted tier, and the one
+ * page error that only exists there. They share a file because they share the
+ * setup: a Worker with keys instead of one shared token, and two GitHub
+ * accounts to be.
  */
 
 let server = makeServer({ accounts: true })
@@ -296,5 +297,108 @@ describe("remove across accounts", () => {
     expect(outcome.ok).toBe(false)
     expect(outcome.stderr.join("\n")).toContain("belongs to another account")
     expect(server.hashes(OTHER_OWNER)).toEqual([plan.hash])
+  })
+})
+
+/** Where a deployment that sells something sends the caller to pay. */
+const CHECKOUT_URL = "https://sandbox.polar.sh/checkout/abc123"
+
+describe("account", () => {
+  test("prints the owner, the tier and what the quotas have been spent on", async () => {
+    await cli(["login"], { githubToken: GITHUB_TOKEN })
+    await cli([plan.path])
+
+    const outcome = await cli(["account"])
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stderr).toEqual([])
+    expect(outcome.stdout).toEqual([
+      `owner   ${OWNER}`,
+      "tier    free",
+      "pages   1 / 25 today",
+      `stored  ${plan.bytes.length} / ${250 * 1024 * 1024} bytes`
+    ])
+
+    const json = await cli(["account", "--json"])
+    expect(JSON.parse(json.stdout[0] ?? "")).toEqual({
+      owner: OWNER,
+      tier: "free",
+      usage: { pagesToday: 1, storedBytes: plan.bytes.length },
+      limits: { pagesPerDay: 25, storedBytes: 250 * 1024 * 1024 }
+    })
+  })
+
+  // A deployment that pays its own R2 bill counts nothing, so there is no
+  // limit to print: saying so beats printing a zero that reads as "spent".
+  const selfHosted = session()
+
+  test("says so where nothing is counted", async () => {
+    const outcome = await selfHosted.cli(["account"])
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stdout).toEqual([
+      "owner   self",
+      "tier    free",
+      "quotas are not counted on this deployment."
+    ])
+  })
+})
+
+describe("account --upgrade", () => {
+  // Its own deployment: this one has a payment provider configured, which the
+  // sessions the module's server refuses are the absence of. The admin token is
+  // how a test moves an account onto the paid tier without a Polar webhook.
+  const ADMIN = "operator-only"
+  const selling = makeServer({ accounts: true, checkoutUrl: CHECKOUT_URL, admin: ADMIN })
+  afterAll(() => selling.dispose())
+
+  test("prints the checkout URL and nothing else, and can open it", async () => {
+    await cli(["login"], { githubToken: GITHUB_TOKEN, http: selling.layer })
+
+    const outcome = await cli(["account", "--upgrade"], { http: selling.layer })
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stdout).toEqual([CHECKOUT_URL])
+    expect(outcome.stderr).toEqual([])
+    expect(outcome.opened).toEqual([])
+
+    // Still one line on stdout with `--open`: the browser is a second reader of
+    // the URL, never the first. Which owner the session was created for is the
+    // Worker's test to make — the CLI never names one, which is the point.
+    const opened = await cli(["account", "--upgrade", "--open"], { http: selling.layer })
+    expect(opened.stdout).toEqual([CHECKOUT_URL])
+    expect(opened.opened).toEqual([CHECKOUT_URL])
+  })
+
+  // Paying twice for one account is the mistake this refuses: the sentence sends
+  // the user to the portal rather than to a second subscription.
+  test("an account already on the paid tier is told, not sold to", async () => {
+    await cli(["login"], { githubToken: GITHUB_TOKEN, http: selling.layer })
+    await selling.fetch(`https://api.${ZONE}/v1/admin/tier/${encodeURIComponent(OWNER)}`, {
+      method: "PUT",
+      body: JSON.stringify({ tier: "paid" }),
+      headers: { "content-type": "application/json", authorization: `Bearer ${ADMIN}` }
+    })
+
+    const outcome = await cli(["account", "--upgrade"], { http: selling.layer })
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stdout).toEqual([])
+    expect(outcome.stderr.join("\n")).toContain("already on the paid tier")
+  })
+
+  // `--open` opens what a command printed, and reading an account prints no URL:
+  // silently doing nothing would look like the browser failing to start.
+  test("--open without --upgrade says there is nothing to open", async () => {
+    await cli(["login"], { githubToken: GITHUB_TOKEN })
+    const outcome = await cli(["account", "--open"])
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stdout).toEqual([])
+    expect(outcome.opened).toEqual([])
+    expect(outcome.stderr.join("\n")).toContain("--open has nothing to open")
+  })
+
+  test("a deployment with nothing to sell says so and fails", async () => {
+    await cli(["login"], { githubToken: GITHUB_TOKEN })
+    const outcome = await cli(["account", "--upgrade"])
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stdout).toEqual([])
+    expect(outcome.stderr.join("\n")).toContain("has no paid tier to buy")
   })
 })

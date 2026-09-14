@@ -58,10 +58,11 @@ The full walkthrough — token scopes, verification curls, limits, troubleshooti
 | `handbill update <url\|hash> plan.html` | Republish: the new page up, its names moved, the old hash gone.                                |
 | `handbill alias plan <url\|hash>`       | Point a name at a page: `plan.yourdomain.dev` serves it. Opt-in; `alias list`, `alias remove`. |
 | `handbill login` / `logout`             | Sign in to a hosted deployment with GitHub and keep the key it mints; `logout` revokes it.     |
+| `handbill account`                      | Owner, tier and what today's quotas have been spent on; `--upgrade` prints a checkout URL.     |
 | `handbill doctor`                       | Config, token, endpoint, token accepted, wildcard certificate — each with a one-line fix.      |
 | `handbill completions zsh`              | Shell completions (bash, zsh, fish).                                                           |
 
-Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result. `--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the URL in your browser after printing it. `--qr` on `handbill <file>` and `handbill alias` prints a scannable QR code for the URL to stderr — hand someone the page across a table — and skips it silently when stderr is not a terminal, so pipes never see it.
+Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result. `--open` on `handbill <file>`, `handbill update`, `handbill alias` and `handbill account --upgrade` opens the URL in your browser after printing it. `--qr` on `handbill <file>` and `handbill alias` prints a scannable QR code for the URL to stderr — hand someone the page across a table — and skips it silently when stderr is not a terminal, so pipes never see it.
 
 ## How it works
 

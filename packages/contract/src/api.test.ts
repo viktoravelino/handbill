@@ -2,7 +2,14 @@ import { describe, expect, test } from "bun:test"
 import { Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { HandbillApi } from "./api"
-import { HashMismatch, NotFound, QuotaExceeded, TooLarge, Unauthorized } from "./errors"
+import {
+  AlreadyPaid,
+  HashMismatch,
+  NotFound,
+  QuotaExceeded,
+  TooLarge,
+  Unauthorized
+} from "./errors"
 import { AliasName, Hash, Page } from "./schemas"
 
 const spec = OpenApi.fromApi(HandbillApi)
@@ -75,14 +82,14 @@ describe("Page", () => {
 
 // `NotFound` is the one error no v0.1 endpoint can raise — the page-serving path
 // is a hostname branch, not an API route, and DELETE is idempotent. Generating a
-// spec from a probe API is how we prove all five carry the status they declare.
+// spec from a probe API is how we prove each one carries the status it declares.
 describe("errors", () => {
   test("every error maps to its HTTP status", () => {
     class Probe extends HttpApi.make("probe").add(
       HttpApiGroup.make("probe", { topLevel: true }).add(
         HttpApiEndpoint.get("probe", "/probe", {
           success: Schema.String,
-          error: [HashMismatch, Unauthorized, NotFound, TooLarge, QuotaExceeded]
+          error: [HashMismatch, Unauthorized, NotFound, TooLarge, AlreadyPaid, QuotaExceeded]
         })
       )
     ) {}
@@ -91,6 +98,7 @@ describe("errors", () => {
       "400",
       "401",
       "404",
+      "409",
       "413",
       "429"
     ])
@@ -130,6 +138,12 @@ describe("spec", () => {
     // is a 204, and 404 is only the accounts-off case.
     expect(errorStatuses(spec.paths, "/v1/keys", "post")).toEqual(["401", "404"])
     expect(errorStatuses(spec.paths, "/v1/keys/current", "delete")).toEqual(["404"])
+    // The account routes: reading one can only fail the middleware's 401, and
+    // the checkout's 404 is a deployment with nothing to sell — no payment
+    // provider configured, or secret mode, whose one owner is the operator.
+    expect(errorStatuses(spec.paths, "/v1/account", "get")).toEqual(["401"])
+    // 409 is an account already paying: a second subscription is not more quota.
+    expect(errorStatuses(spec.paths, "/v1/account/checkout", "post")).toEqual(["401", "404", "409"])
     // health needs no token, so it has nothing to fail with.
     expect(errorStatuses(spec.paths, "/v1/health", "get")).toEqual([])
   })
@@ -166,6 +180,11 @@ describe("spec", () => {
     // different secret entirely, so no user key may resolve on this route.
     expect(spec.paths["/v1/admin/pages/{hash}"]?.delete?.security).toEqual([])
     expect(spec.paths["/v1/admin/tier/{owner}"]?.put?.security).toEqual([])
+    // The account routes are inside it, like the pages group: both answers are
+    // about the key presented, and the checkout is stamped with the owner it
+    // resolves to — which is the reason it is a route rather than a link.
+    expect(spec.paths["/v1/account"]?.get?.security).toEqual([{ bearer: [] }])
+    expect(spec.paths["/v1/account/checkout"]?.post?.security).toEqual([{ bearer: [] }])
     // The webhook is outside it for a third reason: the caller is the payment
     // provider, holding no handbill credential at all. Its credential is the
     // signature over the body, and the owner is something the event carries.

@@ -1,4 +1,5 @@
 import {
+  AlreadyPaid,
   Authorization,
   CurrentOwner,
   CurrentTier,
@@ -15,7 +16,7 @@ import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { extractTitle, hashBytes } from "./hash"
 import { Aliases } from "./aliases"
 import { Auth, OPERATOR, secretEquals } from "./auth"
-import { readFlip, verifySignature } from "./billing"
+import { Billing, readFlip, verifySignature } from "./billing"
 import { Config } from "./config"
 import { Quotas } from "./quotas"
 import { Index, Storage } from "./storage"
@@ -133,11 +134,8 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
 
 /**
  * Living names. Two things stay out of the handlers: whether the feature is on
- * (`AliasesDisabled` fails every route with `NotFound`, so no KV binding is a
- * 404 without anyone asking) and who may use it — this gate. Decision 08 keeps
- * aliases operator-only in 0.3: `OPERATOR` is the one owner a self-hosted
- * deployment issues and the one `AuthAccounts` never does, so it is a no-op in
- * secret mode and hides the routes from hosted keys. `list` needs none.
+ * (`AliasesDisabled` fails every route with `NotFound`) and who may use it —
+ * this gate, which decision 08 keeps operator-only. `list` needs none.
  */
 const operatorOnly = Effect.flatMap(CurrentOwner, (owner) =>
   owner === OPERATOR ? Effect.void : Effect.fail(new NotFound())
@@ -210,6 +208,32 @@ export const KeysLive = HttpApiBuilder.group(HandbillApi, "keys", (handlers) =>
         const auth = yield* Auth
         const request = yield* HttpServerRequest.HttpServerRequest
         yield* auth.revoke(presentedKey(request.headers))
+      })
+    )
+)
+
+/**
+ * The caller's own account, as `AccountGroup` defines the two answers. `limits`
+ * comes from `Quotas`, so neither handler asks which layer is on, and the one
+ * outbound call the checkout makes is bounded by WAF rule 1 (2 writes / 10 s per
+ * IP on api.handbill.dev): nobody can spend the Polar rate limit from here.
+ */
+export const AccountLive = HttpApiBuilder.group(HandbillApi, "account", (handlers) =>
+  handlers
+    .handle("read", () =>
+      Effect.gen(function* () {
+        const owner = yield* CurrentOwner
+        const tier = yield* CurrentTier
+        const quotas = yield* Quotas
+        return { owner, tier, usage: yield* quotas.usage(owner), limits: quotas.limits(tier) }
+      })
+    )
+    .handle("checkout", () =>
+      Effect.gen(function* () {
+        const owner = yield* CurrentOwner
+        if (owner === OPERATOR) return yield* Effect.fail(new NotFound())
+        if ((yield* CurrentTier) === "paid") return yield* Effect.fail(new AlreadyPaid())
+        return yield* (yield* Billing).checkout(owner)
       })
     )
 )
@@ -288,4 +312,12 @@ export const MetaLive = HttpApiBuilder.group(HandbillApi, "meta", (handlers) =>
 )
 
 /** Every group's handlers, as the tuple `Layer.provide` wants; `makeApp` spreads it. */
-export const Groups = [PagesLive, AliasesLive, KeysLive, AdminLive, BillingLive, MetaLive] as const
+export const Groups = [
+  PagesLive,
+  AliasesLive,
+  KeysLive,
+  AccountLive,
+  AdminLive,
+  BillingLive,
+  MetaLive
+] as const

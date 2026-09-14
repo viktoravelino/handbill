@@ -4,6 +4,77 @@ exports[`spec matches the published spec 1`] = `
 {
   "components": {
     "schemas": {
+      "Account": {
+        "additionalProperties": false,
+        "properties": {
+          "limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccountLimits",
+              },
+              {
+                "type": "null",
+              },
+            ],
+          },
+          "owner": {
+            "type": "string",
+          },
+          "tier": {
+            "enum": [
+              "free",
+              "paid",
+            ],
+            "type": "string",
+          },
+          "usage": {
+            "$ref": "#/components/schemas/AccountUsage",
+          },
+        },
+        "required": [
+          "owner",
+          "tier",
+          "usage",
+          "limits",
+        ],
+        "type": "object",
+      },
+      "AccountLimits": {
+        "additionalProperties": false,
+        "properties": {
+          "pagesPerDay": {
+            "minimum": 0,
+            "type": "integer",
+          },
+          "storedBytes": {
+            "minimum": 0,
+            "type": "integer",
+          },
+        },
+        "required": [
+          "pagesPerDay",
+          "storedBytes",
+        ],
+        "type": "object",
+      },
+      "AccountUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "pagesToday": {
+            "minimum": 0,
+            "type": "integer",
+          },
+          "storedBytes": {
+            "minimum": 0,
+            "type": "integer",
+          },
+        },
+        "required": [
+          "pagesToday",
+          "storedBytes",
+        ],
+        "type": "object",
+      },
       "Alias": {
         "additionalProperties": false,
         "properties": {
@@ -51,6 +122,34 @@ exports[`spec matches the published spec 1`] = `
         },
         "required": [
           "hash",
+        ],
+        "type": "object",
+      },
+      "AlreadyPaidEncoded": {
+        "additionalProperties": false,
+        "properties": {
+          "_tag": {
+            "enum": [
+              "AlreadyPaid",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "_tag",
+        ],
+        "type": "object",
+      },
+      "Checkout": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "pattern": "^https:\\/\\/",
+            "type": "string",
+          },
+        },
+        "required": [
+          "url",
         ],
         "type": "object",
       },
@@ -311,6 +410,98 @@ exports[`spec matches the published spec 1`] = `
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/account": {
+      "get": {
+        "operationId": "account.read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account",
+                },
+              },
+            },
+            "description": "Account",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded",
+                },
+              },
+            },
+            "description": "Unauthorized",
+          },
+        },
+        "security": [
+          {
+            "bearer": [],
+          },
+        ],
+        "tags": [
+          "Account",
+        ],
+      },
+    },
+    "/v1/account/checkout": {
+      "post": {
+        "operationId": "account.checkout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Checkout",
+                },
+              },
+            },
+            "description": "Checkout",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded",
+                },
+              },
+            },
+            "description": "Unauthorized",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundEncoded",
+                },
+              },
+            },
+            "description": "NotFound",
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlreadyPaidEncoded",
+                },
+              },
+            },
+            "description": "AlreadyPaid",
+          },
+        },
+        "security": [
+          {
+            "bearer": [],
+          },
+        ],
+        "tags": [
+          "Account",
+        ],
+      },
+    },
     "/v1/admin/pages/{hash}": {
       "delete": {
         "operationId": "admin.takedown",
@@ -987,6 +1178,10 @@ exports[`spec matches the published spec 1`] = `
     {
       "description": "Mint and revoke API keys. Absent unless the deployment runs accounts.",
       "name": "Keys",
+    },
+    {
+      "description": "Tier, usage and the upgrade link for the key presented.",
+      "name": "Account",
     },
     {
       "description": "Operator takedown and the tier override. Absent unless the deployment sets an admin token.",

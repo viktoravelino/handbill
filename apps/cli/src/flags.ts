@@ -29,6 +29,12 @@ export const qrFlag = Flag.boolean("qr").pipe(
   Flag.withDefault(false)
 )
 
+/** On `account`, the only command with anything to buy. */
+export const upgradeFlag = Flag.boolean("upgrade").pipe(
+  Flag.withDescription("Print a checkout URL for the paid tier instead of the account"),
+  Flag.withDefault(false)
+)
+
 /** On the two commands that take a document: publish and update. */
 export const markdownFlag = Flag.boolean("markdown").pipe(
   Flag.withDescription("Render the input as markdown, whatever it is named — needed for stdin"),

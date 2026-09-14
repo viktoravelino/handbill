@@ -24,9 +24,12 @@ export const handler =
   (input: I) =>
     body(input).pipe(Output.reporting({ json: input.json }))
 
-/** The configuration and the client that every API-calling command starts from. */
-export const connect = Effect.fn(function* (endpoint: Option.Option<string>) {
-  const settings = yield* Config.resolve({ endpoint })
+/**
+ * The client for settings a command has already resolved — because it has its
+ * own use for them, as `account` has for naming the endpoint in a failure.
+ * Everything else calls {@link connect}, which resolves them itself.
+ */
+export const clientFor = Effect.fn(function* (settings: Config.Settings) {
   const credentials = yield* Config.credentials(settings)
   // Before the client exists, so nothing can put the token on the wire by
   // accident. `credentials` runs first, so a machine with nothing configured is
@@ -34,6 +37,11 @@ export const connect = Effect.fn(function* (endpoint: Option.Option<string>) {
   // token for.
   yield* Config.sendable(settings, credentials.token)
   return yield* Client.make(credentials)
+})
+
+/** The configuration and the client that every API-calling command starts from. */
+export const connect = Effect.fn(function* (endpoint: Option.Option<string>) {
+  return yield* clientFor(yield* Config.resolve({ endpoint }))
 })
 
 /** An `Option` a command cannot go on without: its value, or the failure that says why. */

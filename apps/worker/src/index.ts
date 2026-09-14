@@ -3,22 +3,15 @@ import { Layer } from "effect"
 import { AliasesDisabled, AliasesKV } from "./aliases"
 import { makeApp } from "./app"
 import { AuthAccounts, AuthSecret, keyStore } from "./auth"
-import { DEFAULT_MAX_BYTES } from "./config"
+import { BillingDisabled, BillingPolar } from "./billing"
+import { DEFAULT_MAX_BYTES, DEFAULT_POLAR_API } from "./config"
 import { QuotaKV, QuotaUnlimited } from "./quotas"
 import { IndexBucket, IndexKV, StorageR2 } from "./storage"
 
 /**
- * The bindings `wrangler.jsonc` declares. `ZONE` and the bucket are config,
- * `PUBLISH_TOKEN` is a secret (`wrangler secret put PUBLISH_TOKEN`) and
- * `MAX_BYTES` is optional — it defaults to the CLI's 5 MB cap. `ALIASES` and
- * `ACCOUNTS` are the opt-in KV namespaces: without either one that feature is
- * absent rather than empty. Binding `ACCOUNTS` is what makes a deployment a
- * host — per-account keys, the per-owner index and quota counters instead of the
- * one shared `PUBLISH_TOKEN` — and unbinding it puts the Worker back on the
- * token without touching a page. `ADMIN_TOKEN` is an optional secret of its own
- * (`wrangler secret put ADMIN_TOKEN`): the operator's takedown key, never a user
- * key, and without it the takedown and tier routes are not there.
- * `POLAR_WEBHOOK_SECRET` is a third: without it the billing webhook 404s too.
+ * The bindings `wrangler.jsonc` declares and explains, under the rule every
+ * optional one obeys: what is not bound is absent rather than empty. `ACCOUNTS`
+ * decides what the deployment is — keys, index and counters, or one shared token.
  */
 export interface Env {
   readonly ZONE: string
@@ -26,6 +19,9 @@ export interface Env {
   readonly PUBLISH_TOKEN?: string
   readonly ADMIN_TOKEN?: string
   readonly POLAR_WEBHOOK_SECRET?: string
+  readonly POLAR_ACCESS_TOKEN?: string
+  readonly POLAR_PRODUCT_ID?: string
+  readonly POLAR_API?: string
   readonly BUCKET: R2Bucket
   readonly ALIASES?: KVNamespace
   readonly ACCOUNTS?: KVNamespace
@@ -50,6 +46,8 @@ let app: ReturnType<typeof makeApp> | undefined
 const appFor = (env: Env) => {
   const storage = StorageR2(env.BUCKET)
   const { ADMIN_TOKEN: adminToken, POLAR_WEBHOOK_SECRET: webhookSecret, ZONE: zone } = env
+  const { POLAR_ACCESS_TOKEN: polar, POLAR_PRODUCT_ID: product } = env
+  const api = env.POLAR_API ?? DEFAULT_POLAR_API
   return (app ??= makeApp(
     { zone, maxBytes: maxBytesFrom(env.MAX_BYTES), adminToken, webhookSecret },
     Layer.mergeAll(
@@ -65,7 +63,10 @@ const appFor = (env: Env) => {
       env.ACCOUNTS === undefined
         ? AuthSecret(env.PUBLISH_TOKEN ?? "")
         : AuthAccounts(keyStore(env.ACCOUNTS)),
-      env.ALIASES === undefined ? AliasesDisabled : AliasesKV(env.ALIASES)
+      env.ALIASES === undefined ? AliasesDisabled : AliasesKV(env.ALIASES),
+      // Both or neither, an empty secret counting as unset: a token with no
+      // product buys nothing and a product with no token cannot be charged for.
+      polar && product ? BillingPolar({ api, token: polar, productId: product }) : BillingDisabled
     )
   ))
 }
