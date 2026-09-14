@@ -127,12 +127,9 @@ export const StorageR2 = (bucket: R2Bucket): Layer.Layer<Storage> =>
 /**
  * The per-owner page index: a derived view of the bucket that lets `list` answer
  * from one KV read instead of a whole-bucket scan. `add`/`remove` keep it in step
- * on publish and unpublish; `list` returns an owner's pages newest first.
- *
- * R2 wins every disagreement and nothing reconciles the two (architecture §04): a
- * publish writes the object first, so a crash between the two leaves a page `list`
- * misses and its owner can still remove — which is why `remove` reads ownership
- * from R2, never from here. An entry with no object 404s like any unknown hash.
+ * on publish and unpublish. R2 wins every disagreement and nothing reconciles the
+ * two (architecture §04), which is why `remove` reads ownership from R2 and an
+ * entry with no object behind it 404s like any unknown hash.
  */
 export interface IndexShape {
   readonly add: (meta: StoredMeta) => Effect.Effect<void>

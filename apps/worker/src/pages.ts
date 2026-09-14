@@ -16,10 +16,9 @@ export type HostKind =
   | { readonly kind: "unknown" }
 
 /**
- * Lowercased and without the trailing dot a fully-qualified name carries. Both the
- * request's host and the configured zone go through it, so a `ZONE` pasted out of
- * DNS tooling as `example.dev.` classifies — and prints — the same as `example.dev`.
- * `makeApp` canonicalises the zone once, so every URL agrees with the classifier.
+ * Lowercased and without the trailing dot a fully-qualified name carries. Both
+ * the request's host and the configured zone go through it, so a `ZONE` pasted
+ * out of DNS tooling as `example.dev.` classifies the same as `example.dev`.
  */
 export const canonical = (name: string): string => name.toLowerCase().replace(/\.$/u, "")
 
@@ -51,17 +50,13 @@ export const nothingHere = (): Response =>
     }
   })
 
-/**
- * A hash names bytes that cannot change under it, so its page is cached for a year;
- * an alias is a moving target and gets a minute, which republishing outlives.
- */
+/** A hash cannot change under a reader; an alias can, and republishing outlives a minute. */
 const IMMUTABLE = "public, max-age=31536000, immutable"
 const ALIASED = "public, max-age=60"
 
 /**
- * The document behind a hostname, kept out of search results and every path serving
- * it. `no-referrer` because the URL is the secret: nothing a page loads carries the
- * hash to a third party (#158).
+ * The document behind a hostname, on every path that hostname serves.
+ * `no-referrer` because the URL is the secret: nothing a page loads leaks it (#158).
  */
 export const servePage = (
   hash: Hash,

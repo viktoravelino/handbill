@@ -8,10 +8,10 @@ export const summary =
 /**
  * The docs section: one page per markdown file the repository already has, so
  * the site and GitHub cannot disagree. `path` is the file, relative to the
- * repository root; `slug` is where it is served, `/docs/<slug>/`. Four of the
- * files are the site's own: `api.md`, `hosted.md`, `terms.md` and `abuse.md`
- * are written here — the last three describe the service on this domain rather
- * than the software, so a self-hoster's clone has no business carrying them —
+ * repository root; `slug` is where it is served, `/docs/<slug>/`. Five of the
+ * files are the site's own: `api.md`, `hosted.md`, `pricing.md`, `terms.md` and
+ * `abuse.md` are written here — the last four describe the service on this
+ * domain rather than the software, so a self-hoster's clone has none of them —
  * and `cli.md` is generated from `handbill --help` by scripts/cli-reference.ts
  * before every build. The operator runbooks (`docs/WAF.md`, `docs/DRILL.md`)
  * are deliberately absent: they are for whoever runs a deployment, not for
@@ -32,6 +32,13 @@ export const docs = [
     path: "apps/web/src/docs/hosted.md",
     description:
       "Publish without a Cloudflare account: handbill login signs you in with GitHub, which learns your numeric id and nothing else. 25 pages a day, 250 MB stored, free."
+  },
+  {
+    slug: "pricing",
+    title: "Pricing",
+    path: "apps/web/src/docs/pricing.md",
+    description:
+      "What the hosted tiers cost: free is 25 pages a day and 250 MB stored, paid is 250 and 5 GB for $8 a month or $80 a year. The read side is identical."
   },
   {
     slug: "cli",

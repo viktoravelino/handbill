@@ -78,6 +78,8 @@ Run it when a publish was refused for a quota, or when the user asks what their 
 
 `handbill account --upgrade` prints a checkout URL for the paid tier, created for the account whose key is in hand. Hand that URL to the user and stop: paying is theirs to do, never yours. A deployment with no paid tier says so in one sentence.
 
+`handbill account --web` opens the same account on handbill.dev, for a user who would rather see it in a browser — it works against the hosted deployment only, and refuses elsewhere. **The URL it prints carries the user's key in its fragment: never repeat it, quote it, or put it in a file, a message or a page.** Run the command and tell the user their browser is open.
+
 ## Showing the page
 
 `--open` on `handbill <file>`, `handbill update`, `handbill alias` and `handbill account --upgrade` opens the printed URL in the user's default browser after printing it. stdout is still exactly one line. Use it only when the user asked to see the page, not by default.

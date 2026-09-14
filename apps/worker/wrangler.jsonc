@@ -17,8 +17,10 @@
     // Polar API it lives on (omit for production; the sandbox is the other
     // one). With these and the POLAR_ACCESS_TOKEN secret below, the CLI's
     // `handbill account --upgrade` gets a checkout URL; without them it 404s.
-    // Uncomment the lines you want and put a comma after "ZONE" above:
-    // "POLAR_PRODUCT_ID": "<uuid from the Polar dashboard>",
+    // POLAR_PRODUCT_ID may be several ids separated by commas — Polar models a
+    // monthly and a yearly plan as two products, and the checkout offers all of
+    // them. Uncomment the lines you want and put a comma after "ZONE" above:
+    // "POLAR_PRODUCT_ID": "<uuid from the Polar dashboard>[,<uuid>]",
     // "POLAR_API": "https://sandbox-api.polar.sh"
   },
 

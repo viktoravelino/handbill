@@ -51,9 +51,8 @@ export const OPERATOR = Owner.make("self")
 
 /**
  * Self-hosted auth: one shared `PUBLISH_TOKEN` from the Worker secrets, every
- * page owned by the operator. No accounts here, so the key and tier routes fail
- * with `NotFound` the way `AliasesDisabled` fails the alias routes: absent
- * rather than empty, and no handler has to ask.
+ * page owned by the operator. No accounts, so the key and tier routes 404 —
+ * absent rather than empty, and no handler has to ask.
  */
 export const AuthSecret = (token: string): Layer.Layer<Auth> =>
   Layer.succeed(Auth, {
@@ -127,12 +126,10 @@ export type Identify = (githubToken: string) => Effect.Effect<Owner, Unauthorize
 const isGitHubUser = Schema.is(Schema.Struct({ id: Schema.Number }))
 
 /**
- * The Worker's only outbound call, made on `POST /v1/keys` and nowhere else: a
- * GitHub access token becomes `gh:<numeric id>`, which survives a rename. Only
- * GitHub refusing the token — a `401` — is `Unauthorized`; a `5xx`, a `429`, or
- * a secondary rate limit's `403` is GitHub unavailable, not a verdict, so it
- * throws and the route 500s, minting nothing and calling no token bad. An
- * outage blocks new keys, not publishing.
+ * Made on `POST /v1/keys` and nowhere else: a GitHub access token becomes
+ * `gh:<numeric id>`, which survives a rename. Only a `401` is `Unauthorized`; a
+ * `5xx`, a `429` or a secondary limit's `403` is GitHub unavailable rather than
+ * a verdict, so it throws and the route 500s, calling no token bad.
  */
 export const githubOwner: Identify = (githubToken) =>
   Effect.flatMap(

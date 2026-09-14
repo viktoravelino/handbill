@@ -5,7 +5,7 @@ import { Effect, Layer } from "effect"
 import { AliasesMemory } from "./aliases"
 import { makeApp } from "./app"
 import { AuthAccounts, AuthSecret, type Identify, type KeyStore } from "./auth"
-import { type Billing, BillingDisabled, BillingPolar } from "./billing"
+import { type Billing, BillingDisabled, BillingPolar, productList } from "./billing"
 import { hashBytes } from "./hash"
 import { QuotaMemory, QuotaUnlimited, TIER_LIMITS } from "./quotas"
 import { IndexBucket, IndexMemory, StorageMemory } from "./storage"
@@ -140,10 +140,13 @@ const withPolar = async <A>(
   }
 }
 
+// Two products, because Polar models the yearly plan as a second one and
+// `POLAR_PRODUCT_ID` is a comma-separated list; the spacing is what an operator
+// would actually paste.
 const polar = BillingPolar({
   api: "https://sandbox-api.polar.sh",
   token: "polar_oat_test",
-  productId: "prod_1"
+  products: productList("prod_month , prod_year")
 })
 
 test("usage follows what is published and what is given back", async () => {
@@ -219,7 +222,7 @@ test("the checkout is created for the owner the key resolved to", async () => {
       // `external_customer_id` is one Polar customer per owner, which is what
       // `readFlip`'s `customer.external_id` fallback needs to exist.
       body: {
-        products: ["prod_1"],
+        products: ["prod_month", "prod_year"],
         metadata: { owner: OWNER },
         external_customer_id: OWNER
       }

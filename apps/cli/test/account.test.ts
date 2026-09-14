@@ -534,3 +534,68 @@ describe("account --upgrade", () => {
     expect(outcome.stderr.join("\n")).toContain("has no paid tier to buy")
   })
 })
+
+// M21: the browser gets the key in a URL fragment, which never reaches a server
+// — so `--web` needs no request at all, and the page it opens is the hosted
+// site's, not whatever `--endpoint` names.
+/** A machine logged in to the hosted deployment: the key in the file, minted at the default. */
+const hostedHome = () => configHome(JSON.stringify({ token: "hb_web_key", mintedAt: "default" }))
+
+describe("account --web", () => {
+  const webCli = (args: ReadonlyArray<string>) =>
+    run(args, {
+      http: server.layer,
+      env: { XDG_CONFIG_HOME: hostedHome(), HANDBILL_ENDPOINT: undefined }
+    })
+
+  test("prints the account page URL with the key in it, opens it, and asks nothing of the API", async () => {
+    const outcome = await webCli(["account", "--web"])
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stdout).toEqual(["https://handbill.dev/account/#key=hb_web_key"])
+    expect(outcome.opened).toEqual(["https://handbill.dev/account/#key=hb_web_key"])
+    // Printed on purpose here — the URL is the destination — but the key is in
+    // it, so the warning is not optional.
+    expect(outcome.stderr.join("\n")).toContain("carries your key")
+    expect(server.requests()).toEqual([])
+  })
+
+  // A trailing slash and a capital are the same deployment; `--open` is what the
+  // command already does, so it is accepted rather than refused.
+  test("takes the default endpoint however it is spelled, and takes --open", async () => {
+    const outcome = await run(["account", "--web", "--open"], {
+      http: server.layer,
+      env: { XDG_CONFIG_HOME: hostedHome(), HANDBILL_ENDPOINT: "https://API.handbill.dev/" }
+    })
+    expect(outcome.ok).toBe(true)
+    expect(outcome.stdout).toEqual(["https://handbill.dev/account/#key=hb_web_key"])
+    expect(outcome.opened).toEqual(["https://handbill.dev/account/#key=hb_web_key"])
+  })
+
+  test("--json carries the same URL and nothing else", async () => {
+    const outcome = await webCli(["account", "--web", "--json"])
+    expect(JSON.parse(outcome.stdout[0] ?? "")).toEqual({
+      url: "https://handbill.dev/account/#key=hb_web_key"
+    })
+  })
+
+  // The page is part of handbill.dev. A self-hosted deployment is an API with no
+  // site behind it, so there is nowhere to send the key — and it is not sent.
+  test("refuses for a self-hosted endpoint", async () => {
+    const outcome = await run(["account", "--web", "--endpoint", "https://self.host"], {
+      http: server.layer,
+      env: { XDG_CONFIG_HOME: hostedHome(), HANDBILL_ENDPOINT: undefined }
+    })
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stdout).toEqual([])
+    expect(outcome.opened).toEqual([])
+    expect(outcome.stderr.join("\n")).toContain("--web only works against")
+  })
+
+  // Both print a URL, and stdout carries exactly one line.
+  test("cannot be combined with --upgrade", async () => {
+    const outcome = await webCli(["account", "--web", "--upgrade"])
+    expect(outcome.ok).toBe(false)
+    expect(outcome.stdout).toEqual([])
+    expect(outcome.stderr.join("\n")).toContain("cannot be combined")
+  })
+})

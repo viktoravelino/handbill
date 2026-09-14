@@ -13,7 +13,7 @@ Free, and by publishing here you accept the [terms and acceptable use](/docs/ter
 
 `handbill login` prints a short code and opens `github.com/login/device`, where you approve the "handbill CLI" GitHub App. The CLI exchanges GitHub's answer for a handbill key exactly once, writes the key to `~/.config/handbill/config.json` with mode `0600`, and throws GitHub's token away. The key is what publishes from then on; the server keeps only its SHA-256, so a dump of the store mints nothing. `handbill logout` revokes it and deletes it again.
 
-**What handbill learns about you is your numeric GitHub id.** That is the entire account — `gh:4242`, which is what every page you publish is filed under. Not your username (ids survive renames), not your email, not your repositories, no password anywhere. There is no browser session and no cookie on this domain: signing in happens in your terminal, and the site you are reading has no login at all.
+**What handbill learns about you is your numeric GitHub id.** That is the entire account — `gh:4242`, which is what every page you publish is filed under. Not your username (ids survive renames), not your email, not your repositories, no password anywhere. There is no browser session and no cookie on this domain: signing in happens in your terminal, and the site you are reading has no login at all. `handbill account --web` is the one page that shows your account in a browser, and it keeps that true — the CLI puts the key in the URL's fragment, which no server ever receives, and the page takes it out of the address bar and holds it in memory until the tab closes.
 
 GitHub is a dependency of signing in and of nothing else. If GitHub is down you cannot mint a new key; publishing, reading and unpublishing carry on.
 

@@ -3,7 +3,7 @@ import { Layer } from "effect"
 import { AliasesDisabled, AliasesKV } from "./aliases"
 import { makeApp } from "./app"
 import { AuthAccounts, AuthSecret, keyStore } from "./auth"
-import { BillingDisabled, BillingPolar } from "./billing"
+import { BillingDisabled, BillingPolar, productList } from "./billing"
 import { DEFAULT_MAX_BYTES, DEFAULT_POLAR_API } from "./config"
 import { QuotaKV, QuotaUnlimited } from "./quotas"
 import { IndexBucket, IndexKV, StorageR2 } from "./storage"
@@ -45,7 +45,8 @@ let app: ReturnType<typeof makeApp> | undefined
 const appFor = (env: Env) => {
   const storage = StorageR2(env.BUCKET)
   const { ADMIN_TOKEN: adminToken, POLAR_WEBHOOK_SECRET: webhookSecret, ZONE: zone } = env
-  const { POLAR_ACCESS_TOKEN: polar, POLAR_PRODUCT_ID: product } = env
+  const { POLAR_ACCESS_TOKEN: polar } = env
+  const products = productList(env.POLAR_PRODUCT_ID)
   const { BUILD: build, VERSION: version } = env
   const api = env.POLAR_API ?? DEFAULT_POLAR_API
   return (app ??= makeApp(
@@ -64,9 +65,10 @@ const appFor = (env: Env) => {
         ? AuthSecret(env.PUBLISH_TOKEN ?? "")
         : AuthAccounts(keyStore(env.ACCOUNTS)),
       env.ALIASES === undefined ? AliasesDisabled : AliasesKV(env.ALIASES),
-      // Both or neither, an empty secret counting as unset: a token with no
-      // product buys nothing and a product with no token cannot be charged for.
-      polar && product ? BillingPolar({ api, token: polar, productId: product }) : BillingDisabled
+      // Both or neither, an empty secret and a list naming no product counting
+      // as unset: a token with no product buys nothing, a product with no token
+      // cannot be charged for, and neither is a checkout worth offering.
+      polar && products.length > 0 ? BillingPolar({ api, token: polar, products }) : BillingDisabled
     )
   ))
 }
