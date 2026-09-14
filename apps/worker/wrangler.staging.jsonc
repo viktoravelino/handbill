@@ -1,0 +1,41 @@
+{
+  // The maintainer's staging deployment — a second Worker, `handbill-staging`,
+  // on its own zone, bucket and KV namespaces, so nothing here can touch
+  // handbill.dev. It is where the Polar *sandbox* organisation lives: staging
+  // carries the sandbox wiring permanently, which is why production does not
+  // have to (see wrangler.production.jsonc and docs/RELEASING.md).
+  // Deployed from `main` on every push by
+  // `.github/workflows/deploy-worker-staging.yml`; production stays manual.
+  // For a deploy by hand: bun run --cwd apps/worker deploy:staging
+  // (= wrangler deploy --config wrangler.staging.jsonc, plus VERSION and BUILD
+  // for /v1/health, the same way deploy:prod passes them).
+  // Secrets are per Worker and are not copied from production — set each one
+  // against this config:
+  //   wrangler secret put PUBLISH_TOKEN --config wrangler.staging.jsonc
+  //   wrangler secret put ADMIN_TOKEN --config wrangler.staging.jsonc
+  //   wrangler secret put POLAR_WEBHOOK_SECRET --config wrangler.staging.jsonc
+  //   wrangler secret put POLAR_ACCESS_TOKEN --config wrangler.staging.jsonc
+  // Namespace ids are not secrets; the secrets stay in `wrangler secret`.
+  // Self-hosting? Ignore this file and follow docs/SELF-HOSTING.md.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "handbill-staging",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": false,
+  "observability": { "enabled": true },
+  // Polar's sandbox organisation. Real checkouts, no money.
+  "vars": {
+    "ZONE": "handbill-staging.dev",
+    "POLAR_API": "https://sandbox-api.polar.sh",
+    "POLAR_PRODUCT_ID": "8313da80-c695-4a15-b5be-bde0d7eee784"
+  },
+  "routes": [
+    { "pattern": "api.handbill-staging.dev/*", "zone_name": "handbill-staging.dev" },
+    { "pattern": "*.handbill-staging.dev/*", "zone_name": "handbill-staging.dev" }
+  ],
+  "kv_namespaces": [
+    { "binding": "ALIASES", "id": "85e1b2a3492a4a6ba507142ada7f4fdd" },
+    { "binding": "ACCOUNTS", "id": "7cbcedd5ced54bc5bd2bbe0a2df4130e" }
+  ],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "handbill-staging" }]
+}

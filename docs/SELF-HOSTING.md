@@ -31,6 +31,8 @@ CLOUDFLARE_ACCOUNT_ID=<account id>   # Workers & Pages overview, right-hand colu
 
 `apps/worker/wrangler.jsonc` ships pointing at the maintainer's deployment. Change the three lines marked `EDIT`; the fourth and fifth are optional and belong to [living names](#living-names-optional) and [hosted accounts](#hosted-accounts-optional). (`wrangler.production.jsonc` next to it is the maintainer's filled-in copy for deploying handbill.dev; it is not for you.)
 
+`wrangler.staging.jsonc` is the maintainer's second copy, a separate Worker on `handbill-staging.dev` with its own bucket and KV namespaces that `.github/workflows/deploy-worker-staging.yml` deploys from `main`; it is not for you either. Self-hosting needs one deployment, and this file is only here so a change can be seen running before it reaches production.
+
 ```jsonc
 "vars": { "ZONE": "<zone>" },
 "routes": [
