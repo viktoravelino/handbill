@@ -5,7 +5,16 @@ name: Release
 # release; every night, and on demand, main is published under the `nightly`
 # dist-tag when it has moved since the last nightly. scripts/release-version.sh
 # decides which, and what version. npm trusted publishing (OIDC, provenance
-# attached automatically) is bound to this file's name. See docs/RELEASING.md.
+# attached automatically) is bound to this file's name and to the `npm`
+# environment. See docs/RELEASING.md.
+#
+# Three jobs so the OIDC token never shares a runner with dependency code:
+# `version` decides, `build` installs, tests and packs the tarball, and
+# `publish` — the only job with `id-token: write` — installs nothing, downloads
+# the tarball and publishes it. `publish` runs under the `npm` environment,
+# which only `main` and `v*` tags may deploy to, so a workflow dispatched from a
+# branch never reaches npm even if that branch edits this file. A dry run
+# stops after `build`.
 
 on:
   push:
@@ -20,8 +29,7 @@ on:
         default: false
 
 permissions:
-  contents: write # create the GitHub release
-  id-token: write # npm provenance
+  contents: read
 
 jobs:
   version:
@@ -33,18 +41,20 @@ jobs:
       skip: ${{ steps.resolve.outputs.skip }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # the script checks that a release tag is on origin/main
       - id: resolve
         shell: bash # -o pipefail, so a failing script fails the step through the tee
         env:
           DRY_RUN: ${{ inputs.dry_run }} # lets a non-main ref be dispatched for a rehearsal only
         run: scripts/release-version.sh | tee -a "$GITHUB_OUTPUT"
-      # The only outcome the publish job cannot report, because it does not run.
+      # The only outcome the later jobs cannot report, because they do not run.
       - if: steps.resolve.outputs.skip == 'true'
         run: |
           echo "::notice title=nightly::main has not moved since the last nightly; nothing to publish"
           echo "main has not moved since the last nightly; nothing to publish." >> "$GITHUB_STEP_SUMMARY"
 
-  publish:
+  build:
     needs: version
     if: needs.version.outputs.skip != 'true'
     runs-on: ubuntu-latest
@@ -58,10 +68,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
-          # Publish workflows should not restore a package-manager cache: a poisoned
-          # cache could read the OIDC token (setup-node's trusted-publishing guidance).
-          package-manager-cache: false
 
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
@@ -74,30 +80,74 @@ jobs:
       - name: Set the nightly version in the checkout
         if: needs.version.outputs.dist_tag == 'nightly'
         working-directory: apps/cli
-        run: npm pkg set version="${{ needs.version.outputs.version }}"
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: npm pkg set version="$VERSION"
 
       - run: bun run --cwd apps/cli build
       - run: node apps/cli/dist/cli.js --version
 
+      # The tarball is what gets published, so pack it here and rehearse the
+      # publish against it; a dry run ends on this step.
+      - name: Pack
+        working-directory: apps/cli
+        env:
+          DIST_TAG: ${{ needs.version.outputs.dist_tag }}
+        run: |
+          set -euo pipefail
+          npm pack --pack-destination "$RUNNER_TEMP"
+          mv "$RUNNER_TEMP"/handbill-*.tgz "$RUNNER_TEMP/handbill.tgz"
+          npm publish "$RUNNER_TEMP/handbill.tgz" --access public --tag "$DIST_TAG" --dry-run
+      - if: inputs.dry_run == true
+        run: |
+          echo "dry run: built and packed, nothing published." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: handbill-tgz
+          path: ${{ runner.temp }}/handbill.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: [version, build]
+    if: needs.version.outputs.skip != 'true' && inputs.dry_run != true
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # npm provenance
+    steps:
+      # No checkout and no install: npm is the only thing that runs here.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          # Publish workflows should not restore a package-manager cache: a poisoned
+          # cache could read the OIDC token (setup-node's trusted-publishing guidance).
+          package-manager-cache: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: handbill-tgz
+
       # Trusted publishing (OIDC): no token, provenance is attached automatically.
-      # The package's npm settings must list this repo + workflow as a trusted
-      # publisher (docs/RELEASING.md). Skipped if this version is already on npm,
-      # so a re-run after a failure past this point does not fail here.
+      # The package's npm settings must list this repo, workflow and environment
+      # as the trusted publisher (docs/RELEASING.md). Skipped if this version is
+      # already on npm, so a re-run after a failure past this point does not fail here.
       - name: Publish to npm
         id: publish
-        working-directory: apps/cli
         env:
           VERSION: ${{ needs.version.outputs.version }}
           DIST_TAG: ${{ needs.version.outputs.dist_tag }}
-          DRY_RUN: ${{ inputs.dry_run == true && '--dry-run' || '' }}
         run: |
           set -euo pipefail
           if npm view "handbill@$VERSION" version >/dev/null 2>&1; then
             echo "handbill@$VERSION is already on npm; skipping publish"
             echo "result=already on npm, publish skipped" >> "$GITHUB_OUTPUT"
           else
-            npm publish --access public --tag "$DIST_TAG" $DRY_RUN
-            if [[ -n $DRY_RUN ]]; then echo "result=dry run, nothing published"; else echo "result=published"; fi >> "$GITHUB_OUTPUT"
+            npm publish ./handbill.tgz --access public --tag "$DIST_TAG"
+            echo "result=published" >> "$GITHUB_OUTPUT"
           fi
 
       # The run's Summary page says what was decided and what happened, so a
@@ -118,10 +168,10 @@ jobs:
           echo "::notice title=handbill@$VERSION::$RESULT under $DIST_TAG"
 
       - name: GitHub release
-        if: needs.version.outputs.release == 'true' && inputs.dry_run != true
+        if: needs.version.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           flags=(--generate-notes --verify-tag)
           [[ "$GITHUB_REF_NAME" == *-* ]] && flags+=(--prerelease)
-          gh release create "$GITHUB_REF_NAME" "${flags[@]}"
+          gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" "${flags[@]}"
