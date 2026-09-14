@@ -50,24 +50,25 @@ Don't have a deployment yet? It is one Worker, one bucket and two DNS records �
 
 ## Use
 
-| Command                                   | What it does                                                                              |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `handbill plan.html`                      | Publish. Prints exactly one line: the URL.                                                |
-| `handbill notes.md`                       | Render markdown to a self-contained page, publish that.                                   |
-| `handbill - < plan.html`                  | Publish from stdin. Add `--markdown` to render it.                                        |
-| `handbill plan.html --json`               | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                     |
-| `handbill list`                           | What you have published, newest first: date, URL, title.                                  |
-| `handbill remove <url-or-hash>`           | Unpublish. Idempotent.                                                                    |
-| `handbill update <url-or-hash> plan.html` | Republish: the new page up, its names moved, the old hash gone.                           |
-| `handbill alias plan <url-or-hash>`       | Point a name at a page: `https://plan.yourdomain.dev` serves it. Opt-in, see below.       |
-| `handbill alias list`                     | Your aliases: URL, then the hash each points at. `handbill alias remove plan` drops one.  |
-| `handbill login`                          | Sign in with GitHub; prints the account the key belongs to. `handbill logout` revokes it. |
-| `handbill doctor`                         | Endpoint, mode, key, key accepted, wildcard certificate — each with a one-line fix.       |
-| `handbill completions zsh`                | Shell completions (bash, zsh, fish).                                                      |
-| `handbill admin takedown <url-or-hash>`   | For whoever runs the deployment: take a page down. Needs `HANDBILL_ADMIN_TOKEN`.          |
-| `handbill admin tier gh:4242 paid`        | Also for the operator: set what an account may spend. Needs `HANDBILL_ADMIN_TOKEN`.       |
+| Command                                   | What it does                                                                                                                             |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `handbill plan.html`                      | Publish. Prints exactly one line: the URL.                                                                                               |
+| `handbill notes.md`                       | Render markdown to a self-contained page, publish that.                                                                                  |
+| `handbill - < plan.html`                  | Publish from stdin. Add `--markdown` to render it.                                                                                       |
+| `handbill plan.html --json`               | `{ "hash", "url", "created" }` instead. Every command takes `--json`.                                                                    |
+| `handbill list`                           | What you have published, newest first: date, URL, title.                                                                                 |
+| `handbill remove <url-or-hash>`           | Unpublish. Idempotent.                                                                                                                   |
+| `handbill update <url-or-hash> plan.html` | Republish: the new page up, its names moved, the old hash gone.                                                                          |
+| `handbill alias plan <url-or-hash>`       | Point a name at a page: `https://plan.yourdomain.dev` serves it. Opt-in, see below.                                                      |
+| `handbill alias list`                     | Your aliases: URL, then the hash each points at. `handbill alias remove plan` drops one.                                                 |
+| `handbill login`                          | Sign in with GitHub; prints the account the key belongs to. `handbill logout` revokes it.                                                |
+| `handbill account`                        | Owner, tier and the quotas spent today; `--json` for the object. `--upgrade` prints a checkout URL for the paid tier, `--open` opens it. |
+| `handbill doctor`                         | Endpoint, mode, the deployment's version and build, key, key accepted, wildcard certificate — each with a one-line fix.                  |
+| `handbill completions zsh`                | Shell completions (bash, zsh, fish).                                                                                                     |
+| `handbill admin takedown <url-or-hash>`   | For whoever runs the deployment: take a page down. Needs `HANDBILL_ADMIN_TOKEN`.                                                         |
+| `handbill admin tier gh:4242 paid`        | Also for the operator: set what an account may spend. Needs `HANDBILL_ADMIN_TOKEN`.                                                      |
 
-Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents. `--open` on `handbill <file>`, `handbill update` and `handbill alias` opens the URL in your browser after printing it; stdout is still that one line. `--qr` on `handbill <file>` and `handbill alias` prints a scannable QR code for the URL to stderr — and skips it silently when stderr is not a terminal, so pipes never see it.
+Errors are one sentence on stderr and a non-zero exit; stdout is only ever the result — safe to pipe, safe for agents. `--open` on `handbill <file>`, `handbill update`, `handbill alias` and `handbill account --upgrade` opens the URL in your browser after printing it; stdout is still that one line. `--qr` on `handbill <file>` and `handbill alias` prints a scannable QR code for the URL to stderr — and skips it silently when stderr is not a terminal, so pipes never see it.
 
 ## Names
 

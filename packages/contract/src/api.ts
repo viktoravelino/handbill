@@ -346,7 +346,7 @@ export class HandbillApi extends HttpApi.make("handbill")
   .annotateMerge(
     OpenApi.annotations({
       title: "handbill",
-      version: "0.1.0",
+      version: "0.4.0-dev",
       description:
         "Hand someone a page: one self-contained HTML file at an unguessable, immutable URL."
     })

@@ -1,8 +1,8 @@
-# The 0.3 drill
+# The drill
 
 [WAF.md](WAF.md) is what you read during an incident. This is what you read once, before there is one.
 
-Four scenarios, in order: a stranger publishes, a report becomes a takedown and a dead key, the daily quota refuses a publish, and the kill switch is thrown and put back. Each is a script — pre-conditions, the commands verbatim, what success looks like — with `Result:` and `Time:` lines left blank on purpose. **Fill them in this file, in a commit.** A drill whose numbers live in someone's head is the same as no drill.
+Five scenarios, in order: a stranger publishes, a report becomes a takedown and a dead key, the daily quota refuses a publish, the kill switch is thrown and put back, and a subscription is bought, cancelled and replayed. The first four came with 0.3 and run on production; the fifth came with 0.4 and runs on staging, because rehearsing a payment on production means real webhook deliveries against real accounts. Each is a script — pre-conditions, the commands verbatim, what success looks like — with `Result:` and `Time:` lines left blank on purpose. **Fill them in this file, in a commit.** A drill whose numbers live in someone's head is the same as no drill.
 
 Two standing rules:
 
@@ -13,6 +13,7 @@ Two standing rules:
 
 | Run | Date | Operator | Worker deployed | Notes |
 |---|---|---|---|---|
+| 2 | 2026-09-14 | Viktor Avelino (agent as scribe) | `f094211` (staging) | **E only**, end to end on `handbill-staging.dev` against the Polar sandbox; production untouched. It was brought forward because #143 — a retried stale delivery re-activating a lapsed account, seen on production on 2026-09-10 — needed rehearsing against a real redelivery once #144 shipped. A, B9.2 and C are still run 1's leftovers and are run 3's opening items. |
 | 1 | 2026-09-01 | Viktor Avelino (agent as scribe) | `d809693` | B, C, D run on production. A and B9.2 pending: no stranger and no second GitHub account on hand — they are run 2's opening items. C was observed rather than looped: the operator had already spent the day's quota, so B1's first refusal *was* the observation, and the day counter was reset per WAF.md §4 to let B proceed — an unplanned rehearsal of that runbook section. |
 
 ## Shared pre-conditions
@@ -21,12 +22,16 @@ Check these once, before scenario A:
 
 ```sh
 curl -s https://api.handbill.dev/v1/health
-# {"ok":true,"mode":"accounts","zone":"handbill.dev"}
+# {"ok":true,"mode":"accounts","zone":"handbill.dev","version":"0.4.0-dev","build":"10ebe34"}
 
 cd apps/worker
 bunx wrangler secret list          # PUBLISH_TOKEN and ADMIN_TOKEN both present
 bunx wrangler kv namespace list    # note the ACCOUNTS id; every KV command below wants it
 ```
+
+`version` and `build` are deploy-time vars — the Worker's package version and the short commit it was built from — so the first line is also how you check which code you are about to drill against. A deployment that omits both was not deployed by `deploy:prod` or `deploy:staging`.
+
+**Which secrets should be there depends on the deployment.** `PUBLISH_TOKEN` and `ADMIN_TOKEN` on any of them. Where billing is on — staging, and scenario E — `POLAR_WEBHOOK_SECRET` and `POLAR_ACCESS_TOKEN` as well, with `POLAR_PRODUCT_ID` and `POLAR_API` as vars in the config file rather than secrets. Production deliberately has neither Polar secret while the paid tier is unannounced, so `POST /v1/billing/webhook` and `POST /v1/account/checkout` answer 404 there and scenario E cannot be run against it. `secret list` names keys and never values; a missing one is silent everywhere else, which is exactly how #131's 404 window happened.
 
 You also need, in hand: the `ADMIN_TOKEN` value, the `PUBLISH_TOKEN` value, and **two GitHub accounts** — a *publisher* to be taken down and a *bystander* whose key must survive it. One account cannot prove tenant isolation.
 
@@ -73,7 +78,7 @@ If they reach for `npx handbill` instead, let them — the roadmap's own wording
 - Every question they asked and every place they stopped to re-read, quoted.
 - Anything they typed that the page did not tell them to type.
 
-**Result:** run 1 — not run: no stranger was on hand. The flow itself was exercised by the operator on 2026-09-01 (login → publish, well under two minutes), but the operator cannot be the stranger; this scenario opens run 2.
+**Result:** run 1 — not run: no stranger was on hand. The flow itself was exercised by the operator on 2026-09-01 (login → publish, well under two minutes), but the operator cannot be the stranger; this scenario opens the next run that is not a billing-only one (run 2 was scenario E alone).
 **Time:** — (install — · login — · publish —)
 
 **If this fails** (over two minutes, or they got stuck): fix the words, not the person. Open an issue against `apps/web/src/docs/hosted.md` quoting the sentence they were standing on when the clock ran out.
@@ -182,13 +187,22 @@ NS=<the ACCOUNTS namespace id>
 OWNER=gh:<the publisher's numeric id>
 bunx wrangler kv key list --remote --namespace-id "$NS" --prefix "o:$OWNER:"
 # → o:gh:4242:<digest>, one per key ever minted; the k: record says which are live
-bunx wrangler kv key get --remote --namespace-id "$NS" "k:<digest>"
-# → {"owner":"gh:4242","created":"2026-09-01T…","tier":"free"}
-bunx wrangler kv key put --remote --namespace-id "$NS" "k:<digest>" \
-  '{"owner":"gh:4242","created":"<as it was>","tier":"free","revoked":"<now, ISO 8601>"}'
+KEY="k:<digest>"
+bunx wrangler kv key get --remote --namespace-id "$NS" "$KEY"
+# → {"owner":"gh:4242","created":"2026-09-01T…","tier":"free","tierAt":…,"subscriptionId":…}
+
+# A put replaces the whole value. Read the record, change only `revoked`, put it
+# back whole — never retype it from this page. What a retyped record drops is
+# `tierAt`, the #144 replay guard (the event time of the last tier flip; without
+# one the record is older than anything, so a stale subscription event the
+# provider retries is accepted), and `subscriptionId`, the only handle support
+# has on what was paid for.
+REC=$(bunx wrangler kv key get --remote --namespace-id "$NS" "$KEY")
+NEW=$(printf '%s' "$REC" | jq -c --arg now "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" '.revoked = $now')
+bunx wrangler kv key put --remote --namespace-id "$NS" "$KEY" "$NEW"
 ```
 
-**Expected.** The record reads back with `revoked` set, and every other field exactly as it was. Repeat for every digest the `o:` prefix listed.
+**Expected.** The record reads back with `revoked` set, and every other field exactly as it was — count them against the `get` you started from. Repeat for every digest the `o:` prefix listed.
 
 **Result:** run 1 — one digest listed, revoked, read back with `revoked` set and every other field unchanged. (keys revoked: 1)
 **Time:** 17:48:01Z (B3 → key dead: ~61s)
@@ -226,7 +240,7 @@ handbill login    # on the publisher's account, if you want to confirm it
 
 **Expected.** 200, a listing, a URL. Check 3 is meant to succeed: `POST /v1/keys` is open to any GitHub account by design, and a repeat offender is a policy problem, not a KV one.
 
-**Result:** run 1 — check 1: both the second page and a pre-0.3 page answered 200 after the revocation. Check 2: **not run** — no second GitHub account was on hand, so tenant isolation is asserted by the M16 test suite but not yet by a drill; run 2 opens with it. Check 3: `handbill login` on the revoked account minted a working key that listed the same pages — the door stayed open, as designed.
+**Result:** run 1 — check 1: both the second page and a pre-0.3 page answered 200 after the revocation. Check 2: **not run** — no second GitHub account was on hand, so tenant isolation is asserted by the M16 test suite but not yet by a drill; it is still owed (run 2 was scenario E alone). Check 3: `handbill login` on the revoked account minted a working key that listed the same pages — the door stayed open, as designed.
 **Time:** 17:48:13Z (checks 1); 17:49:30Z (check 3)
 
 ### B · Headline numbers
@@ -379,11 +393,133 @@ git diff wrangler.production.jsonc                               # empty again
 
 ---
 
+## E · Billing, end to end
+
+The 0.4 exit criterion, verbatim: *an upgrade raises a quota with no human in the loop; a lapse lowers it without breaking a single link*. Five legs: buy, cancel-at-period-end, revoke, replay, override.
+
+**This one runs on staging, never on production.** `handbill-staging.dev` is a second Worker with its own bucket and namespaces, and it is where the Polar *sandbox* organisation is wired permanently — real checkouts, no money. Production carries neither Polar secret while the paid tier is unannounced, so both billing routes answer 404 there; pointing the sandbox endpoint at it is what produced the incident below.
+
+**Pre-conditions**
+
+- Staging deployed from `main` (`.github/workflows/deploy-worker-staging.yml` does it on every push that touches the Worker or the contract). `curl -s https://api.handbill-staging.dev/v1/health` names the `build` you are drilling against.
+- `bunx wrangler secret list --config wrangler.staging.jsonc` shows `PUBLISH_TOKEN`, `ADMIN_TOKEN`, `POLAR_WEBHOOK_SECRET` and `POLAR_ACCESS_TOKEN`. All four, or the run measures the wrong thing: a missing webhook secret is a 404 on every delivery and looks exactly like a signature that verified and decided nothing.
+- The Polar **sandbox** dashboard open on the subscription product and on the endpoint's delivery log — that log is the only place a delivery's status code is visible, and every `Result:` below is read off it.
+- Polar's sandbox test card, from their docs. A GitHub account to log in with. The staging `ADMIN_TOKEN` in hand for E5.
+- Environment for the whole scenario — the endpoint is named explicitly so nothing here can reach production:
+
+```sh
+export HANDBILL_ENDPOINT=https://api.handbill-staging.dev
+handbill login                      # a key on staging, not the one in your config file
+```
+
+### E1 · Upgrade
+
+```sh
+handbill account                    # owner gh:<id>, tier free, pages 0 / 25 today
+handbill account --upgrade --open   # prints the checkout URL, then opens it
+```
+
+Pay with the test card. Then, once the delivery log shows the events:
+
+```sh
+handbill account                    # tier paid, pages 0 / 250 today
+```
+
+**Expected.** The checkout is created *by the Worker*, so the session carries `metadata.owner` and `external_customer_id` set to the owner the key resolved to — check both on the subscription in the dashboard; they are what the flip is keyed on, and a caller cannot choose them. Polar sends `subscription.active` and `subscription.updated`; both are `202`. `handbill account` then reads `paid`, and the daily limit it prints is 250.
+
+**Record.** Payment time, the delivery times and their statuses, and how long after the last `202` the command first read `paid`.
+
+**Result:** run 2 — pass. Checkout minted by the Worker with `metadata.owner` and `external_customer_id` from the key (M20, #140); `subscription.active` and `subscription.updated` both `202`; `account` read `paid`.
+**Time:** run 2 — payment 15:25:44Z → deliveries 15:25:45–46Z; clean path about a second. (The same leg on production on 2026-09-10 took 16m37s, of which all but ~90s was the #138 key-derivation fix and redeploy — see the incident note at the end of this scenario.)
+
+### E2 · A scheduled cancel changes nothing
+
+From the Polar dashboard, cancel the subscription **at period end** — not revoke.
+
+```sh
+handbill account                    # tier is still paid
+```
+
+**Expected.** Polar sends `subscription.updated` and `subscription.canceled`, both with `status: active` and `ended_at: null`. Both are `202` and **neither flips anything**: the Worker reads status rather than event name, and a free verdict is only final once `ended_at` is set. A user who cancels keeps what they paid for until the period ends — the opposite result would be the customer-facing bug this leg exists to catch.
+
+**Result:** run 2 — not re-run; proven on production on 2026-09-10 at 19:01:01Z, where the cancel produced `subscription.updated` and `subscription.canceled`, both `status: active` with `ended_at` null, both `202`, and no flip. Re-run it on staging at the next opportunity so all five legs sit on one deployment.
+**Time:** 2026-09-10 — cancel 19:01:01Z → deliveries `202`, tier unchanged.
+
+### E3 · An immediate revoke lowers the tier
+
+From the dashboard, or by API:
+
+```sh
+# The sandbox API, with the organisation token from the maintainer's .env
+curl -X PATCH "https://sandbox-api.polar.sh/v1/subscriptions/<subscription id>" \
+  -H "authorization: Bearer $POLAR_ACCESS_TOKEN" -H 'content-type: application/json' \
+  -d '{"revoke":true}'
+
+handbill account                    # tier free, pages n / 25 today
+```
+
+**Expected.** The events carry `ended_at`, so this time the verdict is final: `202`, and every live key the owner holds moves to `free` at once. **Nothing is unpublished.** Check it: a page published while paid still serves, and `handbill list` still lists it. If the owner is now over the free tier's 250 MB, the next *publish* is refused with `QuotaExceeded` — a write quota, never a link.
+
+Read the record back if you want to see the fields move (`--remote`, always):
+
+```sh
+NS=<the staging ACCOUNTS namespace id>
+bunx wrangler kv key get --remote --namespace-id "$NS" "k:<digest>"
+# tier free, tierAt = the revoking event's timestamp, subscriptionId kept
+```
+
+**Record.** Revoke time, delivery times and statuses, when `account` first read `free`, and that the pages still serve.
+
+**Result:** run 2 — pass. `subscription.updated`, `subscription.canceled` and `subscription.revoked`, all with `ended_at` set, all `202`; `account` read `free`. One wrinkle worth keeping: the operator's first read, at about 15:27Z, still said `paid` because it ran ahead of the deliveries — seconds later it was `free`. Read the delivery log before you read the command.
+**Time:** run 2 — revoke 15:26:52Z → all three `202` by 15:26:55Z, about three seconds. (2026-09-10 on production: revoke 19:01:43Z → accepted delivery 68s. No `subscription.revoked` was emitted for that API revoke at all; the status-plus-`ended_at` rule covered it without depending on an event name.)
+
+### E4 · A replayed delivery does not undo the lapse
+
+The leg #143 bought. Redeliver the **original** `subscription.active` from E1 — the sandbox dashboard's delivery log has a redeliver action, and the API has the same — and leave everything else alone.
+
+```sh
+handbill account                    # still free
+```
+
+**Expected.** `202`, because the signature and the timestamp window are both fine — and no flip, because the event's own `timestamp` is older than the `tierAt` the revocation wrote. A `202` here is the guard working, not the guard being skipped; the delivery log cannot tell you which, so the answer is `handbill account`.
+
+**Result:** run 2 — pass, on a real Polar redelivery rather than a test double. The original `subscription.active` (event timestamp 15:25:44Z) redelivered at 15:28:23Z → `202`, `account` still `free`. The `tierAt` guard from #144 holds.
+**Time:** run 2 — redelivered 15:28:23Z; verified immediately after.
+
+### E5 · The operator override
+
+The manual path for a delivery that never landed, and the support tool. It writes the same field the webhook does, stamped `now`, so it outranks any replay.
+
+```sh
+export HANDBILL_ADMIN_TOKEN=<the staging ADMIN_TOKEN>
+handbill admin tier gh:<id> paid
+handbill account                    # paid
+handbill admin tier gh:<id> free
+handbill account                    # free again
+```
+
+**Expected.** Both directions print the owner and the tier, exit 0, and are idempotent — the tier named is the tier the account ends on. An owner with no keys is a `204` that writes nothing, not an error. `HANDBILL_ADMIN_TOKEN` never goes in the config file.
+
+**Result:** run 2 — not re-run on staging; proven on production on 2026-09-10, where `handbill admin tier gh:64113566 paid` and then `free` both wrote the record, verified with `wrangler kv key get --remote`.
+**Time:** 2026-09-10 — two commands, seconds each.
+
+### E · The incident this scenario is built on
+
+Worth reading before the first run, because it is the shape of everything that can go wrong here.
+
+On 2026-09-10 the whole scenario was attempted against **production** with the sandbox endpoint pointed at it. Three failures stacked. The first delivery `401`d: Polar signs a `whsec_` secret the Standard Webhooks way — prefix stripped, key base64-decoded — and M19 had implemented the legacy derivation, fixed in #138. Then eight retries `404`d over nine minutes because `POLAR_WEBHOOK_SECRET` was absent from the deployed Worker during that window, having demonstrably been present for the `401`; what removed it was never established. Finally, on 2026-09-14, Polar retried those `404`d deliveries — `subscription.active`, event timestamp 18:42:36Z — *after* the 19:01Z revocation, and the account read `paid` again with no subscription behind it. That is #143, closed by #144's `tierAt` guard, which E4 now rehearses.
+
+Three standing consequences: the sandbox endpoint points at staging and nothing else; production carries no Polar secret until the paid tier is announced; and a secret that is silently absent looks exactly like a route that is deliberately off, so the shared pre-conditions check `secret list` first.
+
+**If any leg fails:** finish the scenario anyway, then one issue per failure. A signature that will not verify, a tier that did not flip, and a replay that undid a lapse are three different bugs — and only the third one is invisible from the delivery log.
+
+---
+
 ## Aftercare — the first week
 
 Watch these; none of them page you, so they only exist if someone looks.
 
-- **Quota counters.** `bunx wrangler kv key list --remote --namespace-id "$NS" --prefix "q:"` — how many accounts are counting at all, and whether any `bytes` counter is near 250 MB. A `bytes` value with no matching `i:` entries is the drift WAF.md §4 resets.
+- **Quota counters.** `bunx wrangler kv key list --remote --namespace-id "$NS" --prefix "q:"` — how many accounts are counting at all, and whether any `bytes` counter is near its owner's ceiling — 250 MB on the free tier, 5 GiB on paid. A `bytes` value with no matching `i:` entries is the drift WAF.md §4 resets.
 - **KV writes against the plan's ceiling.** A hosted publish costs three writes, minting a key two. WAF.md's table has the arithmetic; the free plan's ~1,000 writes a day is ~330 publishes.
 - **Web Analytics** on `handbill.dev` — whether anyone read the hosted page before installing, and where they arrived from.
 - **npm downloads** via the metrics branch, for whether the release moved anything.

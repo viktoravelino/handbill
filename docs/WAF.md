@@ -2,10 +2,10 @@
 
 Two things protect a deployment that hosts strangers:
 
-- **Quotas** live in the Worker, count per account, and are about fairness and storage cost. 25 pages a day and 250 MB stored per owner, enforced on publish. They are code, they are tested, and they are described in [SELF-HOSTING.md](SELF-HOSTING.md).
+- **Quotas** live in the Worker, count per account, and are about fairness and storage cost. Per owner, per *tier*, enforced on publish: 25 pages a day and 250 MB stored on `free`, 250 a day and 5 GiB on `paid`. Every number below that names one tier says which. They are code, they are tested, and they are described in [SELF-HOSTING.md](SELF-HOSTING.md).
 - **Rate limits** live in the WAF, count per IP, and are about floods. They run *before* the Worker, so a flood costs no Worker invocations. They are configuration, not code — which is why they are written down here rather than committed: a zone is clicked together, and a rule nobody wrote down is a rule nobody can re-create.
 
-They have different jobs, but they are **not independent**, and it is worth being exact about why. The quota counters are Workers KV values, and KV is eventually consistent: `check` reads a count that `record` may already have raised, and inside that window every request in flight reads the same stale number. So the overshoot on the daily limit is not one page — it is however many publishes an attacker can get in before the counter catches up, which is a rate they choose. **Rule 1 below is what bounds that rate, which makes it required rather than recommended before a zone hosts strangers.** Without it, "25 pages a day" degrades towards "25 per round trip the attacker is willing to wait for".
+They have different jobs, but they are **not independent**, and it is worth being exact about why. The quota counters are Workers KV values, and KV is eventually consistent: `check` reads a count that `record` may already have raised, and inside that window every request in flight reads the same stale number. So the overshoot on the daily limit is not one page — it is however many publishes an attacker can get in before the counter catches up, which is a rate they choose. **Rule 1 below is what bounds that rate, which makes it required rather than recommended before a zone hosts strangers.** Without it, a free account's "25 pages a day" degrades towards "25 per round trip the attacker is willing to wait for" — and a paid one's ceiling is ten times higher before it even starts.
 
 The honest summary: quotas are a cost ceiling that assumes a rate limit underneath it. Making the counters exact would mean Durable Objects, which 0.3 deliberately does not have.
 
@@ -60,8 +60,9 @@ Not a WAF matter, but it belongs next to the one above, because it is the second
 | publish | 1 write (`i:` index entry) | **3** (`i:`, `q:<owner>:d:<date>`, `q:<owner>:bytes`) |
 | remove / takedown | 1 delete | 1 delete + 1 write |
 | mint a key | 1 write | **2** (`k:`, `o:`) |
+| flip a tier | — | **1 per live key** the owner holds (`k:` rewritten in place) |
 
-So roughly **330 publishes a day** exhausts the free plan's KV writes — about thirteen accounts publishing their full 25 — after which writes start failing. Note what that costs: the index and the daily-count writes are not best-effort, so a failed KV write there is a defect and the publish answers **500 after the object is already stored and serving**. The caller is told it failed and the page is live; a retry then takes the same-bytes early return and answers 200 without charging anything, so the state converges, but the first answer is a lie and it is hard to diagnose from outside. The byte *release* on remove is deliberately different — it is swallowed, because a 500 there would misreport a removal that worked and the retry could never fix the counter.
+So roughly **330 publishes a day** exhausts the free plan's KV writes — about thirteen free accounts publishing their full 25, or one paid account and a bit — after which writes start failing. Tier flips are noise next to that: a subscription event, or `handbill admin tier`, rewrites one record per live key the owner holds, and most owners hold one. Note what that costs: the index and the daily-count writes are not best-effort, so a failed KV write there is a defect and the publish answers **500 after the object is already stored and serving**. The caller is told it failed and the page is live; a retry then takes the same-bytes early return and answers 200 without charging anything, so the state converges, but the first answer is a lie and it is hard to diagnose from outside. The byte *release* on remove is deliberately different — it is swallowed, because a 500 there would misreport a removal that worked and the retry could never fix the counter.
 
 Be on a paid KV plan before hosting strangers, not after. Self-hosted deployments write no KV at all unless aliases are on.
 
@@ -115,14 +116,17 @@ bunx wrangler kv key list --remote --namespace-id "$NS" --prefix "o:gh:4242"
 bunx wrangler kv key get  --remote --namespace-id "$NS" "k:<digest>"
 ```
 
-Revoking is a field on the record — the record stays, so the revocation is on the books and already-published pages keep serving:
+Revoking is a field on the record — the record stays, so the revocation is on the books and already-published pages keep serving. **A `put` replaces the whole value, so build the new one from the `get` above**: take the record exactly as it reads, add `revoked`, change nothing else. Retyping it from this page instead drops whatever that account happens to carry, and two fields make that expensive. `tierAt` is the replay guard from #144 — the event time of the last tier flip, and a record without one is older than anything, so any stale subscription event the provider retries afterwards is accepted and can restore a tier nobody is paying for. `subscriptionId` is the only handle support has on what was paid for. A revoked record is skipped by every tier flip, so on this particular edit the first one costs nothing today; but this `put` is how *any* record is edited, and on a live one the loss is immediate.
 
 ```sh
-bunx wrangler kv key put --remote --namespace-id "$NS" "k:<digest>" \
-  '{"owner":"gh:4242","created":"<as it was>","tier":"free","revoked":"2026-09-01T12:00:00.000Z"}'
+# Read it, change only `revoked`, put the whole object back.
+KEY="k:<digest>"
+REC=$(bunx wrangler kv key get --remote --namespace-id "$NS" "$KEY")
+NEW=$(printf '%s' "$REC" | jq -c --arg now "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" '.revoked = $now')
+bunx wrangler kv key put --remote --namespace-id "$NS" "$KEY" "$NEW"
 ```
 
-Read it back with the `get` above before you believe it. A revocation that went to local storage looks identical from here and leaves the key publishing.
+Read it back with the `get` above before you believe it — every field that was there still there, plus `revoked`. A revocation that went to local storage looks identical from here and leaves the key publishing.
 
 That key stops authorizing immediately. It does not stop the account minting another one — `POST /v1/keys` is open to any GitHub account by design — so revocation buys time rather than closing a door. Repeat offenders are a policy problem — [terms and acceptable use](https://handbill.dev/docs/terms/) is what says the account ends — not a KV problem.
 
@@ -134,11 +138,11 @@ That key stops authorizing immediately. It does not stop the account minting ano
 bunx wrangler kv key list --remote --namespace-id "$NS" --prefix "i:gh:4242:"   # → i:gh:4242:<hash>
 ```
 
-Take each hash down, then revoke the keys. An owner's page count is quota-bounded at 25 a day, so this list is never long.
+Take each hash down, then revoke the keys. An owner's page count is quota-bounded at their tier's daily limit — 25 on `free`, 250 on `paid` — so this list is bounded, though a paid account's can be ten times the length.
 
 ### 4. Fix a stuck counter, if an owner reports one
 
-`q:<owner>:bytes` is derived state that is never recomputed, and it can drift upward: a KV write that failed during a removal is not retried (the retry finds the object already gone and has nothing to release), so an owner can end up charged for storage they no longer have — and at 250 MB of phantom bytes they cannot publish at all. Nothing self-heals this. Delete the counter and it starts again from zero:
+`q:<owner>:bytes` is derived state that is never recomputed, and it can drift upward: a KV write that failed during a removal is not retried (the retry finds the object already gone and has nothing to release), so an owner can end up charged for storage they no longer have — and at their tier's ceiling of phantom bytes (250 MB on `free`, 5 GiB on `paid`) they cannot publish at all. Nothing self-heals this. Delete the counter and it starts again from zero:
 
 ```sh
 bunx wrangler kv key delete --remote --namespace-id "$NS" "q:gh:4242:bytes"
