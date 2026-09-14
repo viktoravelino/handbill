@@ -27,7 +27,8 @@
   "vars": {
     "ZONE": "handbill-staging.dev",
     "POLAR_API": "https://sandbox-api.polar.sh",
-    "POLAR_PRODUCT_ID": "8313da80-c695-4a15-b5be-bde0d7eee784"
+    // Monthly, then yearly: the checkout session offers both.
+    "POLAR_PRODUCT_ID": "8313da80-c695-4a15-b5be-bde0d7eee784,049d294d-78f4-4ee8-9a43-bd7663900ff1"
   },
   "routes": [
     { "pattern": "api.handbill-staging.dev/*", "zone_name": "handbill-staging.dev" },

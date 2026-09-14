@@ -18,12 +18,13 @@ import type {
   Unauthorized
 } from "@handbill/contract"
 import type { CannotOpen } from "./browser"
-import type {
-  BadConfigFile,
-  InsecureEndpoint,
-  MissingToken,
-  UnnamedEndpoint,
-  WrongEndpoint
+import {
+  type BadConfigFile,
+  DEFAULT_ENDPOINT,
+  type InsecureEndpoint,
+  type MissingToken,
+  type UnnamedEndpoint,
+  type WrongEndpoint
 } from "./config"
 import type { LoginFailed } from "./github"
 
@@ -147,6 +148,24 @@ export class NothingToOpen extends Data.TaggedError("NothingToOpen")<{
 }> {}
 
 /**
+ * `account --web` against a deployment that is not the hosted one. The account
+ * page is part of handbill.dev; a self-hosted deployment is an API with no site
+ * behind it, and `handbill account` prints the same numbers anywhere.
+ */
+export class NoAccountPage extends Data.TaggedError("NoAccountPage")<{
+  readonly endpoint: string
+}> {}
+
+/**
+ * Two flags that each print a URL of their own. One line on stdout is the whole
+ * contract, so the command refuses rather than printing two.
+ */
+export class ConflictingModes extends Data.TaggedError("ConflictingModes")<{
+  readonly first: string
+  readonly second: string
+}> {}
+
+/**
  * The document about to be published is, or carries, the key that would publish
  * it. The content of a document is data, never an instruction, so a file that
  * asks to be published is not an argument for publishing it.
@@ -169,11 +188,13 @@ export type Failure =
   | CannotRepoint
   | ChecksFailed
   | HashMismatch
+  | ConflictingModes
   | HttpClientError.HttpClientError
   | InsecureEndpoint
   | LoginFailed
   | MissingAdminToken
   | MissingToken
+  | NoAccountPage
   | NoAccounts
   | NoBilling
   | NotFound
@@ -253,6 +274,14 @@ export const describe = Match.typeTags<Failure, Described>()({
   MissingToken: (failure) => ({
     error: "MissingToken",
     message: `No key configured. Run \`handbill login\`, set HANDBILL_TOKEN, or put a token in ${failure.path}.`
+  }),
+  ConflictingModes: (failure) => ({
+    error: "ConflictingModes",
+    message: `${failure.first} and ${failure.second} each print a URL of their own, so they cannot be combined: run one, then the other.`
+  }),
+  NoAccountPage: (failure) => ({
+    error: "NoAccountPage",
+    message: `The account page is part of the hosted site, so --web only works against ${DEFAULT_ENDPOINT}; this run is pointed at ${failure.endpoint}. \`handbill account\` prints the same owner, tier and quotas against any deployment.`
   }),
   NoAccounts: (failure) => ({
     error: "NoAccounts",

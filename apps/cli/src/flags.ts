@@ -35,6 +35,12 @@ export const upgradeFlag = Flag.boolean("upgrade").pipe(
   Flag.withDefault(false)
 )
 
+/** On `account`, the other thing it can do with a key: hand it to the browser. */
+export const webFlag = Flag.boolean("web").pipe(
+  Flag.withDescription("Open the account page on handbill.dev with this key, instead of printing"),
+  Flag.withDefault(false)
+)
+
 /** On the two commands that take a document: publish and update. */
 export const markdownFlag = Flag.boolean("markdown").pipe(
   Flag.withDescription("Render the input as markdown, whatever it is named — needed for stdin"),

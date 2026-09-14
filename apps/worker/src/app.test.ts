@@ -347,3 +347,54 @@ test("the docs page renders and needs no token", async () => {
   expect(page).toContain("@scalar/api-reference@1.67.0/")
   expect(page).toContain('{ url: "/v1/openapi.json" }')
 })
+
+/**
+ * M21: the account page is a browser client of this API, so the site's origin —
+ * and only it — gets CORS headers on the API hostname.
+ */
+const SITE = `https://${ZONE}`
+
+test("a preflight from the site is answered with the methods and headers it may use", async () => {
+  const response = await app.fetch(
+    new Request(`https://api.${ZONE}/v1/pages/${await hashOf(DOC)}`, {
+      method: "OPTIONS",
+      headers: {
+        origin: SITE,
+        "access-control-request-method": "DELETE",
+        "access-control-request-headers": "authorization"
+      }
+    })
+  )
+  expect(response.headers.get("access-control-allow-origin")).toBe(SITE)
+  expect(response.headers.get("access-control-allow-methods")).toContain("DELETE")
+  expect(response.headers.get("access-control-allow-headers")).toContain("authorization")
+  // The key is a bearer token, never a cookie: nothing rides on the browser
+  // sending credentials, so nothing asks it to.
+  expect(response.headers.get("access-control-allow-credentials")).toBeNull()
+})
+
+test("a plain request from the site is readable by the page that made it", async () => {
+  const response = await api("/v1/pages", { headers: { origin: SITE } })
+  expect(response.status).toBe(200)
+  expect(response.headers.get("access-control-allow-origin")).toBe(SITE)
+})
+
+// One origin, and a site that is not it gets no header at all — a page on
+// another domain cannot read an answer meant for this key.
+test("another origin gets no CORS headers", async () => {
+  const response = await api("/v1/pages", { headers: { origin: "https://evil.test" } })
+  expect(response.status).toBe(200)
+  expect(response.headers.get("access-control-allow-origin")).toBeNull()
+})
+
+// CORS is the API handler's alone: a published page is not a resource another
+// site's script may read, whatever origin asks for it.
+test("a served page carries no CORS headers", async () => {
+  const hash = await hashOf(DOC)
+  expect((await publish(hash, DOC)).status).toBe(200)
+  const response = await app.fetch(
+    new Request(`https://${hash}.${ZONE}/`, { headers: { origin: SITE } })
+  )
+  expect(response.status).toBe(200)
+  expect(response.headers.get("access-control-allow-origin")).toBeNull()
+})

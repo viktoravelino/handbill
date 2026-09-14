@@ -28,16 +28,13 @@ import { Index, Storage } from "./storage"
 const publishedAt = (iso: string): DateTime.Utc =>
   Option.getOrElse(DateTime.make(iso), () => DateTime.makeUnsafe(0))
 
-/**
- * The public URL of a page: the label is the whole hostname, so a hash link
- * never changes under a reader and an alias link changes only its contents.
- */
+/** The public URL of a page or a name: the label is the whole hostname. */
 export const pageUrl = (zone: string, label: string): string => `https://${label}.${zone}`
 
 /**
- * Bearer auth for the `pages` group: it resolves the token through whichever
- * `Auth` layer is installed and hands the handlers the owner and the tier — the
- * single place the two modes differ, and the only read of the key record (§11).
+ * Bearer auth for the `pages` group: the token goes through whichever `Auth`
+ * layer is installed, and the handlers get the owner and the tier back — the
+ * single place the two modes differ, and the only read of the key record.
  */
 export const AuthorizationLive = Layer.effect(
   Authorization,
@@ -62,16 +59,12 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
         if (payload.length > maxBytes) return yield* Effect.fail(new TooLarge({ maxBytes }))
         const hash = yield* hashBytes(payload)
         if (hash !== params.hash) return yield* Effect.fail(new HashMismatch({ expected: hash }))
-        // Same bytes, same address: publishing twice stores nothing new and
-        // reports the URL that already exists. On a hash collision this is the
-        // second publisher — they get the same public URL but no index entry and
-        // no ownership: the first writer keeps `owner` (architecture decision 05).
+        // Same bytes, same address: publishing twice stores nothing new, and a
+        // collision leaves the first writer's `owner` alone (decision 05).
         const existing = yield* storage.head(hash)
         if (Option.isSome(existing)) return { hash, url: pageUrl(zone, hash), created: false }
-        // Checked before the write, counted after it (§04's order): a spent quota
-        // costs no R2 write beyond the `head` above, which has to run first so a
-        // republish spends nothing, and a crash between the two undercounts
-        // rather than charging for a page that is not there.
+        // Checked before the write, counted after it (§04's order), and after the
+        // `head` above so a republish spends nothing.
         const quotas = yield* Quotas
         yield* quotas.check(owner, yield* CurrentTier, payload.length)
         const now = yield* DateTime.now
@@ -82,9 +75,8 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
           publishedAt: DateTime.formatIso(now),
           size: payload.length
         }
-        // Object first, then the index: the bucket is the source of truth, so a
-        // crash after the object write leaves a page that simply is not listed
-        // until it is republished — never a listed page that is not there.
+        // Object first, then the index: a crash between them leaves a page that
+        // is not listed until it is republished, never a listing with no page.
         yield* storage.put({ ...meta, body: payload })
         yield* (yield* Index).add(meta)
         yield* quotas.record(owner, payload.length)
@@ -107,11 +99,9 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
         }
       })
     )
-    // Idempotent for a page that is not there (204), but ownership-checked: a
-    // hash owned by someone else answers 404, deletes nothing, and never 403 —
-    // decision 05's bar is that a non-owner learns no *ownership*. Ownership is
-    // read from R2 (`head`), never the index, so a crashed publish that left an
-    // object with no entry is still removable by its owner.
+    // Idempotent for a page that is not there (204), ownership-checked otherwise.
+    // Ownership is read from R2 (`head`), never the index, so a crashed publish
+    // that left an object with no entry is still removable by its owner.
     .handle("remove", ({ params }) =>
       Effect.gen(function* () {
         const storage = yield* Storage
@@ -132,9 +122,9 @@ export const PagesLive = HttpApiBuilder.group(HandbillApi, "pages", (handlers) =
 )
 
 /**
- * Living names. Two things stay out of the handlers: whether the feature is on
- * (`AliasesDisabled` fails every route with `NotFound`) and who may use it —
- * this gate, which decision 08 keeps operator-only. `list` needs none.
+ * Living names. Whether the feature is on stays out of the handlers
+ * (`AliasesDisabled` 404s every route); so does who may use it — this gate,
+ * which decision 08 keeps operator-only. `list` needs none.
  */
 const operatorOnly = Effect.flatMap(CurrentOwner, (owner) =>
   owner === OPERATOR ? Effect.void : Effect.fail(new NotFound())
@@ -169,8 +159,7 @@ export const AliasesLive = HttpApiBuilder.group(HandbillApi, "aliases", (handler
         const { zone } = yield* Config
         const aliases = yield* Aliases
         // `resolve` is the page path's own lookup — one read by key, so this
-        // answers what the name points at now rather than what the listing has
-        // caught up with. Unset and no-KV-binding are the same 404.
+        // answers what the name points at now. Unset and no KV are the same 404.
         const hash = yield* aliases.resolve(params.name)
         if (Option.isNone(hash)) return yield* Effect.fail(new NotFound())
         return { name: params.name, hash: hash.value, url: pageUrl(zone, params.name) }
@@ -185,9 +174,8 @@ export const AliasesLive = HttpApiBuilder.group(HandbillApi, "aliases", (handler
 )
 
 /**
- * The bearer token exactly as presented. `revoke` acts on the key itself, not the
- * owner behind it, and is off the authorize middleware so a revoked key can still
- * reach it — hence reading the header rather than taking a `CurrentOwner`.
+ * The bearer token exactly as presented. `revoke` acts on the key itself and is
+ * off the authorize middleware, so it reads the header rather than `CurrentOwner`.
  */
 const presentedKey = (headers: Headers.Headers): Redacted.Redacted =>
   Redacted.make(
@@ -212,9 +200,7 @@ export const KeysLive = HttpApiBuilder.group(HandbillApi, "keys", (handlers) =>
 
 /**
  * The caller's own account. `limits` comes from `Quotas`, so neither handler asks
- * which layer is on, and the one outbound call the checkout makes is bounded by
- * WAF rule 1 (2 writes / 10 s per IP on api.handbill.dev): nobody can spend the
- * Polar rate limit from here.
+ * which layer is on, and WAF rule 1 is what bounds the checkout's outbound call.
  */
 export const AccountLive = HttpApiBuilder.group(HandbillApi, "account", (handlers) =>
   handlers
@@ -251,9 +237,8 @@ const adminOnly = Effect.gen(function* () {
 
 /**
  * The operator's two routes. `takedown` is the only thing in the API that can kill
- * a published link: the owner comes from R2, so the freed bytes land on whoever
- * published it, idempotently and with no tombstone (§07). `tier` writes the field
- * the webhook does, stamped `now` so no retried delivery can undo it (#143).
+ * a published link; the owner comes from R2, so the freed bytes land on whoever
+ * published it. `tier` writes the webhook's own field, stamped `now` (#143).
  */
 export const AdminLive = HttpApiBuilder.group(HandbillApi, "admin", (handlers) =>
   handlers

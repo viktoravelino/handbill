@@ -32,6 +32,13 @@ type ConfigFile = typeof ConfigFile.Type
  */
 export const DEFAULT_ENDPOINT = "https://api.handbill.dev"
 
+/**
+ * The hosted site — the default endpoint without its `api.` label — which is
+ * where the account page lives. `account --web` opens it and refuses for any
+ * other endpoint: a self-hosted deployment is an API with no site behind it.
+ */
+export const DEFAULT_SITE = DEFAULT_ENDPOINT.replace("://api.", "://")
+
 /** The config file exists but cannot be used. A missing file is not an error. */
 export class BadConfigFile extends Data.TaggedError("BadConfigFile")<{
   readonly path: string
@@ -179,7 +186,9 @@ const configPath = Effect.fn(function* (configHome: Option.Option<string>) {
  */
 const normalise = (url: string) => url.trim().replace(/\/+$/u, "").toLowerCase()
 
-const sameEndpoint = (left: string, right: string): boolean => normalise(left) === normalise(right)
+/** Whether two spellings name one deployment; what `pinned` and `account --web` both ask. */
+export const sameEndpoint = (left: string, right: string): boolean =>
+  normalise(left) === normalise(right)
 
 /**
  * Loopback, where `wrangler dev` runs. The only hosts a credential may reach

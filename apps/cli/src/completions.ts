@@ -36,6 +36,14 @@ const upgradeDescriptor: Completions.FlagDescriptor = {
   type: { _tag: "Boolean" }
 }
 
+/** `--web` is on `account` alone: the account page is the only page the CLI opens. */
+const webDescriptor: Completions.FlagDescriptor = {
+  name: "web",
+  aliases: [],
+  description: "Open the account page on handbill.dev with this key, instead of printing",
+  type: { _tag: "Boolean" }
+}
+
 /** `--qr` is on publish and `alias`, the two commands that print a shareable URL. */
 const qrDescriptor: Completions.FlagDescriptor = {
   name: "qr",
@@ -192,7 +200,7 @@ export const descriptor: Completions.CommandDescriptor = {
     {
       name: "account",
       description: "Show the owner, tier and quota usage of the key in hand",
-      flags: [...apiFlags, openDescriptor, upgradeDescriptor],
+      flags: [...apiFlags, openDescriptor, upgradeDescriptor, webDescriptor],
       arguments: [],
       subcommands: []
     },

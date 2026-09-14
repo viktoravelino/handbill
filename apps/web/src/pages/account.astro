@@ -1,0 +1,238 @@
+---
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro"
+
+/**
+ * The one browser touchpoint a hosted account gets, and it is still not a login:
+ * `handbill account --web` opens this page with the key in the URL fragment, the
+ * script below takes it out of the address bar and keeps it in a variable for the
+ * lifetime of the tab. No cookie, no storage, no session on this domain — the
+ * fragment never reaches a server, and a reload is a signed-out page.
+ *
+ * Everything it shows comes from `GET /v1/account` and `GET /v1/pages` on
+ * `api.<this host>`, so staging serves itself without a second build.
+ */
+---
+
+<StarlightPage
+  frontmatter={{
+    title: "Account",
+    template: "splash",
+    // Nothing here is worth finding in the site's own search either: without a
+    // key in the fragment the page has nothing to show.
+    pagefind: false,
+    // The page is meaningless without a key and is not a page to find in a
+    // search result; the API's own routes say the same about themselves.
+    head: [{ tag: "meta", attrs: { name: "robots", content: "noindex, nofollow" } }]
+  }}
+>
+  <div id="loading" class="account-note">Reading the account…</div>
+
+  <div id="signed-out" class="account-note" hidden>
+    <p>This page needs a key, and it gets one from the CLI rather than from a login here.</p>
+    <pre><code>handbill account --web</code></pre>
+    <p>
+      That opens this page for the key on your machine. The URL it opens contains the key, so treat
+      it like the key itself: do not paste it into a chat, an issue or a bug report. Not signed in
+      anywhere yet? <code>handbill login</code> first, and see <a href="/docs/hosted/">hosted</a>.
+    </p>
+  </div>
+
+  <div id="account" hidden>
+    <dl class="account-facts">
+      <div><dt>Owner</dt><dd id="owner"></dd></div>
+      <div><dt>Tier</dt><dd id="tier"></dd></div>
+      <div><dt>Pages today</dt><dd id="pages-today"></dd></div>
+      <div><dt>Stored</dt><dd id="stored"></dd></div>
+    </dl>
+
+    <p id="upgrade-row" hidden>
+      <button id="upgrade" type="button">Upgrade to paid</button>
+      <a href="/docs/pricing/">What the tiers cost</a>
+    </p>
+
+    <h2>Published pages</h2>
+    <p id="pages-empty" hidden>Nothing published yet. <code>handbill plan.html</code>.</p>
+    <ul id="pages" class="account-pages"></ul>
+  </div>
+
+  <p id="message" class="account-message" hidden></p>
+</StarlightPage>
+
+<style>
+  .account-note pre {
+    max-width: 24rem;
+  }
+  .account-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  .account-facts dt {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  .account-facts dd {
+    margin: 0;
+    font-size: var(--sl-text-lg);
+    color: var(--sl-color-white);
+  }
+  .account-pages {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-top: 1px solid var(--sl-color-hairline);
+  }
+  .account-pages li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+  .account-pages .title {
+    flex: 1 1 12rem;
+    color: var(--sl-color-white);
+  }
+  .account-pages .meta {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  button {
+    font: inherit;
+    color: var(--sl-color-white);
+    background: none;
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    cursor: pointer;
+  }
+  button:hover {
+    border-color: var(--sl-color-accent);
+  }
+  .account-message {
+    margin-top: 1.5rem;
+    color: var(--sl-color-gray-3);
+  }
+</style>
+
+<script is:inline>
+  // The key, for as long as this tab is open and nowhere else.
+  const fragment = location.hash
+  // A fragment is whatever was typed into the address bar, so a broken escape is
+  // a page with no key rather than a page that threw before it rendered.
+  let key = ""
+  try {
+    key = fragment.startsWith("#key=") ? decodeURIComponent(fragment.slice(5)) : ""
+  } catch {
+    key = ""
+  }
+  // Out of the address bar before anything renders, so it is not in the history
+  // entry, in what a bookmark or a screenshot would carry, or in a `Referer`.
+  if (fragment) history.replaceState(null, "", location.pathname + location.search)
+
+  // The API of whatever site this is: handbill.dev → api.handbill.dev, and the
+  // staging site answers for itself with no second build.
+  const api = `https://api.${location.host}`
+  const show = (id, visible) => void (document.getElementById(id).hidden = !visible)
+  const text = (id, value) => void (document.getElementById(id).textContent = value)
+
+  const say = (words) => {
+    text("message", words)
+    show("message", words !== "")
+  }
+
+  /** Every call is the same: the key as a bearer token, and no credentials. */
+  const call = (path, init) =>
+    fetch(api + path, { ...init, headers: { authorization: `Bearer ${key}` } })
+
+  /** MB and GB, because that is how the limits are quoted. */
+  const size = (bytes) => {
+    const mb = bytes / (1024 * 1024)
+    return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(mb < 10 ? 1 : 0)} MB`
+  }
+
+  const signedOut = () => {
+    show("loading", false)
+    show("account", false)
+    show("signed-out", true)
+  }
+
+  /**
+   * One row per page. Built with DOM calls rather than markup: a title is the
+   * `<title>` of whatever someone published, so it is text and never HTML.
+   */
+  const renderPages = (pages) => {
+    const list = document.getElementById("pages")
+    list.replaceChildren()
+    show("pages-empty", pages.length === 0)
+    for (const page of pages) {
+      const row = document.createElement("li")
+      const link = document.createElement("a")
+      link.className = "title"
+      link.href = page.url
+      link.rel = "noreferrer"
+      link.textContent = page.title === "" ? page.hash : page.title
+      const meta = document.createElement("span")
+      meta.className = "meta"
+      meta.textContent = `${page.publishedAt.slice(0, 10)} · ${size(page.size)}`
+      const remove = document.createElement("button")
+      remove.type = "button"
+      remove.textContent = "Unpublish"
+      remove.addEventListener("click", async () => {
+        // The hash and the URL, never the title: a title is text the page's own
+        // author wrote, and this dialog is where a page says which one it is.
+        if (!confirm(`Unpublish ${page.hash}? ${page.url} stops working for everyone who has it.`)) {
+          return
+        }
+        remove.disabled = true
+        const response = await call(`/v1/pages/${page.hash}`, { method: "DELETE" })
+        if (!response.ok) {
+          remove.disabled = false
+          return say("That page could not be unpublished. Try again, or use `handbill remove`.")
+        }
+        say("")
+        load()
+      })
+      row.append(link, meta, remove)
+      list.append(row)
+    }
+  }
+
+  /** The checkout is created by the Worker for the account the key names. */
+  const upgrade = async () => {
+    say("")
+    const response = await call("/v1/account/checkout", { method: "POST" })
+    if (response.status === 409) {
+      return say("This account is already on the paid tier — there is nothing to buy.")
+    }
+    if (!response.ok) return say("No checkout is available on this deployment right now.")
+    const { url } = await response.json()
+    location.href = url
+  }
+
+  const load = async () => {
+    if (key === "") return signedOut()
+    const response = await call("/v1/account")
+    // A key that is refused reads exactly like no key at all: mint another one.
+    if (response.status === 401) return signedOut()
+    if (!response.ok) {
+      show("loading", false)
+      return say("The API could not be reached. Try again in a moment.")
+    }
+    const { owner, tier, usage, limits } = await response.json()
+    text("owner", owner)
+    text("tier", tier)
+    text("pages-today", limits === null ? String(usage.pagesToday) : `${usage.pagesToday} / ${limits.pagesPerDay}`)
+    text("stored", limits === null ? size(usage.storedBytes) : `${size(usage.storedBytes)} / ${size(limits.storedBytes)}`)
+    show("upgrade-row", tier === "free")
+    const listed = await call("/v1/pages")
+    renderPages(listed.ok ? (await listed.json()).pages : [])
+    show("loading", false)
+    show("account", true)
+  }
+
+  document.getElementById("upgrade").addEventListener("click", upgrade)
+  load()
+</script>

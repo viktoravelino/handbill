@@ -1,6 +1,12 @@
 import { HandbillApi } from "@handbill/contract"
 import { Effect, FileSystem, Layer, ManagedRuntime, Path } from "effect"
-import { Etag, HttpPlatform, HttpRouter, HttpServerResponse } from "effect/unstable/http"
+import {
+  Etag,
+  HttpMiddleware,
+  HttpPlatform,
+  HttpRouter,
+  HttpServerResponse
+} from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { AuthorizationLive, Groups } from "./api"
 import { canonical, classifyHost, nothingHere, serveAlias, servePage } from "./pages"
@@ -12,9 +18,8 @@ import type { Quotas } from "./quotas"
 import type { Index, Storage } from "./storage"
 
 /**
- * `HttpApiBuilder` asks for the platform services that back `HttpServerResponse.file`,
- * which a Worker has no use for. A no-op filesystem satisfies them without
- * pulling anything real into the bundle.
+ * `HttpApiBuilder` asks for the platform services behind `HttpServerResponse.file`,
+ * which a Worker has no use for: a no-op filesystem satisfies them cheaply.
  */
 const PlatformLive = Layer.mergeAll(Etag.layer, Path.layer, HttpPlatform.layer).pipe(
   Layer.provideMerge(FileSystem.layerNoop({}))
@@ -28,19 +33,15 @@ const OPENAPI_PATH = "/v1/openapi.json"
 const DOCS_PATH = "/docs"
 
 /**
- * The docs page: Scalar, told where the spec is. `HttpApiScalar` would write this
- * page for us, but importing it drags the 3 MB browser build of Scalar into the
- * Worker bundle even when only its CDN variant is used, so the page is nine lines
- * here instead. The Scalar version is pinned because the page runs it — bump it
- * deliberately, not by drift. Nothing here describes the API; the spec does.
+ * The docs page: Scalar, told where the spec is. `HttpApiScalar` would write it
+ * for us and drag Scalar's 3 MB browser build into the bundle to do it. The
+ * version is pinned because the page runs it — bump it deliberately.
  */
 const DocsLive = HttpRouter.add(
   "GET",
   DOCS_PATH,
-  // `text` rather than `html` only so the charset is spelled out: every textual
-  // response this Worker sends says `charset=utf-8`. The two safety headers are
-  // the ones a served page gets — an instance's own reference is for whoever
-  // runs it, not for a search index.
+  // `text` rather than `html` only so the charset is spelled out, and the two
+  // safety headers a served page gets: a reference is not for a search index.
   HttpServerResponse.text(
     `<!doctype html>
 <meta charset="utf-8">
@@ -60,12 +61,28 @@ const DocsLive = HttpRouter.add(
 )
 
 /**
- * Those two are the only API responses worth caching: they are derived from the
- * contract, so they change on deploy and nowhere else. Everything else is
- * per-request state a shared cache must never hold on to.
+ * Those two are the only API responses worth caching — derived from the contract,
+ * so they change on deploy. The rest is per-request state no cache may hold.
  */
 const cacheControl = (pathname: string): string =>
   pathname === OPENAPI_PATH || pathname === DOCS_PATH ? "public, max-age=300" : "no-store"
+
+/**
+ * The browser's half of the API. The account page on the site holds a key and
+ * calls `/v1/account`, `/v1/pages` and the checkout with it, so that one origin
+ * is let through and nothing else is; no credentials, because the key travels
+ * in `Authorization` and never in a cookie. Wired to the API handler alone, so
+ * a served page answers with no CORS header and stays unreadable to a script.
+ */
+const corsFor = (zone: string) =>
+  HttpMiddleware.cors({
+    // A predicate rather than a one-element list, which would echo the allowed
+    // origin back at every caller instead of omitting the header.
+    allowedOrigins: (origin) => origin === `https://${zone}`,
+    allowedMethods: ["GET", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["authorization", "content-type"],
+    credentials: false
+  })
 
 /**
  * The Worker as a single `fetch`: classify the hostname, then either hand the
@@ -93,7 +110,7 @@ export const makeApp = (config: WorkerConfig, services: Layer.Layer<AppServices>
     ),
     // Cloudflare already logs every request; a second log line per request
     // only costs CPU.
-    { memoMap, disableLogger: true }
+    { memoMap, disableLogger: true, middleware: corsFor(zone) }
   )
   const runtime = ManagedRuntime.make(withConfig, { memoMap })
 
@@ -105,6 +122,9 @@ export const makeApp = (config: WorkerConfig, services: Layer.Layer<AppServices>
         case "api": {
           const response = await api.handler(request)
           response.headers.set("cache-control", cacheControl(url.pathname))
+          // Also on the answers that got no CORS header, so a shared cache can
+          // never hand the site a copy of one taken for another origin.
+          response.headers.set("vary", "Origin")
           return response
         }
         case "page":

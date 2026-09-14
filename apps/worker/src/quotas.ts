@@ -16,10 +16,9 @@ export const TIER_LIMITS = {
 /**
  * The per-owner cost ceiling. `check` runs before the R2 write and fails with the limit
  * that tripped; `record` and `release` move the counters after it (§04's order). Counters
- * are eventually consistent: parallel requests all read one stale count and overshoot by a
- * publish rate rather than by one, so WAF rule 1 is required rather than advisory. Drift upward
- * overcharges an owner; drift downward is free storage, which no floor can undo — so `release`
- * is the caller's to gate on having been the request that removed the object (#157).
+ * are eventually consistent, so parallel publishes overshoot by a publish rate and WAF
+ * rule 1 is required rather than advisory. Drift downward is free storage no floor undoes,
+ * so `release` is the caller's to gate on having been the request that removed the object.
  */
 export interface QuotasShape {
   readonly check: (owner: Owner, tier: Tier, bytes: number) => Effect.Effect<void, QuotaExceeded>

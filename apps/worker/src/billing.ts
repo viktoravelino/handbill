@@ -60,9 +60,9 @@ const asOwner = (id: unknown): Option.Option<Owner> =>
   typeof id === "string" && /^gh:\d+$/u.test(id) ? Option.some(Owner.make(id)) : Option.none()
 
 /**
- * Status, never event name: the state an event carries is idempotent where a
- * step in a sequence is not. Only a verdict is here, and a free one not final
- * alone — Polar sets `canceled` on request and `ended_at` when access ends.
+ * Status, never event name: a state is idempotent where a step in a sequence is
+ * not. Only a verdict is here, and a free one is not final alone — Polar sets
+ * `canceled` on request and `ended_at` when access ends.
  */
 const TIER_FOR: Record<string, Tier> = {
   active: "paid",
@@ -105,28 +105,35 @@ const isSession = Schema.is(Checkout)
  * A checkout session per request, with both owner fields written: `metadata` is
  * what `readFlip` reads back and `external_customer_id` files it under one Polar
  * customer per owner, which makes that fallback real. Anything else throws.
+ * `products` is non-empty — {@link productList} decides whether there is a tier.
  */
 export const BillingPolar = (config: {
   readonly api: string
   readonly token: string
-  readonly productId: string
+  readonly products: ReadonlyArray<string>
 }): Layer.Layer<Billing> =>
   Layer.succeed(Billing, {
     checkout: (owner) =>
       Effect.promise(async () => {
+        const body = { products: config.products, metadata: { owner }, external_customer_id: owner }
         // The trailing slash is load-bearing: Polar 307s without it, and the
         // redirected POST arrives with no body.
         const response = await fetch(`${config.api}/v1/checkouts/`, {
           method: "POST",
           headers: { authorization: `Bearer ${config.token}`, "content-type": "application/json" },
-          body: JSON.stringify({
-            products: [config.productId],
-            metadata: { owner },
-            external_customer_id: owner
-          })
+          body: JSON.stringify(body)
         })
         const session: unknown = response.ok ? await response.json() : null
         if (!isSession(session)) throw new Error(`polar checkout failed: ${response.status}`)
         return session
       })
   })
+
+/**
+ * `POLAR_PRODUCT_ID` as the ids it names — Polar models the yearly plan as a
+ * second product, and the checkout offers whichever it is given. Separators and
+ * blanks are not ids: `","` names nothing, which `index.ts` reads as a
+ * deployment with nothing to sell rather than a checkout that 500s.
+ */
+export const productList = (value: string | undefined): ReadonlyArray<string> =>
+  (value ?? "").split(",").flatMap((id) => (id.trim() === "" ? [] : [id.trim()]))
