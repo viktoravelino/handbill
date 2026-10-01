@@ -28,11 +28,11 @@
     "build": "bun build ./src/cli.ts --target=node --outfile=dist/cli.js --external effect --external marked --banner='#!/usr/bin/env node' && chmod +x dist/cli.js"
   },
   "dependencies": {
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.0-rc.118",
     "marked": "18.0.11"
   },
   "devDependencies": {
-    "@effect/platform-node": "4.0.0-rc.112",
+    "@effect/platform-node": "4.0.0-rc.118",
     "@handbill/contract": "workspace:*",
     "@handbill/worker": "workspace:*",
     "uqr": "0.1.3"
