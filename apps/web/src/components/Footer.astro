@@ -5,12 +5,18 @@ import StarlightFooter from "@astrojs/starlight/components/Footer.astro"
  * Starlight's footer with one row added under it, on every page including the
  * splash landing page: the words that make hosting strangers legitimate have to
  * be reachable from wherever someone lands, not only from the docs sidebar.
+ * `slug` names the link in the site's analytics, so it stays put when a label
+ * or an address changes.
  */
 const links = [
-  { label: "Terms and acceptable use", href: "/docs/terms/" },
-  { label: "Report abuse", href: "/docs/abuse/" },
-  { label: "Security", href: "/docs/security/" },
-  { label: "MIT licensed", href: "https://github.com/viktoravelino/handbill/blob/main/LICENSE" }
+  { label: "Terms and acceptable use", href: "/docs/terms/", slug: "terms" },
+  { label: "Report abuse", href: "/docs/abuse/", slug: "abuse" },
+  { label: "Security", href: "/docs/security/", slug: "security" },
+  {
+    label: "MIT licensed",
+    href: "https://github.com/viktoravelino/handbill/blob/main/LICENSE",
+    slug: "license"
+  }
 ]
 ---
 
@@ -18,10 +24,48 @@ const links = [
 
 <div class="site-footer">
   <nav aria-label="Site">
-    {links.map(({ label, href }) => <a href={href}>{label}</a>)}
+    {
+      links.map(({ label, href, slug }) => (
+        <a href={href} data-umami-event="footer" data-umami-event-link={slug}>
+          {label}
+        </a>
+      ))
+    }
   </nav>
   <p>Hosted on handbill.dev by one person. <a href="mailto:abuse@handbill.dev">abuse@handbill.dev</a></p>
 </div>
+
+<script>
+  // The site's click events for what Starlight and markdown render, where no
+  // `data-umami-event` attribute can go. It lives here because this footer is
+  // the one component every page renders — docs, splash, account, and 404.
+  // `umami` is absent whenever the tracker is blocked or has not loaded, and
+  // then this does nothing.
+  declare global {
+    interface Window {
+      umami?: { track: (name: string, data?: Record<string, string>) => void }
+    }
+  }
+
+  document.addEventListener("click", ({ target }) => {
+    if (!(target instanceof Element)) return
+    const copy = target.closest(".expressive-code .copy button")
+    if (copy instanceof HTMLButtonElement) {
+      // Expressive Code marks line breaks in data-code with U+007F.
+      const code = (copy.dataset["code"] ?? "").replaceAll(/[\s\u007F]+/gu, " ").trim().slice(0, 80)
+      return window.umami?.track("copy-code", { code })
+    }
+    const link = target.closest("a[href]")
+    // A link that names its own event is already counted by the tracker.
+    if (!(link instanceof HTMLAnchorElement) || link.closest("[data-umami-event]")) return
+    const { protocol, hostname, origin, pathname } = new URL(link.href)
+    // Every *.handbill.dev host is skipped, not only this one: published pages
+    // and aliases live there, and their hostnames never reach analytics.
+    const ours = hostname === "handbill.dev" || hostname.endsWith(".handbill.dev")
+    if (ours || !/^https?:$/u.test(protocol)) return
+    window.umami?.track("outbound", { url: origin + pathname })
+  })
+</script>
 
 <style>
   .site-footer {

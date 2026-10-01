@@ -30,8 +30,11 @@ export default defineConfig({
       // site only — never on published pages. The Cloudflare token and the Umami
       // website id are public identifiers, not secrets. Umami's data-domains makes
       // the tracker send only from handbill.dev, so local and preview builds stay
-      // silent. The og:image is public/og.png, rendered once by hand; scrapers
-      // need an absolute URL.
+      // silent. data-exclude-hash keeps every fragment out of what Umami records,
+      // which is what guarantees the `#key=` of the account page's URL is never
+      // reported, whatever order its scripts run in; data-do-not-track honours the
+      // browser's Do Not Track setting. The og:image is public/og.png, rendered
+      // once by hand; scrapers need an absolute URL.
       head: [
         {
           tag: "script",
@@ -47,7 +50,9 @@ export default defineConfig({
             defer: true,
             src: "https://analytics.vkav.dev/script.js",
             "data-website-id": "f1ed741f-310f-463a-af48-10626612c3c4",
-            "data-domains": "handbill.dev"
+            "data-domains": "handbill.dev",
+            "data-exclude-hash": "true",
+            "data-do-not-track": "true"
           }
         },
         {
