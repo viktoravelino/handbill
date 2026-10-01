@@ -1,3 +1,5 @@
 export * from "./api"
+export * from "./auth"
 export * from "./errors"
+export * from "./groups"
 export * from "./schemas"
