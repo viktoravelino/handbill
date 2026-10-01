@@ -26,9 +26,12 @@ export default defineConfig({
       // The only component override: Starlight's footer, plus a row of site-wide
       // links (terms, abuse, security) that has to be on every page.
       components: { Footer: "./src/components/Footer.astro" },
-      // Cloudflare Web Analytics, on this site only — never on published pages.
-      // The token is the zone's public beacon token, not a secret. The og:image
-      // is public/og.png, rendered once by hand; scrapers need an absolute URL.
+      // Cloudflare Web Analytics and a self-hosted Umami, side by side, on this
+      // site only — never on published pages. The Cloudflare token and the Umami
+      // website id are public identifiers, not secrets. Umami's data-domains makes
+      // the tracker send only from handbill.dev, so local and preview builds stay
+      // silent. The og:image is public/og.png, rendered once by hand; scrapers
+      // need an absolute URL.
       head: [
         {
           tag: "script",
@@ -36,6 +39,15 @@ export default defineConfig({
             type: "module",
             src: "https://static.cloudflareinsights.com/beacon.min.js",
             "data-cf-beacon": '{"token": "807ccc184fed485aad2f4bda825554ea"}'
+          }
+        },
+        {
+          tag: "script",
+          attrs: {
+            defer: true,
+            src: "https://analytics.vkav.dev/script.js",
+            "data-website-id": "f1ed741f-310f-463a-af48-10626612c3c4",
+            "data-domains": "handbill.dev"
           }
         },
         {

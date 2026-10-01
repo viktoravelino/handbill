@@ -1,5 +1,5 @@
-# No Content-Security-Policy: Starlight ships inline scripts and the Cloudflare
-# analytics beacon needs one too, and a CSP tight enough to matter needs testing
+# No Content-Security-Policy: Starlight ships inline scripts and the analytics
+# scripts need one too, and a CSP tight enough to matter needs testing
 # this pass is not doing.
 /*
   X-Content-Type-Options: nosniff

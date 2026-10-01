@@ -537,7 +537,7 @@ Watch these; none of them page you, so they only exist if someone looks.
 
 - **Quota counters.** `bunx wrangler kv key list --remote --namespace-id "$NS" --prefix "q:"` — how many accounts are counting at all, and whether any `bytes` counter is near its owner's ceiling — 250 MB on the free tier, 5 GiB on paid. A `bytes` value with no matching `i:` entries is the drift WAF.md §4 resets.
 - **KV writes against the plan's ceiling.** A hosted publish costs three writes, minting a key two. WAF.md's table has the arithmetic; the free plan's ~1,000 writes a day is ~330 publishes.
-- **Web Analytics** on `handbill.dev` — whether anyone read the hosted page before installing, and where they arrived from.
+- **Web Analytics and Umami** on `handbill.dev` — whether anyone read the hosted page before installing, and where they arrived from.
 - **npm downloads** via the metrics branch, for whether the release moved anything.
 - **`abuse@handbill.dev`** — check it even when it is empty, weekly. B2 is the only proof it works, and it was true once, on one day.
 
