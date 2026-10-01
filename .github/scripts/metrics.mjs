@@ -142,7 +142,7 @@ if (ok === 0) {
   process.exit(1)
 }
 console.error(
-  `done: ${ok} section(s) ok${failures.length ? `, failed: ${failures.join(", ")}` : ""}`
+  `done: ${ok} section(s) ok${failures.length > 0 ? `, failed: ${failures.join(", ")}` : ""}`
 )
 
 // --- Actions job summary: the last few days at a glance --------------------
@@ -152,7 +152,7 @@ if (process.env.GITHUB_STEP_SUMMARY) {
     readJson("npm.json"),
     readJson("web.json")
   ])
-  const days = [...Array(4)].map((_, i) =>
+  const days = Array.from({ length: 4 }).map((_, i) =>
     new Date(Date.now() - i * 86400_000).toISOString().slice(0, 10)
   )
   const rows = days.map((d) => {
@@ -174,7 +174,7 @@ if (process.env.GITHUB_STEP_SUMMARY) {
     repoNow
       ? `⭐ ${repoNow.stars} stars · ${repoNow.forks} forks · ${repoNow.watchers} watchers`
       : "",
-    failures.length ? `\n> ⚠️ failed sections: ${failures.join(", ")}` : ""
+    failures.length > 0 ? `\n> ⚠️ failed sections: ${failures.join(", ")}` : ""
   ].join("\n")
   const { appendFile } = await import("node:fs/promises")
   await appendFile(process.env.GITHUB_STEP_SUMMARY, summary + "\n")

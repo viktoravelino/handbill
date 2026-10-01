@@ -135,8 +135,8 @@ import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro"
   // The API of whatever site this is: handbill.dev → api.handbill.dev, and the
   // staging site answers for itself with no second build.
   const api = `https://api.${location.host}`
-  const show = (id, visible) => void (document.getElementById(id).hidden = !visible)
-  const text = (id, value) => void (document.getElementById(id).textContent = value)
+  const show = (id, visible) => void (document.querySelector(`#${id}`).hidden = !visible)
+  const text = (id, value) => void (document.querySelector(`#${id}`).textContent = value)
 
   const say = (words) => {
     text("message", words)
@@ -164,7 +164,7 @@ import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro"
    * `<title>` of whatever someone published, so it is text and never HTML.
    */
   const renderPages = (pages) => {
-    const list = document.getElementById("pages")
+    const list = document.querySelector("#pages")
     list.replaceChildren()
     show("pages-empty", pages.length === 0)
     for (const page of pages) {
@@ -233,6 +233,6 @@ import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro"
     show("account", true)
   }
 
-  document.getElementById("upgrade").addEventListener("click", upgrade)
+  document.querySelector("#upgrade").addEventListener("click", upgrade)
   load()
 </script>

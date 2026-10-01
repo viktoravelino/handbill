@@ -61,15 +61,15 @@ const movableClock = (start: number) => {
  * holds, and — unless a test says otherwise — an `ADMIN_TOKEN`, so the takedown
  * route is there.
  */
-const hosted = (
-  options: { readonly admin?: string; readonly storage?: Layer.Layer<Storage> } = { admin: ADMIN }
-) => {
+const hosted = (options?: { readonly admin?: string; readonly storage?: Layer.Layer<Storage> }) => {
+  // The default admin applies only when no options are passed; `hosted({})` has none.
+  const { admin, storage } = options ?? { admin: ADMIN }
   const counters = new Map<string, number>()
   const time = movableClock(DAY_ONE)
   const app = makeApp(
-    { zone: ZONE, maxBytes: MAX_BYTES, adminToken: options.admin },
+    { zone: ZONE, maxBytes: MAX_BYTES, adminToken: admin },
     Layer.mergeAll(
-      options.storage ?? StorageMemory,
+      storage ?? StorageMemory,
       IndexMemory,
       AuthAccounts(memoryKeys(), identify),
       AliasesMemory,
@@ -103,7 +103,7 @@ const publish = async ({ app }: Hosted, key: string, body: string) =>
     })
   )
 
-const removePage = async ({ app }: Hosted, key: string, hash: string) =>
+const removePage = ({ app }: Hosted, key: string, hash: string) =>
   app.fetch(
     new Request(`https://api.${ZONE}/v1/pages/${hash}`, {
       method: "DELETE",

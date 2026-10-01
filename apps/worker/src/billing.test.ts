@@ -72,16 +72,16 @@ const frozen: Clock.Clock = {
  * A hosted deployment with, unless a test says otherwise, both operator secrets
  * set. `records` and `counters` are the two stores the assertions read.
  */
-const hosted = (
-  options: { readonly admin?: string | undefined; readonly secret?: string | undefined } = {
-    admin: ADMIN,
-    secret: SECRET
-  }
-) => {
+const hosted = (options?: {
+  readonly admin?: string | undefined
+  readonly secret?: string | undefined
+}) => {
+  // Defaults apply only when no options are passed; an explicit `undefined` means "unset".
+  const { admin, secret } = options ?? { admin: ADMIN, secret: SECRET }
   const records = new Map<string, string>()
   const counters = new Map<string, number>()
   const app = makeApp(
-    { zone: ZONE, maxBytes: MAX_BYTES, adminToken: options.admin, webhookSecret: options.secret },
+    { zone: ZONE, maxBytes: MAX_BYTES, adminToken: admin, webhookSecret: secret },
     Layer.mergeAll(
       StorageMemory,
       IndexMemory,
