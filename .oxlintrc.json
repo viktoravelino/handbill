@@ -12,5 +12,16 @@
     "no-redeclare": "off",
     "max-classes-per-file": "off"
   },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/test/**"],
+      "rules": {
+        "max-lines": "off",
+        "max-lines-per-function": "off",
+        "import/max-dependencies": "off"
+      }
+    },
+    { "files": ["apps/worker/src/app.ts"], "rules": { "import/max-dependencies": "off" } }
+  ],
   "ignorePatterns": ["dist", "node_modules", ".wrangler", ".astro", "docs"]
 }

@@ -159,6 +159,33 @@ const liveKeys = async (store: KeyStore, owner: Owner) => {
 }
 
 /**
+ * `AuthAccounts`' `setTier`: every live key at once, so two machines move together,
+ * and an owner with no key yet is not an error — `mint` inherits. Scoped to the
+ * subscription that paid: `metadata.owner` is filled in at checkout, so a stranger
+ * could otherwise name a victim and cancel to strip them. No `sub` is the override.
+ */
+const setTierIn =
+  (store: KeyStore): AuthShape["setTier"] =>
+  (owner, tier, at, sub) =>
+    Effect.promise(async () => {
+      let moved = 0
+      for (const { id, record } of await liveKeys(store, owner)) {
+        const { subscriptionId: held, tier: spends, tierAt } = record
+        // An upgrade claims any record not already paying — unclaimed, or
+        // lapsed and free to re-subscribe — and its own; a lapse, only its own.
+        const mine = sub === undefined || held === sub || (tier === "paid" && spends === "free")
+        // Polar retries a failed delivery out of order, so an `active` from
+        // before a revocation can land after it: only a strictly newer event
+        // time writes, and the override's `now` outranks any replay (#143).
+        if (!mine || (tierAt !== undefined && at <= tierAt)) continue
+        const flip = { ...record, tier, tierAt: at, subscriptionId: sub ?? held }
+        await store.put(id, JSON.stringify(flip))
+        moved += 1
+      }
+      return moved
+    })
+
+/**
  * Hosted auth: one record per key in the `ACCOUNTS` namespace, filed under the
  * key's digest. Nothing here turns a record back into a key, so a leaked KV dump
  * mints nothing and a lost key is re-minted. `identify` is the GitHub check, an
@@ -206,26 +233,5 @@ export const AuthAccounts = (
         const revoked = DateTime.formatIso(yield* DateTime.now)
         yield* Effect.promise(() => store.put(id, JSON.stringify({ ...record, revoked })))
       }),
-    // Every live key at once, so two machines move together, and an owner with
-    // no key yet is not an error — `mint` inherits. Scoped to the subscription
-    // that paid: `metadata.owner` is filled in at checkout, so a stranger could
-    // otherwise name a victim and cancel to strip them. No `sub` is the override.
-    setTier: (owner, tier, at, sub) =>
-      Effect.promise(async () => {
-        let moved = 0
-        for (const { id, record } of await liveKeys(store, owner)) {
-          const { subscriptionId: held, tier: spends, tierAt } = record
-          // An upgrade claims any record not already paying — unclaimed, or
-          // lapsed and free to re-subscribe — and its own; a lapse, only its own.
-          const mine = sub === undefined || held === sub || (tier === "paid" && spends === "free")
-          // Polar retries a failed delivery out of order, so an `active` from
-          // before a revocation can land after it: only a strictly newer event
-          // time writes, and the override's `now` outranks any replay (#143).
-          if (!mine || (tierAt !== undefined && at <= tierAt)) continue
-          const flip = { ...record, tier, tierAt: at, subscriptionId: sub ?? held }
-          await store.put(id, JSON.stringify(flip))
-          moved += 1
-        }
-        return moved
-      })
+    setTier: setTierIn(store)
   })
