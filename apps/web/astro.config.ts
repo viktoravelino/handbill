@@ -48,7 +48,8 @@ export default defineConfig({
           tag: "script",
           attrs: {
             defer: true,
-            src: "https://analytics.vkav.dev/script.js",
+            src: "https://s.vkav.dev/x.js",
+            "data-host-url": "https://s.vkav.dev",
             "data-website-id": "f1ed741f-310f-463a-af48-10626612c3c4",
             "data-domains": "handbill.dev",
             "data-exclude-hash": "true",
